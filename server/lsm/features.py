@@ -16,10 +16,10 @@ def _angle(v1: np.ndarray, v2: np.ndarray) -> float:
     n1, n2 = np.linalg.norm(v1), np.linalg.norm(v2)
     if n1 < 1e-9 or n2 < 1e-9:
         return 0.0
-    # Use atan2 for numerical stability with nearly-parallel vectors
-    cross_z = v1[0] * v2[1] - v1[1] * v2[0]
+    # Use atan2 with full 3D cross product magnitude for numerical stability
+    cross_mag = np.linalg.norm(np.cross(v1, v2))
     dot = float(np.dot(v1, v2))
-    angle_rad = float(np.arctan2(abs(cross_z), dot))
+    angle_rad = float(np.arctan2(cross_mag, dot))
     return float(np.degrees(angle_rad))
 
 

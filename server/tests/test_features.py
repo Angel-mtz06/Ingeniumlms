@@ -60,3 +60,35 @@ def test_featurize_shape_and_layout():
     assert f[0, 68] == pytest.approx(0.5, abs=1e-3)       # flexión del índice = 90/180
     assert (f[:, 72:144] == 0).all() and (f[:, 147:150] == 0).all()
     assert f[5, 144] > 0                                   # la muñeca se mueve a +x
+
+
+def test_finger_flexion_with_nonplanar_3d_vectors():
+    """Regression test: finger_flexion must work correctly for non-planar 3D hand landmarks."""
+    from lsm.features import _angle
+
+    # Test case 1: vectors with nonzero z components
+    v1 = np.array([0.0, -1.0, 0.1], dtype=np.float64)
+    v2 = np.array([0.3, 0.3, 0.9], dtype=np.float64)
+
+    # Reference: arccos formula in float64
+    n1 = np.linalg.norm(v1)
+    n2 = np.linalg.norm(v2)
+    c = np.clip(np.dot(v1, v2) / (n1 * n2), -1.0, 1.0)
+    expected = float(np.degrees(np.arccos(c)))
+
+    actual = _angle(v1.astype(np.float32), v2.astype(np.float32))
+    np.testing.assert_allclose(actual, expected, atol=1e-3)
+
+    # Test case 2: perpendicular vectors in 3D (should give 90°)
+    v1 = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    v2 = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+
+    # Reference
+    n1 = np.linalg.norm(v1)
+    n2 = np.linalg.norm(v2)
+    c = np.clip(np.dot(v1, v2) / (n1 * n2), -1.0, 1.0)
+    expected = float(np.degrees(np.arccos(c)))
+
+    actual = _angle(v1.astype(np.float32), v2.astype(np.float32))
+    np.testing.assert_allclose(actual, expected, atol=1e-3)
+    assert actual == pytest.approx(90.0, abs=1e-3)
