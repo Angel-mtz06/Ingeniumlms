@@ -65,3 +65,32 @@ def test_finger_status_codes():
 def test_max_two_tips():
     ev = evaluate(REF, seq(flex=(90, 0, 0, 0, 0), y=3.5, step=0.4))
     assert len(messages(ev, REF)) == 2
+
+
+def two_hand_seq(flex=TARGET, x0=0.0, T=12, signer="m01", step=0.1, present1=True):
+    hands = np.zeros((T, 2, 21, 3), np.float32)
+    present = np.zeros((T, 2), bool)
+    for t in range(T):
+        hands[t, 0] = make_hand(wrist=(x0 + step * t, 1.0), flex=flex)
+        present[t, 0] = True
+        if present1:
+            hands[t, 1] = make_hand(wrist=(1.0, 1.0), flex=flex)
+            present[t, 1] = True
+    return NormSequence(hands, present, f"{signer}_Y", signer)
+
+
+REF2 = build_reference("Y", [two_hand_seq(signer="a"), two_hand_seq(signer="b", x0=0.02),
+                              two_hand_seq(signer="c", x0=-0.02)])
+
+
+def test_missing_non_dominant_hand_keeps_movement_score():
+    ev = evaluate(REF2, two_hand_seq(present1=False))
+    assert ev.scores["movimiento"] > 90
+    tips = messages(ev, REF2)
+    assert tips and tips[0].startswith("No veo tu mano izquierda")
+
+
+def test_horizontal_location_tip_direction():
+    ev = evaluate(REF, seq(x0=3.0))
+    tips = messages(ev, REF)
+    assert any(t.startswith("Mueve la mano derecha hacia tu derecha") for t in tips)

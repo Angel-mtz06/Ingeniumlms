@@ -36,12 +36,16 @@ class Evaluation:
     issues: list
 
 
+def _flex_z(ref: GlossRef, flex_row: np.ndarray, s: int) -> np.ndarray:
+    return np.abs(flex_row - ref.flex_mean[s]) / np.maximum(np.nan_to_num(ref.flex_std[s]), FLEX_FLOOR)
+
+
 def finger_status(ref: GlossRef, flex: np.ndarray) -> np.ndarray:
     out = np.full((2, 5), -1, int)
     for s in (0, 1):
         if not ref.slots_used[s]:
             continue
-        z = np.abs(flex[s] - ref.flex_mean[s]) / np.maximum(np.nan_to_num(ref.flex_std[s]), FLEX_FLOOR)
+        z = _flex_z(ref, flex[s], s)
         out[s] = np.where(np.isnan(z), -1, np.where(z < 1, 0, np.where(z < 2, 1, 2)))
     return out
 
@@ -67,10 +71,10 @@ def evaluate(ref: GlossRef, seq: NormSequence, glove_flex: np.ndarray | None = N
             continue
         if st["present_frac"][s] < 0.5:
             issues.append(Issue("mano", 99.0, s))
-            for p in PARAMS:
+            for p in ("configuracion", "ubicacion", "orientacion"):
                 per[p].append(0.0)
             continue
-        z = np.abs(flex[s] - ref.flex_mean[s]) / np.maximum(np.nan_to_num(ref.flex_std[s]), FLEX_FLOOR)
+        z = _flex_z(ref, flex[s], s)
         finger_z[s] = z
         conf = float(np.mean([z_to_score(v) for v in z if not np.isnan(v)] or [0.0]))
         for f in range(5):
