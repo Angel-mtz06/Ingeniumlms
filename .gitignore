@@ -1,0 +1,11 @@
+datasets/
+tools/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+dist/
+.env
+*.pt
+*.onnx
+.pio/
