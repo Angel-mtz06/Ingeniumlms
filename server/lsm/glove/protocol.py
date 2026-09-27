@@ -33,6 +33,8 @@ class GloveId:
 
 
 def parse_line(line: str) -> GloveReading | GloveId | None:
+    if not isinstance(line, str):
+        return None
     parts = line.strip().split(",")
     try:
         if parts[0] == "ID" and len(parts) >= 2:

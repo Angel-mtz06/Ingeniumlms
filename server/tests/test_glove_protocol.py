@@ -40,3 +40,8 @@ def test_wave_flex_range():
     for t in range(0, 4000, 250):
         f = wave_flex(t)
         assert len(f) == 5 and all(5 <= v <= 85 for v in f)
+
+
+def test_non_string_is_none():
+    assert parse_line(None) is None
+    assert parse_line(123) is None
