@@ -8,5 +8,5 @@ export TEMP=D:/Ingenium/tools/tmp
 export TORCH_HOME=D:/Ingenium/tools/torch
 export MPLCONFIGDIR=D:/Ingenium/tools/mpl
 export PYTHONIOENCODING=utf-8
-export PATH="D:/Ingenium/.venv/Scripts:D:/Ingenium/tools/uvpkg/bin:$PATH"
+export PATH="/d/Ingenium/.venv/Scripts:/d/Ingenium/tools/uvpkg/bin:$PATH"
 mkdir -p "$UV_CACHE_DIR" "$UV_PYTHON_INSTALL_DIR" "$PIP_CACHE_DIR" "$TMP" "$TORCH_HOME" "$MPLCONFIGDIR"
