@@ -1,0 +1,108 @@
+"""Puntaje 0–100 por parámetro de la LSM respecto a la variación natural entre signantes."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import numpy as np
+
+from lsm.evaluator.references import GlossRef, dtw, sample_stats
+from lsm.normalize import NormSequence
+
+FLEX_FLOOR, LOC_FLOOR, MOVE_FLOOR, PALM_FLOOR = 12.0, 0.35, 0.15, 20.0
+ISSUE_Z = 1.5
+CONTACT_PENALTY = 10.0
+PARAMS = ("configuracion", "ubicacion", "movimiento", "orientacion")
+
+
+def z_to_score(z: float) -> float:
+    return float(100.0 * np.exp(-0.5 * float(z) ** 2))
+
+
+@dataclass
+class Issue:
+    param: str
+    z: float
+    slot: int
+    finger: int | None = None
+    detail: dict = field(default_factory=dict)
+
+
+@dataclass
+class Evaluation:
+    scores: dict
+    total: float
+    finger_flex: np.ndarray
+    finger_z: np.ndarray
+    issues: list
+
+
+def finger_status(ref: GlossRef, flex: np.ndarray) -> np.ndarray:
+    out = np.full((2, 5), -1, int)
+    for s in (0, 1):
+        if not ref.slots_used[s]:
+            continue
+        z = np.abs(flex[s] - ref.flex_mean[s]) / np.maximum(np.nan_to_num(ref.flex_std[s]), FLEX_FLOOR)
+        out[s] = np.where(np.isnan(z), -1, np.where(z < 1, 0, np.where(z < 2, 1, 2)))
+    return out
+
+
+def _angle(a: np.ndarray, b: np.ndarray) -> float:
+    return float(np.degrees(np.arccos(np.clip(np.dot(a, b), -1.0, 1.0))))
+
+
+def evaluate(ref: GlossRef, seq: NormSequence, glove_flex: np.ndarray | None = None,
+             glove_contacts: np.ndarray | None = None) -> Evaluation:
+    st = sample_stats(seq)
+    flex = st["flex"].copy()
+    if glove_flex is not None:
+        flex = np.where(np.isnan(glove_flex), flex, glove_flex)
+    contacts = st["contacts"].copy()
+    if glove_contacts is not None:
+        contacts = np.where(np.isnan(glove_contacts), contacts, glove_contacts)
+    issues: list[Issue] = []
+    per = {p: [] for p in PARAMS}
+    finger_z = np.full((2, 5), np.nan)
+    for s in (0, 1):
+        if not ref.slots_used[s]:
+            continue
+        if st["present_frac"][s] < 0.5:
+            issues.append(Issue("mano", 99.0, s))
+            for p in PARAMS:
+                per[p].append(0.0)
+            continue
+        z = np.abs(flex[s] - ref.flex_mean[s]) / np.maximum(np.nan_to_num(ref.flex_std[s]), FLEX_FLOOR)
+        finger_z[s] = z
+        conf = float(np.mean([z_to_score(v) for v in z if not np.isnan(v)] or [0.0]))
+        for f in range(5):
+            if z[f] > ISSUE_Z:
+                issues.append(Issue("configuracion", float(z[f]), s, f,
+                                    {"actual": float(flex[s, f]), "target": float(ref.flex_mean[s, f])}))
+        for c in range(4):
+            prob, got = ref.contact_prob[s, c], contacts[s, c]
+            if np.isnan(prob) or np.isnan(got):
+                continue
+            if prob >= 0.7 and got < 0.5:
+                conf -= CONTACT_PENALTY
+                issues.append(Issue("contacto", 2.0, s, c + 1, {"expected": True}))
+            elif prob <= 0.15 and got >= 0.5:
+                conf -= CONTACT_PENALTY
+                issues.append(Issue("contacto", 2.0, s, c + 1, {"expected": False}))
+        per["configuracion"].append(max(conf, 0.0))
+        d = st["loc"][s] - ref.loc_mean[s]
+        zl = float(np.linalg.norm(d) / max(float(np.linalg.norm(np.nan_to_num(ref.loc_std[s]))), LOC_FLOOR))
+        per["ubicacion"].append(z_to_score(zl))
+        if zl > ISSUE_Z:
+            issues.append(Issue("ubicacion", zl, s, None, {"dx": float(d[0]), "dy": float(d[1])}))
+        spread = ref.palm_spread[s]
+        zo = _angle(st["palm"][s], ref.palm_mean[s]) / max(0.0 if np.isnan(spread) else float(spread), PALM_FLOOR)
+        per["orientacion"].append(z_to_score(zo))
+        if zo > ISSUE_Z:
+            issues.append(Issue("orientacion", zo, s))
+    zm = dtw(st["traj"], ref.traj_mean) / max(ref.traj_scale, MOVE_FLOOR)
+    per["movimiento"].append(0.0 if st["present_frac"][ref.dom] < 0.5 else z_to_score(zm))
+    if zm > ISSUE_Z and st["present_frac"][ref.dom] >= 0.5:
+        issues.append(Issue("movimiento", zm, ref.dom, None,
+                            {"ratio": st["path_len"] / max(ref.path_len, 1e-6)}))
+    scores = {p: round(float(np.mean(v)), 1) if v else 0.0 for p, v in per.items()}
+    issues.sort(key=lambda i: -i.z)
+    return Evaluation(scores, round(float(np.mean(list(scores.values()))), 1), flex, finger_z, issues)
