@@ -87,6 +87,7 @@ D:\Ingenium\training\
 - Test: `D:\Ingenium\server\tests\test_normalize.py` (agregar pruebas)
 
 **Interfaces:**
+- Consumes: `normalize(raw, anchor=None)` con el parámetro `anchor` agregado en la Task 11b del Plan 1 (debe conservarse).
 - Produces: `to_head_units(h: (21,3), cx, cy, s) -> (21,3) float32`; `assign_slots(dets: list[(21,3)], last_wrist: list[np.ndarray|None]) -> list[int]` (orden de dets de entrada = orden de slots devueltos; ya ordena por x cuando hay 2). `normalize()` conserva su comportamiento y sus pruebas.
 
 - [ ] **Step 1: Agregar el extra `server` en `pyproject.toml`** (pedir permiso al usuario: descarga desde PyPI de fastapi, uvicorn, openai, anthropic, httpx y dependencias, ~40 MB)
@@ -157,8 +158,8 @@ def assign_slots(dets: list[np.ndarray], last_wrist: list[np.ndarray | None]) ->
     return []
 
 
-def normalize(raw: RawSequence) -> NormSequence:
-    anchor = head_anchor(raw)
+def normalize(raw: RawSequence, anchor: np.ndarray | None = None) -> NormSequence:
+    anchor = head_anchor(raw) if anchor is None else np.tile(np.asarray(anchor, np.float32).reshape(1, 3), (raw.T, 1))
     T = raw.T
     hands = np.zeros((T, 2, 21, 3), np.float32)
     present = np.zeros((T, 2), bool)
