@@ -44,3 +44,12 @@ def test_norm_roundtrip(tmp_path):
     np.testing.assert_array_equal(m.hands, n.hands)
     np.testing.assert_array_equal(m.present, n.present)
     assert (m.sample_id, m.signer) == (n.sample_id, n.signer)
+
+
+def test_normalize_with_fixed_anchor_ignores_pose():
+    h = make_hand(wrist=(300 + 40, 90 + 60), size=20)
+    raw = raw_with_head(T=2, head=(320, 100), head_w=30, hands_px=[[h], [h]])
+    n = normalize(raw, anchor=np.array([300.0, 90.0, 20.0]))
+    # wrist normaliza a (+2, +3) respecto al ancla fija: x>0 -> lado derecho -> slot 1
+    # (misma convención que test_units_are_head_widths_from_head_center, donde x<0 -> slot 0).
+    np.testing.assert_allclose(n.hands[:, 1, 0, :2], [[2.0, 3.0], [2.0, 3.0]], atol=1e-5)

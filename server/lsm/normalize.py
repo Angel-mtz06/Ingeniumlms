@@ -33,8 +33,8 @@ class NormSequence:
             return NormSequence(hands=z["hands"], present=z["present"], **json.loads(str(z["meta"])))
 
 
-def normalize(raw: RawSequence) -> NormSequence:
-    anchor = head_anchor(raw)
+def normalize(raw: RawSequence, anchor: np.ndarray | None = None) -> NormSequence:
+    anchor = head_anchor(raw) if anchor is None else np.tile(np.asarray(anchor, np.float32).reshape(1, 3), (raw.T, 1))
     T = raw.T
     hands = np.zeros((T, 2, 21, 3), np.float32)
     present = np.zeros((T, 2), bool)
