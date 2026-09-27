@@ -1,0 +1,46 @@
+import numpy as np
+import pytest
+
+from lsm.normalize import NormSequence, normalize
+from tests.conftest import make_hand, raw_with_head
+
+
+def test_units_are_head_widths_from_head_center():
+    h = make_hand(wrist=(320 - 60, 100 + 90), size=30)  # 2 cabezas a la izq., 3 abajo
+    raw = raw_with_head(T=1, head=(320, 100), head_w=30, hands_px=[[h]])
+    n = normalize(raw)
+    assert n.present[0].tolist() == [True, False]
+    np.testing.assert_allclose(n.hands[0, 0, 0, :2], [-2.0, 3.0], atol=1e-5)
+
+
+def test_two_hands_sorted_by_image_x():
+    left = make_hand(wrist=(250, 200), size=30)
+    right = make_hand(wrist=(400, 200), size=30)
+    raw = raw_with_head(T=1, hands_px=[[right, left]])  # orden de detección invertido
+    n = normalize(raw)
+    assert n.hands[0, 0, 0, 0] < n.hands[0, 1, 0, 0]
+    assert n.present[0].all()
+
+
+def test_single_hand_keeps_slot_by_continuity_when_crossing_midline():
+    frames = [[make_hand(wrist=(300, 200), size=30)],   # izq. del centro → slot 0
+              [make_hand(wrist=(335, 200), size=30)]]   # cruza el centro, sigue siendo la misma mano
+    raw = raw_with_head(T=2, head=(320, 100), hands_px=frames)
+    n = normalize(raw)
+    assert n.present[:, 0].all() and not n.present[:, 1].any()
+
+
+def test_absent_hands_are_zero():
+    raw = raw_with_head(T=2)
+    n = normalize(raw)
+    assert not n.present.any() and (n.hands == 0).all()
+
+
+def test_norm_roundtrip(tmp_path):
+    raw = raw_with_head(T=2, hands_px=[[make_hand((300, 200), 30)], []])
+    n = normalize(raw)
+    n.save(tmp_path / "n.npz")
+    m = NormSequence.load(tmp_path / "n.npz")
+    np.testing.assert_array_equal(m.hands, n.hands)
+    np.testing.assert_array_equal(m.present, n.present)
+    assert (m.sample_id, m.signer) == (n.sample_id, n.signer)
