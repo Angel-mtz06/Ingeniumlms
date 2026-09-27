@@ -9,3 +9,5 @@ dist/
 *.pt
 *.onnx
 .pio/
+models/
+*.egg-info/

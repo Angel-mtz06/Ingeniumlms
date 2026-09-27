@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lsm"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "numpy==1.26.4",
+]
+
+[project.optional-dependencies]
+train = [
+  "mediapipe==0.10.14",
+  "scikit-learn==1.5.2",
+  "matplotlib==3.9.2",
+  "openpyxl==3.1.5",
+  "py7zr==0.22.0",
+  "tqdm==4.66.5",
+]
+dev = ["pytest==8.3.3"]
+
+[tool.setuptools.packages.find]
+where = ["server"]
+include = ["lsm*"]
+
+[tool.pytest.ini_options]
+testpaths = ["server/tests"]
+pythonpath = ["server"]
+markers = ["slow: usa MediaPipe real y archivos de datasets"]
+addopts = "-m 'not slow'"
