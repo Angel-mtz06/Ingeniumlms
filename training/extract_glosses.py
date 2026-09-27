@@ -22,9 +22,22 @@ TARGET_W = 960
 VIDEO_EXTS = (".mp4", ".mov")  # el archivo mezcla .mp4 y .MOV (21 de 1415)
 
 
+def label_of(path: Path) -> tuple[str, str]:
+    """Glosa (carpeta contenedora) y sujeto (sufijo del nombre de archivo).
+
+    El nombre de archivo no siempre coincide con la glosa real: p. ej.
+    ``TEMPERATURA/FIEBRE_3.mp4`` es un error de autoría del dataset (archivos
+    de TEMPERATURA nombrados como FIEBRE). La glosa canónica es la carpeta
+    contenedora, no el nombre de archivo.
+    """
+    gloss = path.parent.name
+    subj = path.stem.rsplit("_", 1)[1]
+    return gloss, subj
+
+
 def _work(path_str: str):
     path = Path(path_str)
-    gloss, subj = path.stem.rsplit("_", 1)
+    gloss, subj = label_of(path)
     sid = f"g{int(subj):02d}_{gloss}"
     dst = OUT / f"{sid}.npz"
     cap = cv2.VideoCapture(str(path))
@@ -57,12 +70,30 @@ def _work(path_str: str):
             "path": str(dst), "n_frames": raw.T, "hand_ratio": round(hand_ratio, 3)}
 
 
+def _merge_rows(idx_path: Path, new_rows: list[dict]) -> list[dict]:
+    """Fusiona new_rows con el index_glosses.csv existente: descarta filas viejas
+    cuyo sample_id o path coincida con alguna fila nueva, agrega las nuevas y
+    ordena por sample_id."""
+    with open(idx_path, newline="", encoding="utf-8") as f:
+        old_rows = list(csv.DictReader(f))
+    new_ids = {r["sample_id"] for r in new_rows}
+    new_paths = {r["path"] for r in new_rows}
+    kept = [r for r in old_rows if r["sample_id"] not in new_ids and r["path"] not in new_paths]
+    merged = kept + new_rows
+    merged.sort(key=lambda r: r["sample_id"])
+    return merged
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None,
                          help="Procesar solo los primeros N videos (tras ordenar); por defecto, todos.")
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 2),
                          help="Procesos en paralelo (por defecto cpu_count()-2).")
+    parser.add_argument("--glosses", type=str, default=None,
+                         help="Carpetas de glosa a reprocesar, separadas por coma (por defecto, todas). "
+                              "Si se da, el resultado se fusiona con index_glosses.csv existente en vez "
+                              "de sobrescribirlo por completo.")
     args = parser.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -71,6 +102,10 @@ def main():
         with py7zr.SevenZipFile(ARCHIVE) as z:
             z.extractall(EXTRACTED)
     videos = sorted(str(p) for p in EXTRACTED.rglob("*") if p.suffix.lower() in VIDEO_EXTS)
+    gloss_filter = None
+    if args.glosses:
+        gloss_filter = {g.strip() for g in args.glosses.split(",") if g.strip()}
+        videos = [v for v in videos if Path(v).parent.name in gloss_filter]
     if args.limit is not None:
         videos = videos[:args.limit]
     print("videos:", len(videos))
@@ -82,11 +117,15 @@ def main():
             if i % 50 == 0:
                 print(i, row and row["sample_id"], flush=True)
     rows.sort(key=lambda r: r["sample_id"])
-    with open(RAW_LANDMARKS / "index_glosses.csv", "w", newline="", encoding="utf-8") as f:
+
+    idx_path = RAW_LANDMARKS / "index_glosses.csv"
+    if gloss_filter is not None and idx_path.exists():
+        rows = _merge_rows(idx_path, rows)
+    with open(idx_path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
-    print("listo:", len(rows), "hand_ratio medio:", np.mean([r["hand_ratio"] for r in rows]))
+    print("listo:", len(rows), "hand_ratio medio:", np.mean([float(r["hand_ratio"]) for r in rows]))
 
 
 if __name__ == "__main__":
