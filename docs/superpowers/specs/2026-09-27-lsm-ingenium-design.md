@@ -141,10 +141,11 @@ Se extraen landmarks por cuadro de ambos datasets y se guardan como `.npz` por m
 - **LSM Glosses:** se remuestrea a 30 fps y se recortan los tramos quietos al inicio y al final.
 
 ### 4.2 Normalización (módulo `features`, compartido entre entrenamiento e inferencia)
-- **Referencia corporal:** centro y ancho de hombros cuando hay pose.
-- **Respaldo para Mendeley** (sin pose por la cara pixelada):
-  1. Si hay pose en algún cuadro de la muestra, se usa la mediana para toda la muestra (cámara fija, persona casi inmóvil).
-  2. Si no la hay, se usa el **bloque pixelado de la cara** (región color piel sobre fondo y ropa negros) como centro y escala.
+- **Referencia corporal = la cabeza** (centro y ancho), para que las tres fuentes (Mendeley, LSM Glosses y la cámara en vivo) usen la misma medida. Prioridad por cuadro:
+  1. Malla facial: punta de la nariz + distancia entre mejillas (puntos 234 y 454).
+  2. Pose: nariz + distancia entre orejas (visibilidad > 0.5).
+  3. **Bloque pixelado de la cara** (Mendeley): región color piel sobre fondo y ropa negros, medida en los cuadros de reposo; ancho × factor calibrado.
+  Los cuadros sin referencia toman la mediana de la muestra (cámara fija, persona casi inmóvil).
 - **Forma de la mano** en coordenadas propias (origen en la muñeca, escala por la palma) + **ángulo de flexión por dedo**. El evaluador usa esos mismos ángulos.
 - **Asignación de manos por posición** (lado de la imagen respecto al centro corporal), no por la etiqueta de MediaPipe.
 - **Largo fijo: 16 cuadros**. Es el mínimo común, porque Mendeley solo tiene 9–15 fotogramas por muestra.
