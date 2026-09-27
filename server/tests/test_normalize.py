@@ -53,3 +53,20 @@ def test_normalize_with_fixed_anchor_ignores_pose():
     # wrist normaliza a (+2, +3) respecto al ancla fija: x>0 -> lado derecho -> slot 1
     # (misma convención que test_units_are_head_widths_from_head_center, donde x<0 -> slot 0).
     np.testing.assert_allclose(n.hands[:, 1, 0, :2], [[2.0, 3.0], [2.0, 3.0]], atol=1e-5)
+
+
+from lsm.normalize import assign_slots, to_head_units
+
+
+def test_to_head_units():
+    h = make_hand(wrist=(350, 160), size=30)
+    u = to_head_units(h, 320, 100, 30)
+    np.testing.assert_allclose(u[0, :2], [1.0, 2.0], atol=1e-5)
+    assert u.dtype == np.float32
+
+
+def test_assign_slots_two_hands_sorted_and_single_by_side():
+    a, b = make_hand(wrist=(-1, 2)), make_hand(wrist=(1, 2))
+    assert assign_slots([b, a], [None, None]) == [1, 0]
+    assert assign_slots([make_hand(wrist=(0.5, 2))], [None, None]) == [1]
+    assert assign_slots([make_hand(wrist=(0.2, 2))], [np.array([-0.1, 2, 0]), None]) == [0]

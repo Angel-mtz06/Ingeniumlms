@@ -33,6 +33,28 @@ class NormSequence:
             return NormSequence(hands=z["hands"], present=z["present"], **json.loads(str(z["meta"])))
 
 
+def to_head_units(h: np.ndarray, cx: float, cy: float, s: float) -> np.ndarray:
+    n = h.astype(np.float32).copy()
+    n[:, 0] = (n[:, 0] - cx) / s
+    n[:, 1] = (n[:, 1] - cy) / s
+    n[:, 2] = n[:, 2] / s
+    return n
+
+
+def assign_slots(dets: list[np.ndarray], last_wrist: list[np.ndarray | None]) -> list[int]:
+    """Slot de cada detección, en el mismo orden que `dets`."""
+    if len(dets) >= 2:
+        order = sorted(range(2), key=lambda i: dets[i][0, 0])
+        slots = [0, 0]
+        slots[order[0]], slots[order[1]] = 0, 1
+        return slots
+    if len(dets) == 1:
+        w = dets[0][0, :2]
+        known = [(k, np.linalg.norm(w - last_wrist[k][:2])) for k in (0, 1) if last_wrist[k] is not None]
+        return [min(known, key=lambda kv: kv[1])[0]] if known else [0 if w[0] < 0 else 1]
+    return []
+
+
 def normalize(raw: RawSequence, anchor: np.ndarray | None = None) -> NormSequence:
     anchor = head_anchor(raw) if anchor is None else np.tile(np.asarray(anchor, np.float32).reshape(1, 3), (raw.T, 1))
     T = raw.T
@@ -41,25 +63,8 @@ def normalize(raw: RawSequence, anchor: np.ndarray | None = None) -> NormSequenc
     last_wrist: list[np.ndarray | None] = [None, None]
     for t in range(T):
         cx, cy, s = anchor[t]
-        dets = []
-        for h in raw.hands[t]:
-            if np.isnan(h[0, 0]):
-                continue
-            n = h.astype(np.float32).copy()
-            n[:, 0] = (n[:, 0] - cx) / s
-            n[:, 1] = (n[:, 1] - cy) / s
-            n[:, 2] = n[:, 2] / s
-            dets.append(n)
-        if len(dets) >= 2:
-            dets = sorted(dets[:2], key=lambda d: d[0, 0])
-            slots = [0, 1]
-        elif len(dets) == 1:
-            w = dets[0][0, :2]
-            known = [(k, np.linalg.norm(w - last_wrist[k][:2])) for k in (0, 1) if last_wrist[k] is not None]
-            slots = [min(known, key=lambda kv: kv[1])[0]] if known else [0 if w[0] < 0 else 1]
-        else:
-            slots = []
-        for d, k in zip(dets, slots):
+        dets = [to_head_units(h, cx, cy, s) for h in raw.hands[t] if not np.isnan(h[0, 0])][:2]
+        for d, k in zip(dets, assign_slots(dets, last_wrist)):
             hands[t, k] = d
             present[t, k] = True
             last_wrist[k] = d[0]
