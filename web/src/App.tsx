@@ -48,7 +48,9 @@ export default function App() {
   const gloves = useGloves();
   const sinkRef = useRef<FrameSink | null>(null);
   const onFrame = useCallback((f: FramePayload) => sinkRef.current?.(f), []);
-  const vision = useVision(camera.videoRef, camera.ready, onFrame, gloves.latest);
+  // En Inicio y Diagnóstico nadie usa los cuadros: MediaPipe se pausa (la cámara sigue abierta).
+  const usesCamera = TABS.find((t) => t.id === active)?.camera ?? false;
+  const vision = useVision(camera.videoRef, camera.ready, onFrame, gloves.latest, undefined, !usesCamera);
   const [sessionMode, setSessionModeState] = useState<{ mode: Mode; target: string | null }>({ mode: "translate", target: null });
   const session = useSession(sessionMode.mode, sessionMode.target);
   const { vocab, error: vocabError } = useVocab();

@@ -68,6 +68,7 @@ export function Diagnostics() {
           gloves={{ L: gloves.sides.L, R: gloves.sides.R, supported: gloves.supported }}
           connected={session.connected}
           fps={vision.fps}
+          paused
         />
         {vision.delegate ? (
           <p className="sheet__meta">

@@ -52,6 +52,7 @@ export function Home() {
           gloves={{ L: gloves.sides.L, R: gloves.sides.R, supported: gloves.supported }}
           connected={session.connected}
           fps={vision.fps}
+          paused
         />
       </section>
 

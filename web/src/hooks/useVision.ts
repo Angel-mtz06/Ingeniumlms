@@ -25,6 +25,9 @@ type VideoWithRvfc = HTMLVideoElement & {
  * `requestVideoFrameCallback` si existe, si no `requestAnimationFrame` saltando cuadros repetidos.
  * Por cada cuadro llama `onFrame` con el payload del contrato WebSocket. El estado de React
  * solo cambia una vez por segundo (fps), nunca por cuadro.
+ *
+ * `paused` (opcional): detiene el bucle por cuadro sin descargar el modelo ni cerrar la cámara;
+ * al volver a `false` el bucle arranca de nuevo sobre el `<video>` vigente.
  */
 export function useVision(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -32,6 +35,7 @@ export function useVision(
   onFrame: (f: FramePayload) => void,
   gloves: () => FramePayload["gloves"],
   base = "/mediapipe",
+  paused = false,
 ): VisionHandle {
   const [vision, setVision] = useState<Vision | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +94,7 @@ export function useVision(
   // Bucle por cuadro. Sigue al `<video>` vivo de `videoRef` en cada paso: si la pantalla
   // vuelve a montar CameraView, el bucle pasa al elemento nuevo sin reiniciarse.
   useEffect(() => {
-    if (!ready || !vision) return;
+    if (!ready || !vision || paused) return;
     let stopped = false;
     let handle = 0;
     let scheduledOn: VideoWithRvfc | null = null;
@@ -146,7 +150,7 @@ export function useVision(
       else cancelAnimationFrame(handle);
       setFps(null);
     };
-  }, [ready, vision, videoRef]);
+  }, [ready, vision, videoRef, paused]);
 
   const lastHands = useCallback((): HandPoints => visionRef.current?.lastHands() ?? [], []);
 

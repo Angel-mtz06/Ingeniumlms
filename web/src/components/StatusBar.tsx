@@ -11,6 +11,8 @@ export interface StatusBarProps {
   gloves: { L: GloveState; R: GloveState; supported?: boolean };
   connected: boolean;
   fps: number | null;
+  /** La visión está en pausa porque la pantalla no usa la cámara: se muestra "en pausa" en vez de FPS. */
+  paused?: boolean;
 }
 
 const CAMERA_TEXT: Record<CameraStatus, [string, ItemTone]> = {
@@ -55,7 +57,7 @@ function Item({ icon, label, value, tone }: { icon: ReactNode; label: string; va
  * ícono con forma propia y texto; el color solo refuerza. A lectores de pantalla solo se anuncian
  * cambios de conexión (no el parpadeo "sin datos" de los guantes ni los FPS), y solo si duran ≥ 1 s.
  */
-export function StatusBar({ camera, gloves, connected, fps }: StatusBarProps) {
+export function StatusBar({ camera, gloves, connected, fps, paused = false }: StatusBarProps) {
   const supported = gloves.supported ?? true;
   const [camText, camTone] = CAMERA_TEXT[camera];
   const [rText, rTone] = gloveText(gloves.R, supported);
@@ -73,7 +75,7 @@ export function StatusBar({ camera, gloves, connected, fps }: StatusBarProps) {
         {announcement}
       </p>
       <p className="status-bar__fps">
-        <abbr title="cuadros por segundo">FPS</abbr> <span className="tabular">{fps ?? "…"}</span>
+        <abbr title="cuadros por segundo">FPS</abbr> <span className="tabular">{fps ?? (paused ? "en pausa" : "…")}</span>
       </p>
     </div>
   );
