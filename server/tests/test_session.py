@@ -261,3 +261,11 @@ def test_evaluation_marks_evaluable():
         out = asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": target}] + sign_frames()))
         ev = next(m for m in out if m["type"] == "evaluation")
         assert ev["evaluable"] is expected, target
+
+
+def test_frame_with_non_finite_or_non_positive_size_is_error():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    good = frame((0, 1.0))
+    for b in (dict(good, w=float("inf")), dict(good, h=float("nan")), dict(good, w=0), dict(good, h=-480)):
+        assert asyncio.run(s.handle(b)) == [{"type": "error", "message": "cuadro inválido"}], b
+    assert s.idx == -1 and s.hands == []

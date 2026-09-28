@@ -107,3 +107,13 @@ def test_main_limits_torch_threads(tmp_path, monkeypatch):
     monkeypatch.setattr(app_mod, "MODELS", tmp_path)  # sin modelo: no carga nada
     app_mod.main()
     assert calls == [2, "run"]
+
+
+def test_recording_rejects_bad_frame_size(tmp_path):
+    c = client(tmp_path)
+    for bad in (float("inf"), 0, -1):
+        frames = [frame((0.0, 1.0)) for _ in range(3)]
+        frames[1] = dict(frames[1], w=bad)
+        assert c.post("/api/recordings", json={"label": "hola", "signer": "angel", "frames": frames}) \
+            .status_code == 400, bad
+    assert not list((tmp_path / "own").rglob("*.npz"))

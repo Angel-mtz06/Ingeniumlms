@@ -1,6 +1,7 @@
 """Orquesta una conexión: cuadros → segmentos → evaluación/traducción. Sin red: probable en aislamiento."""
 from __future__ import annotations
 
+import math
 import warnings
 
 import numpy as np
@@ -31,12 +32,14 @@ def _nanmedian(a: np.ndarray) -> np.ndarray:
         return np.nanmedian(a, axis=0)
 
 
+def valid_dim(v) -> bool:
+    """Ancho/alto de cuadro válido: número finito > 0 (no bool)."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0
+
+
 def _parse_frame(msg: dict):
     """RawSequence de un cuadro, o None si algún campo tiene tipo o forma inválidos."""
-    def num(v) -> bool:
-        return isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
-
-    if not (num(msg.get("w")) and num(msg.get("h"))):
+    if not (valid_dim(msg.get("w")) and valid_dim(msg.get("h"))):
         return None
     for key in ("hands", "pose", "face"):
         if not isinstance(msg.get(key), (list, type(None))):

@@ -15,7 +15,7 @@ from lsm.evaluator.references import _to_json, load_references
 from lsm.live import frames_to_raw
 from lsm.paths import DATASETS, MODELS, PROCESSED, ROOT
 from lsm.sentences import SentenceBuilder
-from lsm.session import Session
+from lsm.session import Session, valid_dim
 from lsm.vocab import canonical
 
 VOCAB_CSV = PROCESSED / "vocab.csv"
@@ -67,6 +67,8 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
             raise HTTPException(400, "sin cuadros")
         if len(rec.frames) > MAX_REC_FRAMES:
             raise HTTPException(400, f"demasiados cuadros (máx. {MAX_REC_FRAMES})")
+        if not all(valid_dim(f.get("w")) and valid_dim(f.get("h")) for f in rec.frames):
+            raise HTTPException(400, "cuadros inválidos: w y h deben ser números finitos > 0")
         if not SIGNER_RE.fullmatch(rec.signer):
             raise HTTPException(400, "glosa o persona inválida")
         label = canonical(rec.label)
