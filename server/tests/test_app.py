@@ -68,3 +68,29 @@ def test_websocket_survives_bad_frame(tmp_path):
         assert err["type"] == "error"
         ws.send_json({"type": "hello", "mode": "practice", "target": "HOLA"})
         assert ws.receive_json() == {"type": "ready", "mode": "practice", "target": "HOLA", "has_reference": True}
+
+
+def test_recording_rejects_bad_signer_names(tmp_path):
+    c = client(tmp_path)
+    frames = [frame((0.0, 1.0)) for _ in range(3)]
+    for signer in ("angel_x", "angel\n", "", "a" * 33):
+        assert c.post("/api/recordings", json={"label": "hola", "signer": signer, "frames": frames}) \
+            .status_code == 400, signer
+    assert c.post("/api/recordings", json={"label": "hola", "signer": "ana-2", "frames": frames}).status_code == 200
+
+
+def test_recording_too_long_is_rejected(tmp_path):
+    c = client(tmp_path)
+    frames = [{"w": 640, "h": 480}] * 1801
+    assert c.post("/api/recordings", json={"label": "hola", "signer": "angel", "frames": frames}).status_code == 400
+
+
+def test_recording_take_number_never_overwrites(tmp_path):
+    c = client(tmp_path)
+    raw_dir = tmp_path / "own" / "raw"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "angel_HOLA_003.npz").write_bytes(b"previa")
+    frames = [frame((0.0, 1.0)) for _ in range(3)]
+    r = c.post("/api/recordings", json={"label": "hola", "signer": "angel", "frames": frames}).json()
+    assert r["sample_id"] == "angel_HOLA_004"
+    assert (raw_dir / "angel_HOLA_003.npz").read_bytes() == b"previa"
