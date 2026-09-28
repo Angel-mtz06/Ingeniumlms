@@ -3,6 +3,7 @@ import {
   FpsMeter, cameraErrorMessage, clampScore, fingerLabel, fingerSummary, fingerTone, fitBounds, fiveFingers,
   fold, gloveState, glossLabel, groupVocab, monotonic, percent, referenceBounds, referencePosition,
   REFERENCE_FRAME_MS, REFERENCE_HOLD_MS, scoreTone, wsUrl,
+  focusAfterRemove, gloveErrorMessage, selectLatest, statusAnnouncement, trackedRef,
 } from "./ui";
 
 describe("dedos", () => {
@@ -122,5 +123,47 @@ describe("encuadre de la referencia", () => {
     expect(f.scale).toBe(100);
     expect(f.ox).toBe(0);
     expect(f.oy).toBe(50);
+  });
+});
+
+describe("fix round 1", () => {
+  it("selectLatest: null si no hay línea o el guante está sin datos (> 500 ms)", () => {
+    expect(selectLatest("D,1,2", 1000, 1400)).toBe("D,1,2");
+    expect(selectLatest("D,1,2", 1000, 1501)).toBeNull();
+    expect(selectLatest(null, 1000, 1001)).toBeNull();
+  });
+  it("gloveErrorMessage: por nombre del error, sin depender del texto", () => {
+    expect(gloveErrorMessage({ name: "NotFoundError" })).toBeNull();
+    expect(gloveErrorMessage({ name: "AbortError" })).toBeNull();
+    expect(gloveErrorMessage({ name: "NotAllowedError" })).toMatch(/permiso/);
+    expect(gloveErrorMessage({ name: "NetworkError" })).toMatch(/en uso/);
+    expect(gloveErrorMessage({ name: "InvalidStateError" })).toMatch(/en uso/);
+    expect(gloveErrorMessage(new Error("cualquier texto"))).toMatch(/no respondió/);
+    expect(gloveErrorMessage("raro")).toMatch(/no respondió/);
+  });
+  it("trackedRef avisa solo cuando cambia el elemento", () => {
+    const seen: (string | null)[] = [];
+    const r = trackedRef<string>((v) => seen.push(v));
+    expect(r.current).toBeNull();
+    r.current = "a";
+    r.current = "a";
+    r.current = null;
+    r.current = "b";
+    expect(seen).toEqual(["a", null, "b"]);
+    expect(r.current).toBe("b");
+  });
+  it("focusAfterRemove: la anterior, la primera, o el contenedor si no quedan", () => {
+    expect(focusAfterRemove(2, 3)).toBe(1);
+    expect(focusAfterRemove(0, 2)).toBe(0);
+    expect(focusAfterRemove(5, 2)).toBe(1);
+    expect(focusAfterRemove(0, 0)).toBeNull();
+  });
+  it("statusAnnouncement ignora el parpadeo 'sin datos' y cambia con la conexión", () => {
+    const base = { camera: "ready" as const, connected: true };
+    const fresh = statusAnnouncement({ ...base, gloves: { L: { connected: true, stale: false }, R: { connected: false, stale: false } } });
+    const stale = statusAnnouncement({ ...base, gloves: { L: { connected: true, stale: true }, R: { connected: false, stale: false } } });
+    expect(stale).toBe(fresh);
+    expect(fresh).toBe("Cámara lista. Guante derecho sin conectar. Guante izquierdo conectado. Servidor conectado.");
+    expect(statusAnnouncement({ ...base, connected: false, gloves: { L: { connected: true, stale: false }, R: { connected: false, stale: false } } })).toMatch(/Servidor sin conexión/);
   });
 });

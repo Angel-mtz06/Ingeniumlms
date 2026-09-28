@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Glosses } from "../lib/protocol";
-import { glossLabel, percent } from "../lib/ui";
+import { focusAfterRemove, glossLabel, percent } from "../lib/ui";
 import { IconWarning } from "./icons";
 import "./components.css";
 
@@ -26,6 +26,19 @@ export function GlossChips({ items, onConfirm, onRemove }: GlossChipsProps) {
   const panelId = useId();
   const chipRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const firstOption = useRef<HTMLButtonElement | null>(null);
+  const regionRef = useRef<HTMLDivElement | null>(null);
+  // Quitar es asíncrono (lo confirma el servidor): se recuerda qué se quitó para mover el foco
+  // cuando la lista realmente se acorta.
+  const pendingFocus = useRef<{ removed: number; prevLength: number } | null>(null);
+
+  useEffect(() => {
+    const p = pendingFocus.current;
+    if (!p || items.length >= p.prevLength) return;
+    pendingFocus.current = null;
+    const target = focusAfterRemove(p.removed, items.length);
+    const el = target === null ? null : chipRefs.current[target];
+    (el ?? regionRef.current)?.focus();
+  }, [items.length]);
 
   // Si la lista cambia y la etiqueta abierta ya no existe, cerrar.
   useEffect(() => {
@@ -49,15 +62,15 @@ export function GlossChips({ items, onConfirm, onRemove }: GlossChipsProps) {
     }
   };
 
-  if (items.length === 0) {
-    return <p className="chips__empty">Todavía no hay señas. Haz una seña frente a la cámara y aparecerá aquí.</p>;
-  }
-
   const current = open !== null ? items[open] : null;
 
   return (
-    <div className="chips">
-      <ol className="chips__list" aria-label="Señas reconocidas">
+    // Contenedor enfocable por script: destino estable del foco cuando se quita la última etiqueta.
+    <div ref={regionRef} className="chips" role="region" aria-label="Señas reconocidas" tabIndex={-1}>
+      {items.length === 0 ? (
+        <p className="chips__empty">Todavía no hay señas. Haz una seña frente a la cámara y aparecerá aquí.</p>
+      ) : null}
+      <ol className="chips__list" hidden={items.length === 0}>
         {items.map((it, i) => (
           <li key={`${i}-${it.gloss}`}>
             <button
@@ -107,9 +120,10 @@ export function GlossChips({ items, onConfirm, onRemove }: GlossChipsProps) {
               onClick={() => {
                 const i = open;
                 setOpen(null);
+                // El foco va al contenedor (estable) y, cuando la lista se acorta, a la etiqueta anterior.
+                pendingFocus.current = { removed: i, prevLength: items.length };
+                regionRef.current?.focus();
                 onRemove(i);
-                // La etiqueta desaparece: el foco pasa a la anterior (o a la primera).
-                requestAnimationFrame(() => chipRefs.current[Math.max(0, i - 1)]?.focus());
               }}
             >
               Quitar esta seña

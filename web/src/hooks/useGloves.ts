@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FramePayload } from "../lib/protocol";
 import { GloveSerial } from "../lib/serial";
-import { type GloveState, gloveState, sameGloveState } from "../lib/ui";
+import { type GloveState, gloveErrorMessage, gloveState, sameGloveState, selectLatest } from "../lib/ui";
 
 export type { GloveState } from "../lib/ui";
 export type Side = "L" | "R";
@@ -14,7 +14,7 @@ export interface GlovesHandle {
   disconnect(side: Side): Promise<void>;
   connecting: boolean;
   error: string | null;
-  /** Última línea cruda de cada guante conectado, para el campo `gloves` del cuadro. */
+  /** Última línea cruda de cada guante conectado con datos frescos; null si está sin conectar o sin datos (> 500 ms). */
   latest(): FramePayload["gloves"];
 }
 
@@ -50,9 +50,12 @@ export function useGloves(): GlovesHandle {
   }, [supported, refresh]);
 
   // Cerrar puertos al desmontar.
+  const mounted = useRef(true);
   useEffect(() => {
+    mounted.current = true;
     const current = ports.current;
     return () => {
+      mounted.current = false;
       void current.L?.disconnect();
       void current.R?.disconnect();
       current.L = null;
@@ -70,22 +73,23 @@ export function useGloves(): GlovesHandle {
     const glove = new GloveSerial();
     try {
       const side = await glove.connect();
+      if (!mounted.current) {
+        // El hook se desmontó mientras se abría el puerto: no guardar un guante huérfano.
+        await glove.disconnect();
+        return;
+      }
       const previous = ports.current[side];
       ports.current[side] = glove;
       if (previous && previous !== glove) await previous.disconnect();
     } catch (err) {
-      // Cerrar el selector sin elegir puerto no es un error para la persona usuaria.
-      const name = err && typeof err === "object" && "name" in err ? String((err as { name: unknown }).name) : "";
-      if (name !== "NotFoundError" && name !== "AbortError") {
-        setError(
-          err instanceof Error && err.message.includes("ID?")
-            ? "El guante no respondió. Revisa que esté encendido y vuelve a conectarlo."
-            : "No se pudo conectar el guante. Desconéctalo, vuelve a conectarlo e inténtalo de nuevo.",
-        );
-      }
+      // Sin depender del texto de serial.ts: cerrar el selector (NotFoundError) no es un error;
+      // permiso, puerto ocupado o falta de respuesta (tiempo agotado) tienen su propio mensaje.
+      if (mounted.current) setError(gloveErrorMessage(err));
     } finally {
-      setConnecting(false);
-      refresh();
+      if (mounted.current) {
+        setConnecting(false);
+        refresh();
+      }
     }
   }, [supported, refresh]);
 
@@ -100,10 +104,14 @@ export function useGloves(): GlovesHandle {
   );
 
   const latest = useCallback(
-    (): FramePayload["gloves"] => ({
-      L: ports.current.L?.latest() ?? null,
-      R: ports.current.R?.latest() ?? null,
-    }),
+    (): FramePayload["gloves"] => {
+      const now = performance.now();
+      const { L, R } = ports.current;
+      return {
+        L: L ? selectLatest(L.latest(), L.lastSeenMs(), now) : null,
+        R: R ? selectLatest(R.latest(), R.lastSeenMs(), now) : null,
+      };
+    },
     [],
   );
 

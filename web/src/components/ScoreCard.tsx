@@ -32,8 +32,8 @@ export function ScoreCard({ scores, total, tips, evaluable = true }: ScoreCardPr
         </div>
         {shownTips.length > 0 ? (
           <ul className="score__tips score__tips--plain">
-            {shownTips.map((t) => (
-              <li key={t}>{t}</li>
+            {shownTips.map((t, i) => (
+              <li key={`${i}-${t}`}>{t}</li>
             ))}
           </ul>
         ) : (
@@ -87,8 +87,8 @@ export function ScoreCard({ scores, total, tips, evaluable = true }: ScoreCardPr
         <div className="score__fix">
           <h4 className="score__fix-title">Para mejorar</h4>
           <ul className="score__tips">
-            {shownTips.map((tip) => (
-              <li key={tip}>{tip}</li>
+            {shownTips.map((tip, i) => (
+              <li key={`${i}-${tip}`}>{tip}</li>
             ))}
           </ul>
         </div>

@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import type { GloveState } from "../lib/ui";
+import { useEffect, useState, type ReactNode } from "react";
+import { type GloveState, statusAnnouncement } from "../lib/ui";
 import { IconCamera, IconConnection, IconGlove, ToneIcon } from "./icons";
 import "./components.css";
 
@@ -25,6 +25,18 @@ function gloveText(g: GloveState, supported: boolean): [string, ItemTone] {
   return g.stale ? ["sin datos", "warn"] : ["conectado", "ok"];
 }
 
+/** Retraso del anuncio a lectores de pantalla: un cambio debe durar ≥ 1 s para anunciarse. */
+const ANNOUNCE_DELAY_MS = 1200;
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = window.setTimeout(() => setV(value), ms);
+    return () => window.clearTimeout(id);
+  }, [value, ms]);
+  return v;
+}
+
 function Item({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: ItemTone }) {
   return (
     <li className="status-item" data-tone={tone}>
@@ -40,22 +52,26 @@ function Item({ icon, label, value, tone }: { icon: ReactNode; label: string; va
 
 /**
  * Barra de estado: cámara, guante derecho e izquierdo, servidor y FPS. Cada estado lleva
- * ícono con forma propia y texto; el color solo refuerza. Los cambios se anuncian con cortesía,
- * los FPS no (cambian cada segundo).
+ * ícono con forma propia y texto; el color solo refuerza. A lectores de pantalla solo se anuncian
+ * cambios de conexión (no el parpadeo "sin datos" de los guantes ni los FPS), y solo si duran ≥ 1 s.
  */
 export function StatusBar({ camera, gloves, connected, fps }: StatusBarProps) {
   const supported = gloves.supported ?? true;
   const [camText, camTone] = CAMERA_TEXT[camera];
   const [rText, rTone] = gloveText(gloves.R, supported);
   const [lText, lTone] = gloveText(gloves.L, supported);
+  const announcement = useDebounced(statusAnnouncement({ camera, gloves, connected }), ANNOUNCE_DELAY_MS);
   return (
     <div className="status-bar">
-      <ul className="status-bar__list" aria-label="Estado del sistema" aria-live="polite">
+      <ul className="status-bar__list" aria-label="Estado del sistema">
         <Item icon={<IconCamera />} label="Cámara" value={camText} tone={camTone} />
         <Item icon={<IconGlove />} label="Guante derecho" value={rText} tone={rTone} />
         <Item icon={<IconGlove style={{ transform: "scaleX(-1)" }} />} label="Guante izquierdo" value={lText} tone={lTone} />
         <Item icon={<IconConnection />} label="Servidor" value={connected ? "conectado" : "sin conexión"} tone={connected ? "ok" : "bad"} />
       </ul>
+      <p className="visually-hidden" role="status">
+        {announcement}
+      </p>
       <p className="status-bar__fps">
         <abbr title="cuadros por segundo">FPS</abbr> <span className="tabular">{fps ?? "…"}</span>
       </p>

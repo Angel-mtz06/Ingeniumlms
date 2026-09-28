@@ -132,6 +132,71 @@ export function sameGloveState(a: GloveState, b: GloveState): boolean {
   return a.connected === b.connected && a.stale === b.stale;
 }
 
+/** Línea que se envía al servidor: null si el guante está sin datos (el servidor lo toma como ausente). */
+export function selectLatest(line: string | null, lastSeenMs: number, nowMs: number): string | null {
+  return line !== null && !gloveState(true, lastSeenMs, nowMs).stale ? line : null;
+}
+
+/**
+ * Mensaje para un fallo al conectar un guante, sin depender del texto del error de serial.ts.
+ * null = no es un error para la persona usuaria (cerró el selector de puertos sin elegir).
+ */
+export function gloveErrorMessage(err: unknown): string | null {
+  const name = err && typeof err === "object" && "name" in err ? String((err as { name: unknown }).name) : "";
+  switch (name) {
+    case "NotFoundError":
+    case "AbortError":
+      return null;
+    case "NotAllowedError":
+    case "SecurityError":
+      return "El navegador no dio permiso para usar el puerto del guante. Vuelve a intentarlo y elige el puerto.";
+    case "NetworkError":
+    case "InvalidStateError":
+      return "No se pudo abrir el puerto del guante; puede estar en uso por otra pestaña o programa. Ciérralo e inténtalo de nuevo.";
+    default:
+      return "El guante no respondió. Revisa que esté encendido, desconéctalo, vuelve a conectarlo e inténtalo de nuevo.";
+  }
+}
+
+/**
+ * Referencia con la forma de `useRef` (`{ current }`) que avisa cuando cambia el elemento.
+ * React asigna `current` al montar y null al desmontar; así un hook puede seguir al elemento vivo
+ * sin cambiar su API pública.
+ */
+export function trackedRef<T>(onChange: (v: T | null) => void): { current: T | null } {
+  let value: T | null = null;
+  return {
+    get current() {
+      return value;
+    },
+    set current(v: T | null) {
+      if (v === value) return;
+      value = v;
+      onChange(v);
+    },
+  };
+}
+
+/** Índice de la etiqueta que recibe el foco tras quitar `removed`; null = no quedan etiquetas (foco al contenedor). */
+export function focusAfterRemove(removed: number, newLength: number): number | null {
+  if (newLength <= 0) return null;
+  return Math.min(Math.max(0, removed - 1), newLength - 1);
+}
+
+/**
+ * Texto que se anuncia a lectores de pantalla en la barra de estado. Solo incluye si cada cosa
+ * está conectada o no: el parpadeo de "sin datos" de los guantes no cambia el anuncio.
+ */
+export function statusAnnouncement(s: {
+  camera: "ready" | "loading" | "error";
+  gloves: { L: GloveState; R: GloveState };
+  connected: boolean;
+}): string {
+  const cam = s.camera === "ready" ? "Cámara lista" : s.camera === "error" ? "Cámara sin acceso" : "Abriendo la cámara";
+  const g = (x: GloveState) => (x.connected ? "conectado" : "sin conectar");
+  return `${cam}. Guante derecho ${g(s.gloves.R)}. Guante izquierdo ${g(s.gloves.L)}. Servidor ${s.connected ? "conectado" : "sin conexión"}.`;
+}
+
 /** Mensaje en español para un fallo de getUserMedia. */
 export function cameraErrorMessage(err: unknown): string {
   const name = err && typeof err === "object" && "name" in err ? String((err as { name: unknown }).name) : "";

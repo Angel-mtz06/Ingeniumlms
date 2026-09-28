@@ -87,31 +87,42 @@ export function useVision(
     };
   }, [base]);
 
-  // Bucle por cuadro.
+  // Bucle por cuadro. Sigue al `<video>` vivo de `videoRef` en cada paso: si la pantalla
+  // vuelve a montar CameraView, el bucle pasa al elemento nuevo sin reiniciarse.
   useEffect(() => {
-    const video = videoRef.current as VideoWithRvfc | null;
-    if (!ready || !video || !vision) return;
+    if (!ready || !vision) return;
     let stopped = false;
     let handle = 0;
+    let scheduledOn: VideoWithRvfc | null = null;
+    let usedRvfc = false;
+    let lastVideo: HTMLVideoElement | null = null;
     let lastTs = -1;
     let lastMediaTime = -1;
     let failures = 0;
     const meter = new FpsMeter();
-    const rvfc = typeof video.requestVideoFrameCallback === "function";
 
     const schedule = () => {
-      handle = rvfc ? video.requestVideoFrameCallback!(step) : requestAnimationFrame(step);
+      const v = videoRef.current as VideoWithRvfc | null;
+      scheduledOn = v;
+      usedRvfc = !!v && typeof v.requestVideoFrameCallback === "function";
+      handle = usedRvfc ? v!.requestVideoFrameCallback!(step) : requestAnimationFrame(step);
     };
 
     function step() {
       if (stopped) return;
-      const fresh = rvfc || video!.currentTime !== lastMediaTime;
-      if (fresh && video!.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video!.videoWidth > 0) {
-        lastMediaTime = video!.currentTime;
+      const video = videoRef.current;
+      if (video !== lastVideo) {
+        lastVideo = video;
+        lastMediaTime = -1;
+      }
+      // Con rVFC cada llamada es un cuadro nuevo del mismo elemento; con rAF se saltan los repetidos.
+      const fresh = !!video && ((usedRvfc && video === scheduledOn) || video.currentTime !== lastMediaTime);
+      if (video && fresh && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+        lastMediaTime = video.currentTime;
         const now = performance.now();
         lastTs = monotonic(lastTs, now);
         try {
-          const frame = vision!.detect(video!, lastTs, glovesRef.current());
+          const frame = vision!.detect(video, lastTs, glovesRef.current());
           failures = 0;
           onFrameRef.current(frame);
           const f = meter.tick(now);
@@ -131,7 +142,7 @@ export function useVision(
     schedule();
     return () => {
       stopped = true;
-      if (rvfc) video.cancelVideoFrameCallback?.(handle);
+      if (usedRvfc) scheduledOn?.cancelVideoFrameCallback?.(handle);
       else cancelAnimationFrame(handle);
       setFps(null);
     };

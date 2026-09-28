@@ -11,6 +11,9 @@ export interface SentencePanelProps {
   onCopy(): void | Promise<void>;
 }
 
+const COPY_OK_MS = 2500;
+const COPY_ERROR_MS = 8000;
+
 const SOURCE_TEXT = {
   llm: { badge: "Generado por IA", hint: "Redactado por un modelo de lenguaje a partir de las señas." },
   template: { badge: "Plantilla", hint: "Armado con reglas fijas a partir de las señas." },
@@ -31,13 +34,15 @@ export function SentencePanel({ text, paragraph, source, onSpeak, onCopy }: Sent
 
   const copy = async () => {
     window.clearTimeout(timer.current);
+    let result: "ok" | "error" = "ok";
     try {
       await onCopy();
-      setCopied("ok");
     } catch {
-      setCopied("error");
+      result = "error";
     }
-    timer.current = window.setTimeout(() => setCopied(null), 2500);
+    setCopied(result);
+    // El error se queda más tiempo (≥ 6 s) para que dé tiempo de leerlo y copiar a mano.
+    timer.current = window.setTimeout(() => setCopied(null), result === "error" ? COPY_ERROR_MS : COPY_OK_MS);
   };
 
   return (
