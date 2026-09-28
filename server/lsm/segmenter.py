@@ -19,6 +19,20 @@ POST_STILL_MIN = 15  # un segmento que sigue a un cierre por quietud necesita �
 POST_STILL_DROP = 1.0  # …y no bajar en neto más de 1 ancho de cabeza (si no, es solo bajar la mano)
 
 
+DESCENT_DY = 0.05  # anchos de cabeza por cuadro: la muñeca sigue bajando hacia el reposo
+DESCENT_MAX_TRIM = 0.4
+
+
+def trim_descent(ys) -> int:
+    """ys: y de la muñeca más alta por cuadro del segmento. Devuelve el índice del último cuadro que se
+    conserva tras quitar la bajada final hacia el reposo (nunca más del 40 % del segmento)."""
+    b = len(ys) - 1
+    lo = b - int(DESCENT_MAX_TRIM * len(ys))
+    while b > max(0, lo) and ys[b] - ys[b - 1] > DESCENT_DY:
+        b -= 1
+    return b
+
+
 def _top_y(hands: np.ndarray, present: np.ndarray) -> float:
     """y de la muñeca más alta presente (y crece hacia abajo)."""
     ys = hands[:, 0, 1][present]
@@ -42,7 +56,7 @@ class Segmenter:
         self.pending = 0
         self.need_motion = False
         self.post_still = False
-        self.start_y = self.last_y = float("nan")
+        self.ys: list[float] = []  # y de la muñeca más alta por cuadro del segmento activo
         self.prev_w: np.ndarray | None = None
         self.prev_p: np.ndarray | None = None
 
@@ -63,9 +77,12 @@ class Segmenter:
         self.need_motion = by_stillness
         if end - start + 1 < self.min_len:
             return []
-        if by_rest and self.post_still and (
-                end - start + 1 < POST_STILL_MIN or self.last_y - self.start_y > POST_STILL_DROP):
-            return []  # tras un sostén: bajar la mano al reposo no es una seña
+        if by_rest and self.post_still:
+            # se juzga sin la bajada final: una seña real tras un sostén también termina bajando
+            ys = self.ys[:end - start + 1]
+            keep = trim_descent(ys)
+            if keep + 1 < POST_STILL_MIN or ys[keep] - ys[0] > POST_STILL_DROP:
+                return []  # tras un sostén: bajar la mano al reposo no es una seña
         self.pending += 1
         return [SegEvent("end", start, end)]
 
@@ -78,7 +95,7 @@ class Segmenter:
                 self.rest_count = self.still_count = 0
                 self.post_still = self.need_motion
                 self.need_motion = False
-                self.start_y = self.last_y = _top_y(hands, present & (hands[:, 0, 1] < self.rest_y))
+                self.ys = [_top_y(hands, present)]
                 return []
             if not active:
                 self.need_motion = False
@@ -89,11 +106,11 @@ class Segmenter:
             return []
         if active:
             self.last_active = idx
-            self.last_y = _top_y(hands, present & (hands[:, 0, 1] < self.rest_y))
             self.rest_count = 0
             self.still_count = self.still_count + 1 if speed < self.still_speed else 0
         else:
             self.rest_count += 1
+        self.ys.append(_top_y(hands, present))
         length = idx - self.start + 1
         # prioridad: reposo → quietud → max_len
         if self.rest_count >= self.rest_frames:

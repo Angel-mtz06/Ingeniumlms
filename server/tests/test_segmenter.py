@@ -106,3 +106,20 @@ def test_hand_in_slot_1_is_segmented():
         events += seg.update(i, hands, present)
     ends = [e for e in events if e.kind == "end"]
     assert len(ends) == 1 and (ends[0].start, ends[0].end) == (5, 24)
+
+
+def _post_hold_sign_then_descent(n, low):
+    # seña A, sostén (cierra por quietud), seña B de n cuadros a la misma altura y bajada de `low` cuadros
+    frames = [REST] * 5 + [make_hand(wrist=(-1.0, 5.0 - 4.0 * k / 8)) for k in range(1, 9)]
+    frames += [up(-1.0 + 0.05 * k) for k in range(10)] + [up(-0.5)] * 15
+    frames += [up(-0.5 + 0.1 * k) for k in range(1, n + 1)]
+    frames += [make_hand(wrist=(1.5, 1.0 + 4.0 * k / low)) for k in range(1, low + 1)]
+    return frames + [REST] * 60
+
+
+def test_post_hold_sign_ending_in_descent_is_kept():
+    for n in (15, 30):
+        for low in (6, 10):
+            ev = feed(Segmenter(max_len=120), _post_hold_sign_then_descent(n, low))
+            ends = [e for e in ev if e.kind == "end"]
+            assert len(ends) == 2 and ends[1].start == 5 + 8 + 10 + 15, (n, low, ends)

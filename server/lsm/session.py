@@ -12,7 +12,7 @@ from lsm.glove.calibration import Calibrator
 from lsm.glove.protocol import GloveReading, parse_line
 from lsm.live import LiveNormalizer, frame_to_raw
 from lsm.normalize import NormSequence
-from lsm.segmenter import Segmenter
+from lsm.segmenter import Segmenter, trim_descent
 from lsm.sentences import SentenceBuilder
 from lsm.vocab import canonical
 
@@ -22,8 +22,6 @@ DROP = 300
 CONF_MIN = 0.6
 NO_HAND_WARN = 60
 GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
-DESCENT_DY = 0.05  # anchos de cabeza por cuadro: la muñeca sigue bajando hacia el reposo
-DESCENT_MAX_TRIM = 0.4
 SIDE_OF_SLOT = ("R", "L")
 
 
@@ -205,10 +203,7 @@ class Session:
 
     def _trim_descent(self, a: int, b: int) -> int:
         """Quita del final los cuadros en que la mano solo baja al reposo (≤40 % del segmento)."""
-        lo = b - int(DESCENT_MAX_TRIM * (b - a + 1))
-        while b > max(a, lo) and self._top_y(b) - self._top_y(b - 1) > DESCENT_DY:
-            b -= 1
-        return b
+        return a + trim_descent([self._top_y(i) for i in range(a, b + 1)])
 
     async def _sentence(self) -> list[dict]:
         if not self.pending:
