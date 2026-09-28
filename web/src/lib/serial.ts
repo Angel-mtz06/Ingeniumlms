@@ -62,9 +62,15 @@ export class GloveSerial {
         }
       })();
 
-      return await Promise.race([got, new Promise<never>((_, rej) => {
+      // Create timeout promise and attach a handler before racing
+      // to prevent "unhandled rejection" warnings from Vitest/Node
+      const timeout = new Promise<never>((_, rej) => {
         timeoutId = setTimeout(() => rej(new Error("El guante no respondió a ID?")), deadline - Date.now());
-      })]);
+      });
+      // Mark rejection as handled without transforming the promise
+      timeout.then(undefined, () => undefined);
+
+      return await Promise.race([got, timeout]);
     } catch (err) {
       await this.disconnect();
       throw err;
