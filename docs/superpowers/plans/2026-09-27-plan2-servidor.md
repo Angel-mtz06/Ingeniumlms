@@ -43,9 +43,9 @@
 |---|---|
 | `ready` | `mode`, `target`, `has_reference: bool` |
 | `live` | `fingers: [[s×5],[s×5]]` (−1 sin uso, 0 bien, 1 regular, 2 mal), `hands: [bool,bool]`, `segment: "idle"\|"active"` |
-| `evaluation` | `target`, `recognized: [[gloss,p]…]`, `scores: {configuracion, ubicacion, movimiento, orientacion}`, `total`, `tips: [str]`, `fingers` |
+| `evaluation` | `target`, `recognized: [[gloss,p]…]`, `scores: {configuracion, ubicacion, movimiento, orientacion}`, `total`, `tips: [str]`, `fingers`, `evaluable: bool` — `false` si una mano que la seña requiere no se vio (el puntaje no es comparable; mostrar el consejo) o si no hay referencia; sin referencia llegan `scores: {}`, `total: 0`, `fingers: []` |
 | `sign` | `index`, `gloss`, `top3: [[gloss,p]…]`, `confident: bool` |
-| `pending` | `glosses: [str]` |
+| `pending` | `glosses: [str]` (también responde a `build_sentence` sin glosas pendientes, con `glosses: []`) |
 | `sentence` | `glosses`, `text`, `paragraph`, `source: "llm"\|"template"` |
 | `calibration` | `step`, `status` o `sides: {"L": bool, "R": bool}` |
 | `warning` | `code`, `message` |

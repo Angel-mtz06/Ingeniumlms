@@ -243,3 +243,21 @@ def test_hello_validates_mode_and_target():
 def test_build_sentence_without_pending_returns_empty_pending():
     s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
     assert asyncio.run(s.handle({"type": "build_sentence"})) == [{"type": "pending", "glosses": []}]
+
+
+def two_hand_ref():
+    hands = np.zeros((12, 2, 21, 3), np.float32)
+    present = np.ones((12, 2), bool)
+    for t in range(12):
+        hands[t, 0] = make_hand(wrist=(-1.0 + 0.1 * t, 1.0), flex=(0, 90, 90, 90, 90))
+        hands[t, 1] = make_hand(wrist=(1.0, 1.0), flex=(0, 90, 90, 90, 90))
+    return build_reference("DOS", [NormSequence(hands, present, f"s{i}", f"s{i}") for i in range(3)])
+
+
+def test_evaluation_marks_evaluable():
+    refs = {"HOLA": ref(), "DOS": two_hand_ref()}
+    for target, expected in (("HOLA", True), ("DOS", False), ("NADA", False)):
+        s = Session(FakeClassifier(), refs, SentenceBuilder(llm=None, provider="none"))
+        out = asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": target}] + sign_frames()))
+        ev = next(m for m in out if m["type"] == "evaluation")
+        assert ev["evaluable"] is expected, target

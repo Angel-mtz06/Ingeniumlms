@@ -182,14 +182,17 @@ class Session:
             ref = self.references.get(self.target)
             if ref is None:
                 return [{"type": "evaluation", "target": self.target, "recognized": top3, "scores": {},
-                         "total": 0.0, "tips": ["No hay referencia para esta seña"], "fingers": []}]
+                         "total": 0.0, "tips": ["No hay referencia para esta seña"], "fingers": [],
+                         "evaluable": False}]
             q = (b - a) // 4
             gflex = _nanmedian(np.stack(self.gflex[a + q:b - q + 1]))
             gcont = _nanmedian(np.stack(self.gcont[a + q:b - q + 1]))
             ev = evaluate(ref, seq, gflex, gcont)
             return [{"type": "evaluation", "target": self.target, "recognized": top3, "scores": ev.scores,
                      "total": ev.total, "tips": messages(ev, ref),
-                     "fingers": finger_status(ref, ev.finger_flex).tolist()}]
+                     "fingers": finger_status(ref, ev.finger_flex).tolist(),
+                     # False si una mano que la seña requiere no se vio (el puntaje no es comparable)
+                     "evaluable": not any(i.param == "mano" for i in ev.issues)}]
         if not top3:
             return []
         item = {"gloss": top3[0][0], "top3": top3, "confident": top3[0][1] >= CONF_MIN}
