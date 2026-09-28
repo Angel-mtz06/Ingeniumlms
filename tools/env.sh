@@ -10,3 +10,6 @@ export MPLCONFIGDIR=D:/Ingenium/tools/mpl
 export PYTHONIOENCODING=utf-8
 export PATH="/d/Ingenium/.venv/Scripts:/d/Ingenium/tools/uvpkg/bin:$PATH"
 mkdir -p "$UV_CACHE_DIR" "$UV_PYTHON_INSTALL_DIR" "$PIP_CACHE_DIR" "$TMP" "$TORCH_HOME" "$MPLCONFIGDIR"
+export PLATFORMIO_CORE_DIR=D:/Ingenium/tools/platformio
+export npm_config_cache=D:/Ingenium/tools/npm-cache
+mkdir -p "$PLATFORMIO_CORE_DIR" "$npm_config_cache"
