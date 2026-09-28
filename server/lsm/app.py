@@ -129,9 +129,12 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
 
 
 def main() -> None:
+    import torch
     import uvicorn
 
     from lsm.classifier.infer import Classifier
+
+    torch.set_num_threads(2)  # inferencia en CPU: deja núcleos libres para el servidor y MediaPipe
 
     clf_path, ref_path = MODELS / "classifier_v1.pt", MODELS / "references.json"
     classifier = Classifier.load(clf_path) if clf_path.exists() else None

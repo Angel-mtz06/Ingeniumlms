@@ -94,3 +94,16 @@ def test_recording_take_number_never_overwrites(tmp_path):
     r = c.post("/api/recordings", json={"label": "hola", "signer": "angel", "frames": frames}).json()
     assert r["sample_id"] == "angel_HOLA_004"
     assert (raw_dir / "angel_HOLA_003.npz").read_bytes() == b"previa"
+
+
+def test_main_limits_torch_threads(tmp_path, monkeypatch):
+    import torch
+    import uvicorn
+
+    import lsm.app as app_mod
+    calls = []
+    monkeypatch.setattr(torch, "set_num_threads", lambda n: calls.append(n))
+    monkeypatch.setattr(uvicorn, "run", lambda *a, **k: calls.append("run"))
+    monkeypatch.setattr(app_mod, "MODELS", tmp_path)  # sin modelo: no carga nada
+    app_mod.main()
+    assert calls == [2, "run"]
