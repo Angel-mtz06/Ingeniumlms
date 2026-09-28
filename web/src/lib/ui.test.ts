@@ -4,6 +4,7 @@ import {
   fold, gloveState, glossLabel, groupVocab, monotonic, percent, referenceBounds, referencePosition,
   REFERENCE_FRAME_MS, REFERENCE_HOLD_MS, scoreTone, wsUrl,
   focusAfterRemove, gloveErrorMessage, selectLatest, statusAnnouncement, trackedRef,
+  duplicateGloveMessage, gloveLostMessage,
 } from "./ui";
 
 describe("dedos", () => {
@@ -165,5 +166,16 @@ describe("fix round 1", () => {
     expect(stale).toBe(fresh);
     expect(fresh).toBe("Cámara lista. Guante derecho sin conectar. Guante izquierdo conectado. Servidor conectado.");
     expect(statusAnnouncement({ ...base, connected: false, gloves: { L: { connected: true, stale: false }, R: { connected: false, stale: false } } })).toMatch(/Servidor sin conexión/);
+  });
+});
+
+describe("mensajes de guantes", () => {
+  it("rechaza un segundo guante del mismo lado con un error claro", () => {
+    expect(duplicateGloveMessage("R")).toMatch(/^Ya hay un guante derecho conectado/);
+    expect(duplicateGloveMessage("L")).toMatch(/^Ya hay un guante izquierdo conectado/);
+  });
+  it("avisa qué guante se desconectó", () => {
+    expect(gloveLostMessage("R")).toMatch(/guante derecho se desconectó/);
+    expect(gloveLostMessage("L")).toMatch(/guante izquierdo se desconectó/);
   });
 });

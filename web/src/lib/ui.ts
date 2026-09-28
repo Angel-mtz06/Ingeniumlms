@@ -137,6 +137,18 @@ export function selectLatest(line: string | null, lastSeenMs: number, nowMs: num
   return line !== null && !gloveState(true, lastSeenMs, nowMs).stale ? line : null;
 }
 
+const SIDE_NAME = { L: "izquierdo", R: "derecho" } as const;
+
+/** Segundo guante que se identifica con un lado ya conectado: se rechaza (no se reemplaza en silencio). */
+export function duplicateGloveMessage(side: "L" | "R"): string {
+  return `Ya hay un guante ${SIDE_NAME[side]} conectado. Revisa que el otro guante esté configurado como ${SIDE_NAME[side === "L" ? "R" : "L"]}, o desconecta el primero antes.`;
+}
+
+/** Guante que se desenchufó o dejó de responder mientras estaba conectado. */
+export function gloveLostMessage(side: "L" | "R"): string {
+  return `El guante ${SIDE_NAME[side]} se desconectó. Revisa el cable y vuelve a conectarlo.`;
+}
+
 /**
  * Mensaje para un fallo al conectar un guante, sin depender del texto del error de serial.ts.
  * null = no es un error para la persona usuaria (cerró el selector de puertos sin elegir).

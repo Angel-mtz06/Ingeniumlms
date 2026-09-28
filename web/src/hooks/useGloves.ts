@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FramePayload } from "../lib/protocol";
 import { GloveSerial } from "../lib/serial";
-import { type GloveState, gloveErrorMessage, gloveState, sameGloveState, selectLatest } from "../lib/ui";
+import { type GloveState, duplicateGloveMessage, gloveErrorMessage, gloveLostMessage, gloveState, sameGloveState, selectLatest } from "../lib/ui";
 
 export type { GloveState } from "../lib/ui";
 export type Side = "L" | "R";
@@ -79,8 +79,22 @@ export function useGloves(): GlovesHandle {
         return;
       }
       const previous = ports.current[side];
+      if (previous && previous !== glove) {
+        // Dos guantes con el mismo lado: no se reemplaza en silencio al que ya funciona.
+        await glove.disconnect();
+        setError(duplicateGloveMessage(side));
+        return;
+      }
       ports.current[side] = glove;
-      if (previous && previous !== glove) await previous.disconnect();
+      // Desenchufado o error fatal de lectura: el lado vuelve a "sin conectar" (reaparece "Conectar").
+      glove.onLost = () => {
+        if (ports.current[side] !== glove) return;
+        ports.current[side] = null;
+        if (mounted.current) {
+          setError(gloveLostMessage(side));
+          refresh();
+        }
+      };
     } catch (err) {
       // Sin depender del texto de serial.ts: cerrar el selector (NotFoundError) no es un error;
       // permiso, puerto ocupado o falta de respuesta (tiempo agotado) tienen su propio mensaje.
@@ -97,6 +111,7 @@ export function useGloves(): GlovesHandle {
     async (side: Side) => {
       const glove = ports.current[side];
       ports.current[side] = null;
+      if (glove) glove.onLost = null;
       await glove?.disconnect();
       refresh();
     },
