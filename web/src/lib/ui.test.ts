@@ -164,7 +164,7 @@ describe("fix round 1", () => {
     const fresh = statusAnnouncement({ ...base, gloves: { L: { connected: true, stale: false }, R: { connected: false, stale: false } } });
     const stale = statusAnnouncement({ ...base, gloves: { L: { connected: true, stale: true }, R: { connected: false, stale: false } } });
     expect(stale).toBe(fresh);
-    expect(fresh).toBe("Cámara lista. Guante derecho sin conectar. Guante izquierdo conectado. Servidor conectado.");
+    expect(fresh).toBe("Cámara lista. Guante izquierdo conectado. Guante derecho sin conectar. Servidor conectado.");
     expect(statusAnnouncement({ ...base, connected: false, gloves: { L: { connected: true, stale: false }, R: { connected: false, stale: false } } })).toMatch(/Servidor sin conexión/);
   });
 });

@@ -206,7 +206,7 @@ export function statusAnnouncement(s: {
 }): string {
   const cam = s.camera === "ready" ? "Cámara lista" : s.camera === "error" ? "Cámara sin acceso" : "Abriendo la cámara";
   const g = (x: GloveState) => (x.connected ? "conectado" : "sin conectar");
-  return `${cam}. Guante derecho ${g(s.gloves.R)}. Guante izquierdo ${g(s.gloves.L)}. Servidor ${s.connected ? "conectado" : "sin conexión"}.`;
+  return `${cam}. Guante izquierdo ${g(s.gloves.L)}. Guante derecho ${g(s.gloves.R)}. Servidor ${s.connected ? "conectado" : "sin conexión"}.`; // mismo orden que la pantalla (espejo)
 }
 
 /** Mensaje en español para un fallo de getUserMedia. */
