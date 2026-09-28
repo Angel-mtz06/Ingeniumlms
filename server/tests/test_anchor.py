@@ -1,15 +1,17 @@
 import numpy as np
 import pytest
 
-from lsm.anchor import FACEBOX_TO_HEAD, AnchorError, frame_anchor, head_anchor
+from lsm.anchor import EAR_TO_CHEEK, FACEBOX_TO_HEAD, AnchorError, frame_anchor, head_anchor
 from lsm.schema import RawSequence
 from tests.conftest import raw_with_head
 
 
 def test_pose_anchor_uses_nose_and_ear_distance():
+    # orejas ≈ 0.83 × mejillas: el respaldo por pose se escala a la misma unidad que la malla facial
     raw = raw_with_head(T=3, head=(320, 100), head_w=30)
     cx, cy, s = frame_anchor(raw, 0)
-    assert (cx, cy) == pytest.approx((320, 100)) and s == pytest.approx(30)
+    assert EAR_TO_CHEEK == 1.21
+    assert (cx, cy) == pytest.approx((320, 100)) and s == pytest.approx(30 * 1.21)
 
 
 def test_face_mesh_has_priority_over_pose():
@@ -33,7 +35,7 @@ def test_missing_frames_take_median():
     raw.pose[2] = np.nan
     a = head_anchor(raw)
     assert a.shape == (4, 3)
-    np.testing.assert_allclose(a[2], [320, 100, 30])
+    np.testing.assert_allclose(a[2], [320, 100, 30 * 1.21], rtol=1e-6)
 
 
 def test_no_anchor_anywhere_raises():

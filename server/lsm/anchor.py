@@ -7,6 +7,8 @@ from lsm.schema import FACE_CHEEK_A, FACE_CHEEK_B, FACE_NOSE, RawSequence
 
 # ancho de cabeza ≈ ancho del bloque pixelado × este factor (calibrar con training/calibrate_facebox.py)
 FACEBOX_TO_HEAD = 0.85
+# distancia entre orejas (pose) ≈ 0.83 × distancia entre mejillas (malla): se lleva a la misma unidad
+EAR_TO_CHEEK = 1.21
 POSE_NOSE, POSE_EAR_A, POSE_EAR_B = 0, 7, 8
 MIN_VIS = 0.5
 
@@ -23,7 +25,7 @@ def frame_anchor(raw: RawSequence, t: int) -> tuple[float, float, float] | None:
             return float(f[FACE_NOSE, 0]), float(f[FACE_NOSE, 1]), s
     p = raw.pose[t]
     if not np.isnan(p[POSE_NOSE, 0]) and min(p[POSE_NOSE, 3], p[POSE_EAR_A, 3], p[POSE_EAR_B, 3]) > MIN_VIS:
-        s = float(np.linalg.norm(p[POSE_EAR_A, :2] - p[POSE_EAR_B, :2]))
+        s = float(np.linalg.norm(p[POSE_EAR_A, :2] - p[POSE_EAR_B, :2])) * EAR_TO_CHEEK
         if s > 1e-3:
             return float(p[POSE_NOSE, 0]), float(p[POSE_NOSE, 1]), s
     b = raw.face_box[t]

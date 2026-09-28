@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from lsm.anchor import EAR_TO_CHEEK  # el respaldo por pose escala orejas → mejillas
 from lsm.normalize import NormSequence, normalize
 from tests.conftest import make_hand, raw_with_head
 
@@ -10,7 +11,7 @@ def test_units_are_head_widths_from_head_center():
     raw = raw_with_head(T=1, head=(320, 100), head_w=30, hands_px=[[h]])
     n = normalize(raw)
     assert n.present[0].tolist() == [True, False]
-    np.testing.assert_allclose(n.hands[0, 0, 0, :2], [-2.0, 3.0], atol=1e-5)
+    np.testing.assert_allclose(n.hands[0, 0, 0, :2], np.array([-2.0, 3.0]) / EAR_TO_CHEEK, atol=1e-5)
 
 
 def test_two_hands_sorted_by_image_x():

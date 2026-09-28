@@ -1,5 +1,6 @@
 import numpy as np
 
+from lsm.anchor import EAR_TO_CHEEK  # el respaldo por pose escala orejas → mejillas
 from lsm.live import LiveNormalizer, frame_to_raw, frames_to_raw
 from tests.conftest import make_hand
 
@@ -30,10 +31,10 @@ def test_live_normalizer_units_and_median_anchor():
     ln = LiveNormalizer(window=5)
     h, p = ln.push(frame_to_raw(frame([make_hand((260, 190), 30)])))
     assert p.tolist() == [True, False]
-    np.testing.assert_allclose(h[0, 0, :2], [-2.0, 3.0], atol=1e-4)
+    np.testing.assert_allclose(h[0, 0, :2], np.array([-2.0, 3.0]) / EAR_TO_CHEEK, atol=1e-4)
     # cuadro sin pose: usa la mediana previa
     h2, p2 = ln.push(frame_to_raw(frame([make_hand((260, 190), 30)], with_pose=False)))
-    np.testing.assert_allclose(h2[0, 0, :2], [-2.0, 3.0], atol=1e-4)
+    np.testing.assert_allclose(h2[0, 0, :2], np.array([-2.0, 3.0]) / EAR_TO_CHEEK, atol=1e-4)
 
 
 def test_live_normalizer_without_any_anchor_returns_absent():
