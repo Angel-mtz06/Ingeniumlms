@@ -137,3 +137,31 @@ def test_segmenter_depends_on_mode():
     assert (s.segmenter.still_frames, s.segmenter.max_len) == (10**6, 150)
     asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}]))
     assert s.segmenter.max_len == 120 and s.segmenter.still_frames < 100
+
+
+class LenClassifier(FakeClassifier):
+    def __init__(self):
+        self.lengths = []
+
+    def predict(self, norm, k=3):
+        self.lengths.append(norm.T)
+        return super().predict(norm, k)
+
+
+def test_final_descent_is_trimmed_from_segment():
+    clf = LenClassifier()
+    s = Session(clf, {}, SentenceBuilder(llm=None, provider="none"))
+    sign = [frame((-1.0 + 0.1 * i, 1.0)) for i in range(20)]
+    lower = [frame((0.9, 1.0 + 0.4 * k)) for k in range(1, 11)]  # 6 cuadros bajando aún "activos"
+    asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}]
+                    + [frame((-1.0, 5.0))] * 5 + sign + lower + [frame((-1.0, 5.0))] * 10))
+    assert clf.lengths == [20]
+
+
+def test_descent_trim_is_capped_at_40_percent():
+    clf = LenClassifier()
+    s = Session(clf, {}, SentenceBuilder(llm=None, provider="none"))
+    fall = [frame((0.1 * i, 0.15 * i)) for i in range(20)]  # todo el segmento baja
+    asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}]
+                    + [frame((-1.0, 5.0))] * 5 + fall + [frame((-1.0, 5.0))] * 10))
+    assert clf.lengths == [12]

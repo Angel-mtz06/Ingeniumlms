@@ -20,6 +20,8 @@ KEEP = 900
 DROP = 300
 CONF_MIN = 0.6
 NO_HAND_WARN = 60
+DESCENT_DY = 0.05  # anchos de cabeza por cuadro: la muñeca sigue bajando hacia el reposo
+DESCENT_MAX_TRIM = 0.4
 SIDE_OF_SLOT = ("R", "L")
 
 
@@ -132,6 +134,7 @@ class Session:
         a, b = max(start - self.base, 0), end - self.base
         if b < a:
             return []
+        b = self._trim_descent(a, b)
         seq = NormSequence(np.stack(self.hands[a:b + 1]), np.stack(self.present[a:b + 1]))
         top3 = [[g, round(float(p), 3)] for g, p in self.classifier.predict(seq, k=3)] if self.classifier else []
         if self.mode == "practice":
@@ -151,6 +154,17 @@ class Session:
         item = {"gloss": top3[0][0], "top3": top3, "confident": top3[0][1] >= CONF_MIN}
         self.pending.append(item)
         return [{"type": "sign", "index": len(self.pending) - 1, **item}]
+
+    def _top_y(self, i: int) -> float:
+        ys = self.hands[i][:, 0, 1][self.present[i]]
+        return float(ys.min()) if ys.size else float("nan")
+
+    def _trim_descent(self, a: int, b: int) -> int:
+        """Quita del final los cuadros en que la mano solo baja al reposo (≤40 % del segmento)."""
+        lo = b - int(DESCENT_MAX_TRIM * (b - a + 1))
+        while b > max(a, lo) and self._top_y(b) - self._top_y(b - 1) > DESCENT_DY:
+            b -= 1
+        return b
 
     async def _sentence(self) -> list[dict]:
         if not self.pending:
