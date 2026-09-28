@@ -1,5 +1,8 @@
 import type { ClientMsg, ServerMsg } from "./protocol";
 
+/** Si el WebSocket acumula más de esto sin enviar, los cuadros se descartan (los de control nunca). */
+export const MAX_BUFFERED_BYTES = 64 * 1024;
+
 export class SessionSocket {
   private ws: WebSocket | null = null;
   private queue: ClientMsg[] = [];
@@ -45,7 +48,12 @@ export class SessionSocket {
 
   send(m: ClientMsg): boolean {
     if (m.type === "hello") this.hello = m;
-    if (this.open) { this.ws!.send(JSON.stringify(m)); return true; }
+    if (this.open) {
+      // Red lenta: un cuadro viejo no sirve; mejor soltarlo que acumular latencia.
+      if (m.type === "frame" && (this.ws!.bufferedAmount ?? 0) > MAX_BUFFERED_BYTES) return false;
+      this.ws!.send(JSON.stringify(m));
+      return true;
+    }
     if (m.type !== "frame" && m.type !== "hello") this.queue.push(m);
     return false;
   }

@@ -95,4 +95,28 @@ describe("SessionSocket", () => {
       vi.useRealTimers();
     }
   });
+
+  it("descarta cuadros si el socket tiene más de 64 KB sin enviar, pero nunca mensajes de control", () => {
+    const s = new SessionSocket("ws://x/ws", () => {}, { WebSocketImpl: FakeWS as unknown as typeof WebSocket, retryMs: 1e9 });
+    FakeWS.last.openNow();
+    const ws = FakeWS.last as FakeWS & { bufferedAmount: number };
+    ws.bufferedAmount = 64 * 1024; // justo en el límite: todavía se envía
+    expect(s.send(frame)).toBe(true);
+    ws.bufferedAmount = 64 * 1024 + 1;
+    const before = ws.sent.length;
+    expect(s.send(frame)).toBe(false);
+    expect(ws.sent.length).toBe(before);
+    const control = [
+      { type: "hello", mode: "translate", target: null },
+      { type: "confirm_gloss", index: 0, gloss: "HOLA" },
+      { type: "remove_gloss", index: 0 },
+      { type: "build_sentence" },
+      { type: "calibrate", step: "open" },
+      { type: "reset" },
+    ] as const;
+    for (const m of control) expect(s.send(m)).toBe(true);
+    expect(ws.sent.slice(before).map((x) => JSON.parse(x).type)).toEqual(control.map((m) => m.type));
+    s.close();
+  });
 });
+
