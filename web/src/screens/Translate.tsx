@@ -47,7 +47,12 @@ export function Translate() {
   const canSpeak = speechSupported();
 
   useSessionMode("translate", null);
-  useFrameSink((f) => session.send(f));
+  // Mientras se corrige una seña dudosa no se mandan cuadros: así el contador de quietud del
+  // servidor (pausa automática) no avanza y no forma la oración a media corrección.
+  const correcting = useRef(false);
+  useFrameSink((f) => {
+    if (!correcting.current) session.send(f);
+  });
 
   // Solo se leen las oraciones que llegan con la pantalla abierta (no la que ya estaba al entrar).
   const spoken = useRef(translate.sentence);
@@ -128,6 +133,10 @@ export function Translate() {
             onRemove={(index) => {
               translateDispatch({ kind: "remove", index });
               session.send({ type: "remove_gloss", index });
+            }}
+            onOpenChange={(open) => {
+              // El confirm_gloss/remove_gloss ya salió (se envía antes de cerrar): los cuadros siguen detrás.
+              correcting.current = open;
             }}
           />
           <div className="sheet__actions">

@@ -14,6 +14,11 @@ export interface GlossChipsProps {
   items: GlossChipItem[];
   onConfirm(i: number, gloss: string): void;
   onRemove(i: number): void;
+  /**
+   * Avisa cuando se abre o se cierra el panel de corrección (también `false` al desmontar abierto).
+   * `onConfirm`/`onRemove` se llaman siempre ANTES del `false` de su cierre.
+   */
+  onOpenChange?(open: boolean): void;
 }
 
 /**
@@ -21,7 +26,7 @@ export interface GlossChipsProps {
  * y la palabra "¿revisar?". Al tocar una etiqueta se abre, debajo, la elección entre sus tres
  * opciones más probables y el botón para quitarla.
  */
-export function GlossChips({ items, onConfirm, onRemove }: GlossChipsProps) {
+export function GlossChips({ items, onConfirm, onRemove, onOpenChange }: GlossChipsProps) {
   const [open, setOpen] = useState<number | null>(null);
   const panelId = useId();
   const chipRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -48,6 +53,22 @@ export function GlossChips({ items, onConfirm, onRemove }: GlossChipsProps) {
   useEffect(() => {
     if (open !== null) firstOption.current?.focus();
   }, [open]);
+
+  const openChange = useRef(onOpenChange);
+  openChange.current = onOpenChange;
+  const isOpen = open !== null;
+  const reported = useRef(false);
+  useEffect(() => {
+    if (reported.current === isOpen) return;
+    reported.current = isOpen;
+    openChange.current?.(isOpen);
+  }, [isOpen]);
+  useEffect(
+    () => () => {
+      if (reported.current) openChange.current?.(false);
+    },
+    [],
+  );
 
   const close = (focusChip = true) => {
     const i = open;
