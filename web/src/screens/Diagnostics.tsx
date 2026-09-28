@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ToneIcon } from "../components/icons";
 import { StatusBar } from "../components/StatusBar";
 import { formatAngle, IMU_NAMES, parseGloveLine, SeqRate, type GloveLine } from "../lib/diagnostics";
-import { GloveControls, useApp } from "./shared";
+import { sentencesLabel } from "../lib/health";
+import { GloveControls, HealthNotice, useApp } from "./shared";
 
 const POLL_MS = 200;
 
@@ -20,7 +21,7 @@ const EMPTY: SideView = { raw: null, parsed: null, rate: null };
  * Se interpreta en el navegador solo para mostrarlo; el servidor sigue siendo la fuente de verdad.
  */
 export function Diagnostics() {
-  const { gloves, session, vision, cameraStatus } = useApp();
+  const { gloves, session, vision, cameraStatus, health } = useApp();
   const [view, setView] = useState<{ L: SideView; R: SideView }>({ L: EMPTY, R: EMPTY });
   const meters = useRef({ L: new SeqRate(), R: new SeqRate() });
   const latest = gloves.latest; // función estable del hook
@@ -59,6 +60,8 @@ export function Diagnostics() {
         <p className="screen__lead">Revisa que cada sensor responda antes de una demostración. Mueve los dedos y mira cómo cambian los valores.</p>
       </header>
 
+      <HealthNotice />
+
       <section className="sheet" aria-labelledby="diag-estado">
         <h3 id="diag-estado" className="sheet__title">
           Estado del sistema
@@ -75,6 +78,25 @@ export function Diagnostics() {
             Visión con MediaPipe en <strong>{vision.delegate === "GPU" ? "GPU" : "CPU (la GPU no estaba disponible)"}</strong>.
           </p>
         ) : null}
+        <h4 className="diag-sub">Servidor</h4>
+        {health ? (
+          <dl className="diag-kv diag-server">
+            <div>
+              <dt>Clasificador</dt>
+              <dd>{health.classifier ? "cargado" : "no cargado"}</dd>
+            </div>
+            <div>
+              <dt>Señas de referencia</dt>
+              <dd className="tabular">{health.references}</dd>
+            </div>
+            <div>
+              <dt>Oraciones</dt>
+              <dd>{sentencesLabel(health.llm)}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="sheet__meta">{session.connected ? "Consultando el estado del servidor…" : "Sin datos del servidor."}</p>
+        )}
         <GloveControls compact />
       </section>
 

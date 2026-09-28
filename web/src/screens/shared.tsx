@@ -12,6 +12,7 @@ import type { GlovesHandle } from "../hooks/useGloves";
 import type { SessionHandle } from "../hooks/useSession";
 import type { VisionHandle } from "../hooks/useVision";
 import type { CalibrationState } from "../lib/calibration";
+import { type Health, healthWarning, parseHealth } from "../lib/health";
 import type { FramePayload, Mode } from "../lib/protocol";
 import type { SavedRecording } from "../lib/record";
 import type { TranslateAction, TranslateState } from "../lib/translate";
@@ -44,6 +45,8 @@ export interface AppState {
   takes: SavedTake[];
   addTake(t: SavedTake): void;
   go(tab: TabId): void;
+  /** Última respuesta de /api/health (null = aún no llega o el servidor no responde). */
+  health: Health | null;
 }
 
 export const AppContext = createContext<AppState | null>(null);
@@ -133,6 +136,40 @@ export function CalibrationLostNotice({ onCalibrate }: { onCalibrate?: () => voi
         </button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Consulta /api/health al montar y cada vez que el WebSocket se (re)conecta (`generation` cambia):
+ * si el servidor se reinició sin modelo, el aviso aparece sin recargar la página.
+ */
+export function useHealth(generation: number): Health | null {
+  const [health, setHealth] = useState<Health | null>(null);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetch("/api/health", { signal: ctrl.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        setHealth(parseHealth(await r.json()));
+      })
+      .catch(() => {
+        /* sin servidor: ServerNotice ya lo avisa */
+      });
+    return () => ctrl.abort();
+  }, [generation]);
+  return health;
+}
+
+/** Aviso visible si el servidor no tiene cargado el modelo de reconocimiento o las referencias. */
+export function HealthNotice() {
+  const { health } = useApp();
+  const text = healthWarning(health);
+  if (!text) return null;
+  return (
+    <p className="notice notice--bad" role="alert">
+      <IconError />
+      <span>{text}</span>
+    </p>
   );
 }
 

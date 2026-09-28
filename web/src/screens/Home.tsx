@@ -1,7 +1,7 @@
 import type { MouseEvent } from "react";
 import { IconCamera, IconSpeaker } from "../components/icons";
 import { StatusBar } from "../components/StatusBar";
-import { GloveControls, useApp } from "./shared";
+import { GloveControls, HealthNotice, useApp } from "./shared";
 
 /**
  * Inicio: las dos entradas principales (Práctica y Traducción), el estado del sistema
@@ -23,6 +23,8 @@ export function Home() {
         <h2 className="screen__title">¿Qué quieres hacer?</h2>
         <p className="screen__lead">Todo funciona con tu cámara. Los guantes son opcionales y ayudan a leer mejor los dedos.</p>
       </header>
+
+      <HealthNotice />
 
       <div className="entries">
         <a href="#practica" className="entry" onClick={link("practica")}>

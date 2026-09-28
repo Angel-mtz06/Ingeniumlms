@@ -12,7 +12,7 @@ import { Diagnostics } from "./screens/Diagnostics";
 import { Home } from "./screens/Home";
 import { Practice } from "./screens/Practice";
 import { RecordScreen } from "./screens/Record";
-import { AppContext, useVocab, type AppState, type FrameSink, type SavedTake, type TabId } from "./screens/shared";
+import { AppContext, useHealth, useVocab, type AppState, type FrameSink, type SavedTake, type TabId } from "./screens/shared";
 import { Translate } from "./screens/Translate";
 
 const TABS: readonly { id: TabId; label: string; camera: boolean }[] = [
@@ -54,7 +54,8 @@ export default function App() {
   const vision = useVision(camera.videoRef, camera.ready, onFrame, gloves.latest, undefined, !usesCamera);
   const [sessionMode, setSessionModeState] = useState<{ mode: Mode; target: string | null }>({ mode: "translate", target: null });
   const session = useSession(sessionMode.mode, sessionMode.target);
-  const { vocab, error: vocabError } = useVocab();
+  const { vocab, error: vocabError, retry: retryVocab } = useVocab();
+  const health = useHealth(session.generation);
   const [translate, translateDispatch] = useReducer(translateReducer, TRANSLATE_INITIAL);
   const [calibration, calibrationDispatch] = useReducer(calibrationReducer, CALIBRATION_INITIAL);
   const [takes, setTakes] = useState<SavedTake[]>([]);
@@ -79,6 +80,15 @@ export default function App() {
     if (g > 1 && g !== lastGeneration.current) calibrationDispatch({ kind: "reconnect" });
     if (g > 0) lastGeneration.current = g;
   }, [session.generation]);
+
+  // Si el catálogo falló porque el servidor aún no estaba arriba, se reintenta al conectarse el socket.
+  const vocabErrorRef = useRef(vocabError);
+  vocabErrorRef.current = vocabError;
+  const retryVocabRef = useRef(retryVocab);
+  retryVocabRef.current = retryVocab;
+  useEffect(() => {
+    if (session.connected && vocabErrorRef.current) retryVocabRef.current();
+  }, [session.connected]);
 
   const setFrameSink = useCallback((fn: FrameSink | null) => {
     sinkRef.current = fn;
@@ -123,8 +133,9 @@ export default function App() {
       takes,
       addTake,
       go,
+      health,
     }),
-    [camera, vision, gloves, session, cameraStatus, vocab, vocabError, setFrameSink, setSessionMode, translate, calibration, takes, addTake, go],
+    [camera, vision, gloves, session, cameraStatus, vocab, vocabError, setFrameSink, setSessionMode, translate, calibration, takes, addTake, go, health],
   );
 
   useEffect(() => {

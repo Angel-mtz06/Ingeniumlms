@@ -800,6 +800,15 @@
   font-weight: 700;
 }
 
+.diag-server {
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  margin-block-end: var(--space-4);
+}
+
+.diag-server dd {
+  font-size: var(--text-md);
+}
+
 .diag-table-wrap {
   overflow-x: auto;
 }
