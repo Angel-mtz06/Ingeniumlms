@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useThemeColors } from "../hooks/useThemeColors";
 import { fitBounds, glossLabel, HAND_CONNECTIONS, referenceBounds, referencePosition } from "../lib/ui";
 import { IconError, IconPause, IconPlay } from "./icons";
 import "./components.css";
@@ -25,6 +26,7 @@ const SPEEDS = [
 ] as const;
 
 const HEAD = { rx: 0.5, ry: 0.65 };
+const REF_COLOR_VARS = ["--color-accent", "--color-text", "--color-border"] as const;
 
 function point(frames: P3[][][], t: number, s: number, j: number): [number, number] | null {
   const p = frames[t]?.[s]?.[j];
@@ -48,6 +50,7 @@ export function ReferencePlayer({ gloss, mirrored = true }: ReferencePlayerProps
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Tiempo de animación acumulado: cambiar la velocidad o pausar no hace saltar la figura.
   const clock = useRef({ elapsed: 0, last: 0 });
+  const colors = useThemeColors(canvasRef, REF_COLOR_VARS);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -99,10 +102,10 @@ export function ReferencePlayer({ gloss, mirrored = true }: ReferencePlayerProps
         canvas.width = w;
         canvas.height = h;
       }
-      const style = getComputedStyle(canvas);
-      const accent = style.getPropertyValue("--color-accent").trim();
-      const text = style.getPropertyValue("--color-text").trim();
-      const guide = style.getPropertyValue("--color-border").trim();
+      const palette = colors.get();
+      const accent = palette?.["--color-accent"] ?? "";
+      const text = palette?.["--color-text"] ?? "";
+      const guide = palette?.["--color-border"] ?? "";
       const { scale, ox, oy } = fitBounds(bounds, w, h);
       const X = (x: number) => ox + x * scale;
       const Y = (y: number) => oy + y * scale;
@@ -167,7 +170,7 @@ export function ReferencePlayer({ gloss, mirrored = true }: ReferencePlayerProps
     clock.current.last = 0;
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [data, bounds, playing, speed, mirrored]);
+  }, [data, bounds, playing, speed, mirrored, colors]);
 
   const label = glossLabel(gloss);
 
