@@ -44,3 +44,27 @@ def test_websocket_hello(tmp_path):
 
 def test_lookup_own():
     assert lookup("own", "Mañana") == "MAÑANA"
+
+
+def test_recording_rejects_path_traversal(tmp_path):
+    c = client(tmp_path)
+    frames = [frame((0.0, 1.0)) for _ in range(5)]
+    assert c.post("/api/recordings", json={"label": "hola", "signer": "../../evil", "frames": frames}) \
+        .status_code == 400
+    assert c.post("/api/recordings", json={"label": "hola", "signer": "C:/evil", "frames": frames}) \
+        .status_code == 400
+    assert c.post("/api/recordings", json={"label": "../x", "signer": "angel", "frames": frames}) \
+        .status_code == 400
+    raw_dir = tmp_path / "own" / "raw"
+    written = list(raw_dir.glob("*.npz")) if raw_dir.exists() else []
+    assert written == []
+    assert not list(tmp_path.rglob("evil*"))
+
+
+def test_websocket_survives_bad_frame(tmp_path):
+    with client(tmp_path).websocket_connect("/ws") as ws:
+        ws.send_json({"type": "frame"})
+        err = ws.receive_json()
+        assert err["type"] == "error"
+        ws.send_json({"type": "hello", "mode": "practice", "target": "HOLA"})
+        assert ws.receive_json() == {"type": "ready", "mode": "practice", "target": "HOLA", "has_reference": True}

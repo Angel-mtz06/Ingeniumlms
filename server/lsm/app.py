@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,8 @@ from lsm.vocab import canonical
 
 VOCAB_CSV = PROCESSED / "vocab.csv"
 INDEX_FIELDS = ["sample_id", "dataset", "source_label", "signer", "path", "n_frames", "hand_ratio"]
+SIGNER_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+LABEL_RE = re.compile(r"^[A-ZÑ0-9_]{1,40}$")
 
 
 class RecordingIn(BaseModel):
@@ -59,12 +62,20 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
     def recordings(rec: RecordingIn):
         if not rec.frames:
             raise HTTPException(400, "sin cuadros")
+        if not SIGNER_RE.match(rec.signer):
+            raise HTTPException(400, "glosa o persona inválida")
         label = canonical(rec.label)
-        (own / "raw").mkdir(parents=True, exist_ok=True)
-        n = len(list((own / "raw").glob(f"{rec.signer}_{label}_*.npz")))
+        if not LABEL_RE.match(label):
+            raise HTTPException(400, "glosa o persona inválida")
+        raw_dir = own / "raw"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        raw_root = raw_dir.resolve()
+        n = len(list(raw_dir.glob(f"{rec.signer}_{label}_*.npz")))
         sid = f"{rec.signer}_{label}_{n:03d}"
+        path = raw_dir / f"{sid}.npz"
+        if raw_root not in path.resolve().parents:
+            raise HTTPException(400, "glosa o persona inválida")
         raw = frames_to_raw(rec.frames, sample_id=sid, dataset="own", source_label=label, signer=rec.signer)
-        path = own / "raw" / f"{sid}.npz"
         raw.save(path)
         present = (~np.isnan(raw.hands[:, :, 0, 0])).any(axis=1)
         index = own / "index_own.csv"
@@ -81,13 +92,17 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
     async def ws_endpoint(ws: WebSocket):
         await ws.accept()
         session = Session(classifier, references, sentences)
-        try:
-            while True:
+        while True:
+            try:
                 msg = await ws.receive_json()
+                if not isinstance(msg, dict):
+                    raise ValueError("mensaje no es un objeto JSON")
                 for out in await session.handle(msg):
                     await ws.send_json(out)
-        except WebSocketDisconnect:
-            return
+            except WebSocketDisconnect:
+                return
+            except Exception as e:
+                await ws.send_json({"type": "error", "message": f"error interno: {type(e).__name__}"})
 
     if static_dir and Path(static_dir).exists():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="web")
