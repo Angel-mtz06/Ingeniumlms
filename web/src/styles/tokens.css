@@ -1,0 +1,77 @@
+/*
+ * tokens.css: unica fuente de color, tipografia, espaciado, radios y sombras.
+ * Direccion visual documentada en web/DESIGN.md.
+ * Referencias: Wise (estructura calida: lienzo salvia, tinta casi negra, radios generosos),
+ * IBM Carbon (un solo acento azul, triada semantica, anillo de foco), Airbnb (una sola sombra, tono humano).
+ * Ningun otro archivo debe contener colores literales.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---------- Color: tema claro ---------- */
+  --color-bg: #eef1eb;          /* Wise canvas-soft #e8ebe6, aclarado para pantallas con camara */
+  --color-surface: #fbfcfa;     /* tarjeta casi blanca (sin #fff puro) */
+  --color-surface-2: #e1e6dd;   /* hundidos: pistas, zonas inactivas, fondo de camara */
+  --color-text: #0e0f0c;        /* Wise ink */
+  --color-text-muted: #454745;  /* Wise body */
+  --color-accent: #0043ce;      /* IBM Carbon blue-70 */
+  --color-accent-contrast: #fbfcfa; /* texto/icono sobre accent, ok, warn y bad */
+  --color-ok: #0e6027;          /* Carbon green-70 */
+  --color-warn: #7a5b00;        /* entre Carbon yellow-60 y yellow-70 */
+  --color-bad: #a2191f;         /* Carbon red-70 */
+  --color-border: #7a8076;      /* >= 3:1 sobre bg, surface y surface-2 (WCAG 1.4.11) */
+
+  /* ---------- Tipografia (fuentes del sistema: la demo funciona sin internet) ---------- */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, "Noto Sans", Arial, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, "Noto Sans", Arial, sans-serif;
+
+  --text-xs: 0.875rem;   /* 14px: solo metadatos, nunca instrucciones */
+  --text-sm: 1rem;       /* 16px: etiquetas, pestanas */
+  --text-md: 1.125rem;   /* 18px: cuerpo por defecto (IBM body-lg) */
+  --text-lg: 1.25rem;    /* 20px: texto destacado (IBM subhead / Wise body-lg) */
+  --text-xl: 1.5rem;     /* 24px: titulos de tarjeta (Wise display-xs) */
+  --text-2xl: 2rem;      /* 32px: titulo de pantalla (IBM headline / Wise display-sm) */
+  --text-3xl: 2.5rem;    /* 40px: palabra traducida, retroalimentacion principal (Wise display-md) */
+
+  /* ---------- Espaciado: base 4px (Wise / Carbon) ---------- */
+  --space-1: 0.25rem;  /* 4 */
+  --space-2: 0.5rem;   /* 8 */
+  --space-3: 0.75rem;  /* 12 */
+  --space-4: 1rem;     /* 16 */
+  --space-5: 1.5rem;   /* 24 */
+  --space-6: 2rem;     /* 32 */
+  --space-7: 3rem;     /* 48 */
+  --space-8: 4rem;     /* 64 (Airbnb section) */
+
+  /* ---------- Radios (Wise) ---------- */
+  --radius-sm: 8px;    /* chips, insignias de estado */
+  --radius-md: 12px;   /* botones, pestanas, campos */
+  --radius-lg: 24px;   /* tarjetas y marco de camara */
+
+  /* ---------- Sombras (Airbnb: un nivel + uno para superposiciones), tintadas con la tinta ---------- */
+  --shadow-1: 0 0 0 1px rgb(14 15 12 / 0.04), 0 2px 6px rgb(14 15 12 / 0.06), 0 4px 8px rgb(14 15 12 / 0.08);
+  --shadow-2: 0 0 0 1px rgb(14 15 12 / 0.05), 0 8px 16px rgb(14 15 12 / 0.10), 0 16px 32px rgb(14 15 12 / 0.12);
+
+  /* ---------- Foco (Carbon: contorno solido del acento) ---------- */
+  --focus-ring: 3px solid var(--color-accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0f110e;          /* Wise ink, tinta calida */
+    --color-surface: #191c17;
+    --color-surface-2: #242821;
+    --color-text: #eef1ea;
+    --color-text-muted: #b3b9ae;
+    --color-accent: #78a9ff;      /* Carbon blue-40 */
+    --color-accent-contrast: #0f110e;
+    --color-ok: #42be65;          /* Carbon green-40 */
+    --color-warn: #f1c21b;        /* Carbon yellow-30 */
+    --color-bad: #ff8389;         /* Carbon red-40 */
+    --color-border: #767d71;
+
+    --shadow-1: 0 0 0 1px rgb(238 241 234 / 0.06), 0 2px 6px rgb(0 0 0 / 0.30), 0 4px 8px rgb(0 0 0 / 0.30);
+    --shadow-2: 0 0 0 1px rgb(238 241 234 / 0.08), 0 8px 16px rgb(0 0 0 / 0.40), 0 16px 32px rgb(0 0 0 / 0.45);
+  }
+}

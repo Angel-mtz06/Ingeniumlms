@@ -1,0 +1,253 @@
+/*
+ * base.css: reset, tipografia base y el armazon de la app (encabezado + pestanas + panel).
+ * Solo consume variables de tokens.css. Sin colores literales aqui.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* el encabezado es fijo: que no tape el elemento enfocado */
+  scroll-padding-top: calc(var(--space-8) * 2 + var(--space-4));
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+  max-width: 65ch;
+  text-wrap: pretty;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---------- Saltar al contenido ---------- */
+.skip-link {
+  position: absolute;
+  left: var(--space-4);
+  top: var(--space-4);
+  z-index: 100;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+/* ---------- Encabezado ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-surface-2);
+}
+
+.app-header__inner {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-xl);
+}
+
+.brand__mark {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.brand__name {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--color-text-muted);
+}
+
+/* ---------- Pestanas: control segmentado (Wise sage track + tarjeta activa) ---------- */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: calc(var(--radius-md) + var(--space-1));
+  background: var(--color-surface-2);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  flex: 1 0 auto;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+/* Activo: superficie + sombra + peso, no solo color */
+.tab[aria-selected="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 700;
+  box-shadow: var(--shadow-1), inset 0 0 0 1px var(--color-border);
+}
+
+.tab:focus-visible {
+  outline-offset: -3px;
+}
+
+/* ---------- Contenido ---------- */
+.app-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5) var(--space-8);
+}
+
+.app-main:focus {
+  outline: none;
+}
+
+.panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.panel__title {
+  font-size: var(--text-2xl);
+}
+
+.panel__body {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 767px) {
+  .app-header__inner {
+    padding: var(--space-3) var(--space-4) var(--space-3);
+  }
+
+  .brand {
+    font-size: var(--text-lg);
+  }
+
+  .brand__name {
+    font-size: var(--text-xs);
+  }
+
+  .tab {
+    flex: 0 0 auto;
+  }
+
+  .app-main {
+    padding: var(--space-4) var(--space-4) var(--space-7);
+  }
+
+  .panel {
+    padding: var(--space-5);
+  }
+}
+
+/* Transiciones decorativas fuera con movimiento reducido. Cada componente con animacion
+   esencial (p. ej. el reproductor de referencia) decide su propia version reducida. */
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .skip-link {
+    transition: none;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}

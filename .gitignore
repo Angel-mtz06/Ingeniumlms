@@ -11,3 +11,4 @@ dist/
 .pio/
 models/
 *.egg-info/
+web/.screens/
