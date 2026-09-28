@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalGloss, labelError, recordingErrorMessage, saveRecording, signerError } from "./record";
+import { canonicalGloss, labelError, MAX_REC_FRAMES, recordingErrorMessage, saveRecording, signerError } from "./record";
 
 describe("canonicalGloss", () => {
   it("canoniza como el servidor", () => {
@@ -51,5 +51,17 @@ describe("saveRecording", () => {
     await expect(saveRecording("hola", "ana", frames, down)).rejects.toThrow(/conexión/);
     expect(recordingErrorMessage(502, null)).toMatch(/no respondió/);
     expect(recordingErrorMessage(500, "otra cosa")).toMatch(/500/);
+  });
+
+  it("valida el número de cuadros antes de enviar", async () => {
+    let calls = 0;
+    const fake = (async () => {
+      calls++;
+      return new Response(JSON.stringify({ sample_id: "x", frames: 0 }));
+    }) as unknown as typeof fetch;
+    await expect(saveRecording("hola", "ana", [], fake)).rejects.toThrow(/ningún cuadro/);
+    const many = Array.from({ length: MAX_REC_FRAMES + 1 }, () => frames[0]);
+    await expect(saveRecording("hola", "ana", many, fake)).rejects.toThrow(/demasiado larga/);
+    expect(calls).toBe(0);
   });
 });

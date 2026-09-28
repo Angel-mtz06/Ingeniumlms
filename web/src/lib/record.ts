@@ -8,6 +8,7 @@ import type { FramePayload } from "./protocol";
 export const SIGNER_RE = /^[A-Za-z0-9-]{1,32}$/;
 /** Igual que LABEL_RE del servidor, aplicado a la glosa ya canonizada. */
 export const LABEL_RE = /^[A-ZÑ0-9_]{1,40}$/;
+/** Igual que MAX_REC_FRAMES del servidor (60 s a 30 fps): se valida antes de enviar. */
 export const MAX_REC_FRAMES = 1800;
 export const NONE_LABEL = "NINGUNA";
 
@@ -63,6 +64,9 @@ export async function saveRecording(
   frames: FramePayload[],
   fetchImpl: typeof fetch = fetch,
 ): Promise<SavedRecording> {
+  // Mismos límites que el servidor: se evita subir una toma que de todos modos rechazaría.
+  if (frames.length === 0) throw new Error(recordingErrorMessage(400, "sin cuadros"));
+  if (frames.length > MAX_REC_FRAMES) throw new Error(recordingErrorMessage(400, "demasiados cuadros"));
   let r: Response;
   try {
     r = await fetchImpl("/api/recordings", {
