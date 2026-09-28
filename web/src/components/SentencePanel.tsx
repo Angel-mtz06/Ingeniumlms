@@ -47,6 +47,10 @@ export function SentencePanel({ text, paragraph, source, onSpeak, onCopy }: Sent
 
   return (
     <section className="sentence" aria-label="Traducción">
+      {/* Región viva siempre montada: si naciera junto con el texto, la primera oración no se anunciaría. */}
+      <p className="visually-hidden" aria-live="polite">
+        {empty ? "" : `Traducción: ${text}`}
+      </p>
       {empty ? (
         <p className="sentence__empty">La oración aparecerá aquí cuando termines de señar.</p>
       ) : (
@@ -57,9 +61,7 @@ export function SentencePanel({ text, paragraph, source, onSpeak, onCopy }: Sent
             </span>
             <span className="sentence__hint">{src.hint}</span>
           </p>
-          <p className="sentence__text" aria-live="polite">
-            {text}
-          </p>
+          <p className="sentence__text">{text}</p>
           {paragraph && paragraph !== text ? <p className="sentence__paragraph">{paragraph}</p> : null}
         </>
       )}
