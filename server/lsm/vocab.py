@@ -47,7 +47,7 @@ def mendeley_category(word_id: int) -> str:
 def lookup(dataset: str, source_label: str) -> str:
     if dataset == "mendeley":
         return MENDELEY_ES[int(source_label)]
-    if dataset == "glosses":
+    if dataset in ("glosses", "own"):
         return canonical(source_label)
     raise ValueError(dataset)
 

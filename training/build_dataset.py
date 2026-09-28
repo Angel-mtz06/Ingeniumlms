@@ -8,7 +8,7 @@ import numpy as np
 
 from lsm.anchor import AnchorError
 from lsm.normalize import normalize
-from lsm.paths import PROCESSED, RAW_LANDMARKS
+from lsm.paths import DATASETS, PROCESSED, RAW_LANDMARKS
 from lsm.schema import RawSequence
 from lsm.splits import split_of
 from lsm.vocab import build_vocab, lookup, write_vocab_csv
@@ -26,8 +26,12 @@ def main():
     norm_dir.mkdir(parents=True, exist_ok=True)
     rows, skipped = [], Counter()
     glosses_names = set()
-    for idx in ("index_mendeley.csv", "index_glosses.csv"):
-        for r in csv.DictReader(open(RAW_LANDMARKS / idx, encoding="utf-8")):
+    indexes = [RAW_LANDMARKS / "index_mendeley.csv", RAW_LANDMARKS / "index_glosses.csv",
+               DATASETS / "own" / "index_own.csv"]
+    for idx in indexes:
+        if not idx.exists():
+            continue
+        for r in csv.DictReader(open(idx, encoding="utf-8")):
             if r["dataset"] == "glosses":
                 glosses_names.add(r["source_label"])
             if float(r["hand_ratio"]) < MIN_HAND_RATIO:
