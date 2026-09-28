@@ -129,3 +129,11 @@ def test_calibration_survives_hello_and_reset():
     assert s.calib["R"] is not None
     asyncio.run(run(s, [{"type": "reset"}]))
     assert s.calib["R"] is not None
+
+
+def test_segmenter_depends_on_mode():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}]))
+    assert (s.segmenter.still_frames, s.segmenter.max_len) == (10**6, 150)
+    asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}]))
+    assert s.segmenter.max_len == 120 and s.segmenter.still_frames < 100

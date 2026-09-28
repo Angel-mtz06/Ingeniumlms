@@ -40,7 +40,10 @@ class Session:
 
     def _reset_stream(self, keep_calib: bool = False) -> None:
         calib = self.calib if keep_calib else {"L": None, "R": None}
-        self.normalizer, self.segmenter = LiveNormalizer(), Segmenter()
+        self.normalizer = LiveNormalizer()
+        # Práctica: solo cierra al volver al reposo (una seña por intento); Traducción: también por quietud
+        self.segmenter = (Segmenter(still_frames=10**6, max_len=150) if self.mode == "practice"
+                          else Segmenter(max_len=120))
         self.hands, self.present, self.gflex, self.gcont = [], [], [], []
         self.base, self.idx = 0, -1
         self.gloves: dict[str, GloveReading | None] = {"L": None, "R": None}
