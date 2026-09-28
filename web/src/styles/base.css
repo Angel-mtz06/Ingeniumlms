@@ -230,6 +230,16 @@ button {
     flex: 0 0 auto;
   }
 
+  /* Las pestañas se desplazan en horizontal: los bordes se desvanecen en lugar de cortar una
+     palabra en seco, y el relleno lateral deja ver completas la primera y la última pestaña.
+     La máscara solo usa el canal alfa (cualquier color opaco sirve; se usa un token). */
+  .tabs {
+    padding-inline: var(--space-5);
+    scroll-padding-inline: var(--space-5);
+    -webkit-mask-image: linear-gradient(to right, transparent, var(--color-text) var(--space-5), var(--color-text) calc(100% - var(--space-5)), transparent);
+    mask-image: linear-gradient(to right, transparent, var(--color-text) var(--space-5), var(--color-text) calc(100% - var(--space-5)), transparent);
+  }
+
   .app-main {
     padding: var(--space-4) var(--space-4) var(--space-7);
   }
