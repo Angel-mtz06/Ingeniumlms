@@ -66,7 +66,7 @@ def _anthropic_llm(model: str, timeout: float) -> Llm:
 
 class SentenceBuilder:
     def __init__(self, llm: Llm | None = None, provider: str | None = None, model: str | None = None,
-                 timeout: float = 3.0):
+                 timeout: float = 5.0):  # la 1a llamada (TLS en frío) tardó 2.6 s
         self.timeout = timeout
         self.llm = llm
         if llm is None:
