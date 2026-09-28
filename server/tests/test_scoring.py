@@ -94,3 +94,20 @@ def test_horizontal_location_tip_direction():
     ev = evaluate(REF, seq(x0=3.0))
     tips = messages(ev, REF)
     assert any(t.startswith("Mueve la mano derecha hacia tu derecha") for t in tips)
+
+
+def test_deviation_within_one_z_is_not_penalized():
+    # variación natural (≤1 z respecto a la referencia) = 100; los consejos empiezan cuando el z
+    # con margen (z − Z_MARGIN) pasa de ISSUE_Z, es decir z > 3
+    from lsm.evaluator.scoring import ISSUE_Z, Z_MARGIN
+    assert (Z_MARGIN, ISSUE_Z) == (1.0, 2.0)
+    ev = evaluate(REF, seq(y=1.3))  # 0.3 / LOC_FLOOR(0.35) ≈ 0.86 z
+    assert ev.scores["ubicacion"] == 100.0
+    assert messages(ev, REF) == []
+
+
+def test_tip_needs_margin_adjusted_z_above_issue_z():
+    ev = evaluate(REF, seq(y=1.0 + 2.5 * 0.35))  # z = 2.5 → z con margen 1.5 < 2: sin consejo
+    assert not any(t.startswith("Sube la mano") for t in messages(ev, REF))
+    ev = evaluate(REF, seq(y=1.0 + 3.5 * 0.35))  # z = 3.5 → 2.5 > 2: consejo
+    assert any(t.startswith("Sube la mano derecha") for t in messages(ev, REF))
