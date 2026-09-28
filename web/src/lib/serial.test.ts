@@ -67,14 +67,19 @@ describe("GloveSerial", () => {
       const glove = new GloveSerial();
       const connectPromise = glove.connect();
 
+      // Adjuntar el manejador ANTES de avanzar los temporizadores: el rechazo
+      // ocurre durante runAllTimersAsync, así que si se adjunta después,
+      // Node ya lo marcó como "unhandled".
+      const settled = connectPromise.then(
+        () => null,
+        (err: unknown) => err
+      );
+
       // Ejecutar todos los timers
       await vi.runAllTimersAsync();
 
       // Capturar rechazo
-      let rejectError: unknown;
-      await connectPromise.catch((err) => {
-        rejectError = err;
-      });
+      const rejectError = await settled;
 
       // Verificar
       expect(rejectError).toBeInstanceOf(Error);
