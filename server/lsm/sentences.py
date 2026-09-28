@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from typing import Awaitable, Callable
 
@@ -21,6 +22,7 @@ YO_VERBS = {"IR": "voy a ir a", "TENER": "tengo", "NECESITAR": "necesito", "QUER
             "GUSTAR": "me gusta", "ESTAR": "estoy", "COMER": "como", "DORMIR": "duermo", "AYUDA": "necesito ayuda",
             "NO_ENTENDER": "no entiendo", "NO_PODER": "no puedo", "SENTIR": "siento"}
 Llm = Callable[[str, str], Awaitable[str]]
+log = logging.getLogger(__name__)
 
 
 def template_sentence(glosses: list[str]) -> str:
@@ -41,7 +43,7 @@ def template_sentence(glosses: list[str]) -> str:
 
 def _openai_llm(model: str, timeout: float) -> Llm:
     from openai import AsyncOpenAI
-    client = AsyncOpenAI(timeout=timeout)
+    client = AsyncOpenAI(timeout=timeout, max_retries=0)
 
     async def call(system: str, user: str) -> str:
         r = await client.chat.completions.create(model=model, temperature=0.2, max_tokens=160,
@@ -53,7 +55,7 @@ def _openai_llm(model: str, timeout: float) -> Llm:
 
 def _anthropic_llm(model: str, timeout: float) -> Llm:
     from anthropic import AsyncAnthropic
-    client = AsyncAnthropic(timeout=timeout)
+    client = AsyncAnthropic(timeout=timeout, max_retries=0)
 
     async def call(system: str, user: str) -> str:
         r = await client.messages.create(model=model, max_tokens=160, system=system,
@@ -64,10 +66,11 @@ def _anthropic_llm(model: str, timeout: float) -> Llm:
 
 class SentenceBuilder:
     def __init__(self, llm: Llm | None = None, provider: str | None = None, model: str | None = None,
-                 timeout: float = 6.0):
+                 timeout: float = 3.0):
         self.timeout = timeout
         self.llm = llm
         if llm is None:
+            # SENTENCES_PROVIDER: openai | anthropic | none (solo plantillas)
             provider = provider or os.environ.get("SENTENCES_PROVIDER", "openai")
             if provider == "openai" and os.environ.get("OPENAI_API_KEY"):
                 self.llm = _openai_llm(model or os.environ.get("SENTENCES_MODEL", "gpt-4o-mini"), timeout)
@@ -82,6 +85,7 @@ class SentenceBuilder:
                 text = (await asyncio.wait_for(self.llm(SYSTEM_PROMPT, user), self.timeout)).strip()
                 if text:
                     return text, "llm"
-            except Exception:
-                pass
+                log.warning("el LLM devolvió texto vacío; uso plantilla")
+            except Exception as e:
+                log.warning("LLM no disponible (%s); uso plantilla", type(e).__name__)
         return template_sentence(glosses), "template"

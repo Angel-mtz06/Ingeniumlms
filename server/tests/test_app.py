@@ -16,7 +16,7 @@ def client(tmp_path):
 
 def test_health_and_reference(tmp_path):
     c = client(tmp_path)
-    assert c.get("/api/health").json() == {"ok": True, "classifier": True, "references": 1}
+    assert c.get("/api/health").json() == {"ok": True, "classifier": True, "references": 1, "llm": False}
     r = c.get("/api/reference/HOLA").json()
     assert r["gloss"] == "HOLA" and len(r["example_hands"]) == 16 and r["slots_used"] == [True, False]
     assert c.get("/api/reference/NADA").status_code == 404

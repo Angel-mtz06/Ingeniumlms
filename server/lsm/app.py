@@ -41,7 +41,8 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "classifier": classifier is not None, "references": len(references)}
+        return {"ok": True, "classifier": classifier is not None, "references": len(references),
+                "llm": sentences.llm is not None}
 
     @app.get("/api/vocab")
     def vocab():
