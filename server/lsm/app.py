@@ -135,7 +135,9 @@ def main() -> None:
     import uvicorn
 
     from lsm.classifier.infer import Classifier
+    from lsm.envfile import load_env_file
 
+    load_env_file(ROOT / ".env")  # OPENAI_API_KEY, SENTENCES_PROVIDER…; antes de crear SentenceBuilder
     torch.set_num_threads(2)  # inferencia en CPU: deja núcleos libres para el servidor y MediaPipe
 
     clf_path, ref_path = MODELS / "classifier_v1.pt", MODELS / "references.json"
