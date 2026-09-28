@@ -470,6 +470,11 @@
   list-style: none;
 }
 
+/* Sin señas la lista no se muestra (refuerza la regla global [hidden] de base.css). */
+.chips__list[hidden] {
+  display: none;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -724,7 +729,8 @@
 
 .catalog__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  /* 12rem: la glosa de una sola palabra más larga (ARTICULACIONES) cabe entera en negritas. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
   gap: var(--space-2);
   margin: 0;
   padding: 0;
@@ -762,7 +768,9 @@
 
 .pick__gloss {
   font-weight: 700;
-  overflow-wrap: anywhere;
+  /* Parte por espacios; solo corta una palabra si no cabe ni sola en la línea (nunca como primera opción). */
+  overflow-wrap: break-word;
+  hyphens: manual;
 }
 
 .pick[aria-pressed="true"] .pick__gloss {
@@ -778,7 +786,8 @@
 
 .catalog__skeleton {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  /* 12rem: la glosa de una sola palabra más larga (ARTICULACIONES) cabe entera en negritas. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
   gap: var(--space-2);
 }
 
