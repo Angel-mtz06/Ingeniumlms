@@ -165,3 +165,43 @@ def test_descent_trim_is_capped_at_40_percent():
     asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}]
                     + [frame((-1.0, 5.0))] * 5 + fall + [frame((-1.0, 5.0))] * 10))
     assert clf.lengths == [12]
+
+
+def calibrated_session():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    msgs = [{"type": "hello", "mode": "practice", "target": None}, {"type": "calibrate", "step": "open"}]
+    msgs += [frame((0, 1.0), simulate_line("R", i, i, flex=(0,) * 5)) for i in range(12)]
+    msgs += [{"type": "calibrate", "step": "fist"}]
+    msgs += [frame((0, 1.0), simulate_line("R", 100 + i, i, flex=(80,) * 5)) for i in range(12)]
+    msgs += [{"type": "calibrate", "step": "done"}]
+    asyncio.run(run(s, msgs))
+    assert s.calib["R"] is not None
+    return s
+
+
+def test_stale_glove_stops_influencing_after_10_frames():
+    s = calibrated_session()
+    line = simulate_line("R", 500, 0, flex=(40,) * 5)
+    asyncio.run(run(s, [frame((0, 1.0), line)] * 16))
+    used = [not np.isnan(g[0]).all() for g in s.gflex[-16:]]
+    assert used == [True] * 11 + [False] * 5
+
+
+def test_null_glove_is_absent_immediately():
+    s = calibrated_session()
+    asyncio.run(run(s, [frame((0, 1.0), simulate_line("R", 500, 0, flex=(40,) * 5)), frame((0, 1.0), None)]))
+    assert not np.isnan(s.gflex[-2][0]).all() and np.isnan(s.gflex[-1][0]).all()
+
+
+def test_repeated_line_is_not_a_new_calibration_sample():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    line = simulate_line("R", 7, 0, flex=(0,) * 5)
+    asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": None}, {"type": "calibrate", "step": "open"}]
+                    + [frame((0, 1.0), line)] * 12))
+    assert len(s.calibrator.samples["R"]["open"]) == 1
+
+
+def test_glove_line_for_wrong_side_is_ignored():
+    s = calibrated_session()
+    asyncio.run(run(s, [frame((0, 1.0), None), frame((0, 1.0), simulate_line("L", 500, 0, flex=(40,) * 5))]))
+    assert np.isnan(s.gflex[-1][0]).all() and s.gloves["R"] is None

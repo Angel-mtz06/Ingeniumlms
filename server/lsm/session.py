@@ -20,6 +20,7 @@ KEEP = 900
 DROP = 300
 CONF_MIN = 0.6
 NO_HAND_WARN = 60
+GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
 DESCENT_DY = 0.05  # anchos de cabeza por cuadro: la muñeca sigue bajando hacia el reposo
 DESCENT_MAX_TRIM = 0.4
 SIDE_OF_SLOT = ("R", "L")
@@ -49,6 +50,8 @@ class Session:
         self.hands, self.present, self.gflex, self.gcont = [], [], [], []
         self.base, self.idx = 0, -1
         self.gloves: dict[str, GloveReading | None] = {"L": None, "R": None}
+        self.glove_seq: dict[str, int | None] = {"L": None, "R": None}
+        self.glove_seen = {"L": -1, "R": -1}  # idx del último cuadro con lectura nueva
         self.calib: dict = calib
         self.calibrator: Calibrator | None = None
         self.pending: list[dict] = []
@@ -92,10 +95,7 @@ class Session:
     async def _frame(self, msg: dict) -> list[dict]:
         hands, present = self.normalizer.push(frame_to_raw(msg))
         self.idx += 1
-        for side, line in (msg.get("gloves") or {}).items():
-            r = parse_line(line) if isinstance(line, str) else None
-            if isinstance(r, GloveReading) and side in self.gloves:
-                self.gloves[side] = r
+        fresh = self._update_gloves(msg.get("gloves") or {})
         gf, gc = np.full((2, 5), np.nan, np.float32), np.full((2, 4), np.nan, np.float32)
         cam = np.full((2, 5), np.nan, np.float32)
         for s, side in enumerate(SIDE_OF_SLOT):
@@ -104,7 +104,7 @@ class Session:
             r, cal = self.gloves[side], self.calib.get(side)
             if r is not None and cal is not None:
                 gf[s], gc[s] = cal.flexion(r), cal.contacts(r)
-            if self.calibrator is not None and r is not None:
+            if self.calibrator is not None and r is not None and fresh[side]:
                 self.calibrator.add(side, r, cam[s] if present[s] else None)
         self.hands.append(hands)
         self.present.append(present)
@@ -129,6 +129,22 @@ class Session:
             elif ev.kind == "pause" and self.mode == "translate":
                 out += await self._sentence()
         return out
+
+    def _update_gloves(self, lines: dict) -> dict[str, bool]:
+        """Guarda la última lectura por lado; devuelve qué lados trajeron una lectura nueva (seq distinto).
+        null/ausente, o ninguna lectura nueva en más de GLOVE_STALE cuadros → guante ausente."""
+        fresh = {"L": False, "R": False}
+        for side in ("L", "R"):
+            line = lines.get(side)
+            r = parse_line(line) if isinstance(line, str) else None
+            if line is None:
+                self.gloves[side] = None
+            elif isinstance(r, GloveReading) and r.side == side and r.seq != self.glove_seq[side]:
+                self.gloves[side], self.glove_seq[side], self.glove_seen[side] = r, r.seq, self.idx
+                fresh[side] = True
+            if self.gloves[side] is not None and self.idx - self.glove_seen[side] > GLOVE_STALE:
+                self.gloves[side] = None
+        return fresh
 
     def _segment(self, start: int, end: int) -> list[dict]:
         a, b = max(start - self.base, 0), end - self.base
