@@ -28,3 +28,21 @@ export function calibrationReducer(s: CalibrationState, a: CalibrationAction): C
   }
   return s;
 }
+
+export type CalibrationOutcome = { kind: "done"; sides: { L: boolean; R: boolean } } | { kind: "error" };
+
+/**
+ * Resultado de "calibrate done" entre los mensajes que NO estaban en `before` (instantánea tomada
+ * al pedirlo). Un `done` gana siempre; solo un error de calibración cuenta como fallo (un error
+ * ajeno, p. ej. de un cuadro en vuelo, no). null = todavía no hay respuesta.
+ */
+export function calibrationOutcome(events: readonly ServerMsg[], before: ReadonlySet<ServerMsg>): CalibrationOutcome | null {
+  let failed = false;
+  for (const m of events) {
+    if (before.has(m)) continue;
+    if (m.type === "calibration" && m.step === "done" && m.sides) return { kind: "done", sides: { L: m.sides.L, R: m.sides.R } };
+    if (m.type === "error" && /calibraci/i.test(m.message)) failed = true;
+  }
+  return failed ? { kind: "error" } : null;
+}
+

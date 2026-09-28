@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IconCheck, IconError, IconWarning, ToneIcon } from "../components/icons";
-import type { FramePayload } from "../lib/protocol";
+import { calibrationOutcome } from "../lib/calibration";
+import type { FramePayload, ServerMsg } from "../lib/protocol";
 import { CalibrationLostNotice, CameraStage, GloveControls, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
 const COUNTDOWN_S = 3;
@@ -40,8 +41,11 @@ export function Calibration() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const forwarding = useRef(false);
   const runId = useRef(0);
-  const prevCal = useRef<unknown>(null);
-  const prevErr = useRef<unknown>(null);
+  // Mensajes que ya existían al pedir "done": solo cuenta lo que llegue después (ref al día en cada render,
+  // no el `session` capturado por el closure de `start`).
+  const eventsRef = useRef(session.events);
+  eventsRef.current = session.events;
+  const before = useRef<ReadonlySet<ServerMsg>>(new Set());
   const had = useRef({ L: false, R: false });
 
   useFrameSink((f) => {
@@ -74,16 +78,13 @@ export function Calibration() {
   }, [calibration.lost, phaseKind]);
 
   // Resultado de "calibrate done".
-  const cal = session.last.calibration;
-  const err = session.last.error;
+  const events = session.events;
   useEffect(() => {
     if (phase.kind !== "finishing") return;
-    if (cal && cal !== prevCal.current && cal.step === "done" && cal.sides) {
-      setPhase({ kind: "done", sides: cal.sides, had: had.current });
-    } else if (err && err !== prevErr.current) {
-      setPhase({ kind: "error", message: "El servidor no pudo terminar la calibración. Vuelve a empezar." });
-    }
-  }, [phase.kind, cal, err]);
+    const outcome = calibrationOutcome(events, before.current);
+    if (outcome?.kind === "done") setPhase({ kind: "done", sides: outcome.sides, had: had.current });
+    else if (outcome?.kind === "error") setPhase({ kind: "error", message: "El servidor no pudo terminar la calibración. Vuelve a empezar." });
+  }, [phase.kind, events]);
   useEffect(() => {
     if (phase.kind !== "finishing") return;
     const id = window.setTimeout(
@@ -124,8 +125,7 @@ export function Calibration() {
       }
       forwarding.current = false;
     }
-    prevCal.current = session.last.calibration ?? null;
-    prevErr.current = session.last.error ?? null;
+    before.current = new Set(eventsRef.current);
     setPhase({ kind: "finishing" });
     session.send({ type: "calibrate", step: "done" });
   };
