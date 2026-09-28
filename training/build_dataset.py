@@ -14,13 +14,14 @@ from lsm.splits import split_of
 from lsm.vocab import build_vocab, lookup, write_vocab_csv
 
 MIN_HAND_RATIO = 0.3
+TRAIN_DATASETS = ("glosses", "own")
 
 
 def main():
     anchors_path = PROCESSED / "mendeley_anchors.json"
-    if not anchors_path.exists():
+    if "mendeley" in TRAIN_DATASETS and not anchors_path.exists():
         raise SystemExit("Falta mendeley_anchors.json: ejecuta training/mendeley_anchors.py")
-    signer_anchors = json.load(open(anchors_path, encoding="utf-8"))["signers"]
+    signer_anchors = json.load(open(anchors_path, encoding="utf-8"))["signers"] if anchors_path.exists() else {}
 
     norm_dir = PROCESSED / "norm"
     norm_dir.mkdir(parents=True, exist_ok=True)
@@ -34,6 +35,9 @@ def main():
         for r in csv.DictReader(open(idx, encoding="utf-8")):
             if r["dataset"] == "glosses":
                 glosses_names.add(r["source_label"])
+            if r["dataset"] not in TRAIN_DATASETS:
+                skipped["dataset_excluido"] += 1
+                continue
             if float(r["hand_ratio"]) < MIN_HAND_RATIO:
                 skipped["pocas_manos"] += 1
                 continue
@@ -57,10 +61,15 @@ def main():
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
-    write_vocab_csv(build_vocab(sorted(glosses_names)), PROCESSED / "vocab.csv")
+    manifest_glosses = {r["gloss"] for r in rows}
+    vocab_rows = [row for row in build_vocab(sorted(glosses_names)) if row["gloss"] in manifest_glosses]
+    known = {row["gloss"] for row in vocab_rows}
+    for g in sorted(manifest_glosses - known):
+        vocab_rows.append({"gloss": g, "category": "propias", "sources": "own"})
+    write_vocab_csv(vocab_rows, PROCESSED / "vocab.csv")
     print("muestras:", len(rows), "omitidas:", dict(skipped))
     print("por split:", Counter(r["split"] for r in rows))
-    print("glosas:", len({r["gloss"] for r in rows}))
+    print("glosas:", len(manifest_glosses))
 
 
 if __name__ == "__main__":

@@ -34,3 +34,21 @@ def test_absent_stays_zero():
     n = one_hand_seq()
     a = augment(n, np.random.default_rng(2), p_mirror=0.0)
     assert (a.hands[~a.present] == 0).all()
+
+
+def test_augment_preserves_finger_flexion():
+    from lsm.features import featurize
+
+    hands = np.zeros((12, 2, 21, 3), np.float32)
+    present = np.zeros((12, 2), bool)
+    for t in range(12):
+        hands[t, 0] = make_hand(wrist=(-1.0 + 0.05 * t, 1.0), size=0.3, flex=(10, 80, 80, 20, 20))
+        present[t, 0] = True
+    n = NormSequence(hands, present, "x", "t")
+    f0 = featurize(n)
+    rng = np.random.default_rng(0)
+    for _ in range(20):
+        fa = featurize(augment(n, rng, p_mirror=0.0))
+        ok = fa[:, 0] > 0
+        # flexión por dedo (columnas 67–71, escala /180): error medio < 5°
+        assert np.abs(fa[ok, 67:72] - f0[0, 67:72]).mean() * 180 < 5.0

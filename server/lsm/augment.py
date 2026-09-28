@@ -23,7 +23,6 @@ def augment(norm: NormSequence, rng: np.random.Generator, p_mirror: float = 0.3)
     shift = rng.uniform(-0.3, 0.3, size=2).astype(np.float32)
     h[..., :2] = (h[..., :2] @ R.T) * scale + shift
     h[..., 2] *= scale
-    h += rng.normal(0, 0.02, h.shape).astype(np.float32)
     p &= ~(rng.random(p.shape) < 0.05)  # manos perdidas
     h[~p] = 0
     return NormSequence(hands=h.astype(np.float32), present=p, sample_id=norm.sample_id, signer=norm.signer)
