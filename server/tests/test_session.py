@@ -217,3 +217,29 @@ def test_invalid_frame_is_error_without_touching_state():
         out = asyncio.run(s.handle(b))
         assert out == [{"type": "error", "message": "cuadro inválido"}], b
     assert s.idx == 0 and len(s.hands) == 1 and len(s.normalizer.anchors) == 1
+
+
+def test_confirm_gloss_is_canonical_string():
+    s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
+    s.pending = [{"gloss": "HOLA", "top3": [], "confident": False}]
+    out = asyncio.run(run(s, [{"type": "confirm_gloss", "index": 0, "gloss": "buenos días"}]))
+    assert out[-1] == {"type": "pending", "glosses": ["BUENOS_DIAS"]}
+    asyncio.run(run(s, [{"type": "confirm_gloss", "index": 0, "gloss": {"a": 1}}]))
+    assert isinstance(s.pending[0]["gloss"], str)
+    out = asyncio.run(run(s, [{"type": "build_sentence"}]))
+    assert out[0]["type"] == "sentence"
+
+
+def test_hello_validates_mode_and_target():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}]))
+    for bad in ({"type": "hello", "mode": "xyz", "target": None},
+                {"type": "hello", "mode": "practice", "target": ["HOLA"]}):
+        out = asyncio.run(s.handle(bad))
+        assert len(out) == 1 and out[0]["type"] == "error"
+        assert (s.mode, s.target) == ("practice", "HOLA")
+
+
+def test_build_sentence_without_pending_returns_empty_pending():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    assert asyncio.run(s.handle({"type": "build_sentence"})) == [{"type": "pending", "glosses": []}]

@@ -14,6 +14,7 @@ from lsm.live import LiveNormalizer, frame_to_raw
 from lsm.normalize import NormSequence
 from lsm.segmenter import Segmenter
 from lsm.sentences import SentenceBuilder
+from lsm.vocab import canonical
 
 LIVE_EVERY = 2
 KEEP = 900
@@ -82,7 +83,10 @@ class Session:
     async def handle(self, msg: dict) -> list[dict]:
         t = msg.get("type")
         if t == "hello":
-            self.mode, self.target = msg.get("mode", "translate"), msg.get("target")
+            mode, target = msg.get("mode", "translate"), msg.get("target")
+            if mode not in ("practice", "translate") or not isinstance(target, (str, type(None))):
+                return [{"type": "error", "message": "hello inválido: mode debe ser practice|translate y target str o null"}]
+            self.mode, self.target = mode, target
             self._reset_stream(keep_calib=True)  # la calibración sobrevive al cambio de modo
             return [self._ready()]
         if t == "frame":
@@ -94,7 +98,7 @@ class Session:
                 if t == "confirm_gloss":
                     i = int(msg["index"])
                     if 0 <= i < len(self.pending):
-                        self.pending[i].update(gloss=msg["gloss"], confident=True)
+                        self.pending[i].update(gloss=canonical(str(msg["gloss"])), confident=True)
                 else:
                     i = int(msg["index"])
                     if 0 <= i < len(self.pending):
@@ -103,7 +107,7 @@ class Session:
                 return [{"type": "error", "message": f"mensaje inválido: {t}"}]
             return [{"type": "pending", "glosses": [p["gloss"] for p in self.pending]}]
         if t == "build_sentence":
-            return await self._sentence()
+            return await self._sentence() if self.pending else [{"type": "pending", "glosses": []}]
         if t == "reset":
             self.paragraph = []
             self._reset_stream(keep_calib=True)
