@@ -36,7 +36,7 @@ def test_no_api_key_uses_template(monkeypatch):
 
 
 def test_default_timeout_is_short():
-    assert SentenceBuilder(llm=None, provider="none").timeout == 3.0
+    assert SentenceBuilder(llm=None, provider="none").timeout == 5.0
 
 
 def test_provider_none_uses_only_templates(monkeypatch):
@@ -60,7 +60,7 @@ def test_clients_do_not_retry(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
     assert SentenceBuilder(provider="openai").llm is not None
     assert SentenceBuilder(provider="anthropic").llm is not None
-    assert seen == [{"timeout": 3.0, "max_retries": 0}] * 2
+    assert seen == [{"timeout": 5.0, "max_retries": 0}] * 2
 
 
 def test_fallback_is_logged(caplog):
