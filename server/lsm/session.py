@@ -32,6 +32,24 @@ def _nanmedian(a: np.ndarray) -> np.ndarray:
         return np.nanmedian(a, axis=0)
 
 
+def _parse_frame(msg: dict):
+    """RawSequence de un cuadro, o None si algún campo tiene tipo o forma inválidos."""
+    def num(v) -> bool:
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
+
+    if not (num(msg.get("w")) and num(msg.get("h"))):
+        return None
+    for key in ("hands", "pose", "face"):
+        if not isinstance(msg.get(key), (list, type(None))):
+            return None
+    if not isinstance(msg.get("gloves"), (dict, type(None))):
+        return None
+    try:
+        return frame_to_raw(msg)
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
 class Session:
     def __init__(self, classifier=None, references: dict | None = None, sentences: SentenceBuilder | None = None):
         self.classifier = classifier
@@ -93,7 +111,10 @@ class Session:
         return [{"type": "error", "message": f"tipo de mensaje desconocido: {t}"}]
 
     async def _frame(self, msg: dict) -> list[dict]:
-        hands, present = self.normalizer.push(frame_to_raw(msg))
+        raw = _parse_frame(msg)  # valida todo antes de tocar el estado
+        if raw is None:
+            return [{"type": "error", "message": "cuadro inválido"}]
+        hands, present = self.normalizer.push(raw)
         self.idx += 1
         fresh = self._update_gloves(msg.get("gloves") or {})
         gf, gc = np.full((2, 5), np.nan, np.float32), np.full((2, 4), np.nan, np.float32)

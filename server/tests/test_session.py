@@ -205,3 +205,15 @@ def test_glove_line_for_wrong_side_is_ignored():
     s = calibrated_session()
     asyncio.run(run(s, [frame((0, 1.0), None), frame((0, 1.0), simulate_line("L", 500, 0, flex=(40,) * 5))]))
     assert np.isnan(s.gflex[-1][0]).all() and s.gloves["R"] is None
+
+
+def test_invalid_frame_is_error_without_touching_state():
+    s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
+    asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}, frame((0, 1.0))]))
+    good = frame((0, 1.0))
+    bad = [dict(good, gloves=["x"]), dict(good, w="640"), dict(good, h=None), dict(good, hands=[[1, 2]]),
+           dict(good, hands="x"), dict(good, pose=[[0, 0]]), dict(good, face=7), {"type": "frame"}]
+    for b in bad:
+        out = asyncio.run(s.handle(b))
+        assert out == [{"type": "error", "message": "cuadro inválido"}], b
+    assert s.idx == 0 and len(s.hands) == 1 and len(s.normalizer.anchors) == 1
