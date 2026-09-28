@@ -67,8 +67,9 @@ export function StatusBar({ camera, gloves, connected, fps, paused = false }: St
     <div className="status-bar">
       <ul className="status-bar__list" aria-label="Estado del sistema">
         <Item icon={<IconCamera />} label="Cámara" value={camText} tone={camTone} />
-        <Item icon={<IconGlove />} label="Guante derecho" value={rText} tone={rTone} />
+        {/* Izquierdo antes que derecho, igual que la cámara en espejo y los paneles de guantes. */}
         <Item icon={<IconGlove style={{ transform: "scaleX(-1)" }} />} label="Guante izquierdo" value={lText} tone={lTone} />
+        <Item icon={<IconGlove />} label="Guante derecho" value={rText} tone={rTone} />
         <Item icon={<IconConnection />} label="Servidor" value={connected ? "conectado" : "sin conexión"} tone={connected ? "ok" : "bad"} />
       </ul>
       <p className="visually-hidden" role="status">
