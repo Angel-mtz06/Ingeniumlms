@@ -1,15 +1,36 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent } from "react";
+import type { CameraStatus } from "./components/StatusBar";
+import { useCamera } from "./hooks/useCamera";
+import { useGloves } from "./hooks/useGloves";
+import { useSession } from "./hooks/useSession";
+import { useVision } from "./hooks/useVision";
+import type { FramePayload, Mode, ServerMsg } from "./lib/protocol";
+import { newEvents, TRANSLATE_INITIAL, translateReducer } from "./lib/translate";
+import { Calibration } from "./screens/Calibration";
+import { Diagnostics } from "./screens/Diagnostics";
+import { Home } from "./screens/Home";
+import { Practice } from "./screens/Practice";
+import { RecordScreen } from "./screens/Record";
+import { AppContext, useVocab, type AppState, type FrameSink, type SavedTake, type TabId } from "./screens/shared";
+import { Translate } from "./screens/Translate";
 
-const TABS = [
-  { id: "inicio", label: "Inicio" },
-  { id: "practica", label: "Práctica" },
-  { id: "traduccion", label: "Traducción" },
-  { id: "calibracion", label: "Calibración" },
-  { id: "grabar", label: "Grabar" },
-  { id: "diagnostico", label: "Diagnóstico" },
-] as const;
+const TABS: readonly { id: TabId; label: string; camera: boolean }[] = [
+  { id: "inicio", label: "Inicio", camera: false },
+  { id: "practica", label: "Práctica", camera: true },
+  { id: "traduccion", label: "Traducción", camera: true },
+  { id: "calibracion", label: "Calibración", camera: true },
+  { id: "grabar", label: "Grabar", camera: true },
+  { id: "diagnostico", label: "Diagnóstico", camera: false },
+];
 
-type TabId = (typeof TABS)[number]["id"];
+const SCREENS: Record<TabId, () => JSX.Element> = {
+  inicio: Home,
+  practica: Practice,
+  traduccion: Translate,
+  calibracion: Calibration,
+  grabar: RecordScreen,
+  diagnostico: Diagnostics,
+};
 
 function hashTab(): TabId | null {
   const id = window.location.hash.replace("#", "");
@@ -22,6 +43,73 @@ export default function App() {
   const [active, setActive] = useState<TabId>(tabFromHash);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
+  // ---------- Estado compartido: una cámara, un MediaPipe, unos guantes, una sesión ----------
+  const camera = useCamera();
+  const gloves = useGloves();
+  const sinkRef = useRef<FrameSink | null>(null);
+  const onFrame = useCallback((f: FramePayload) => sinkRef.current?.(f), []);
+  const vision = useVision(camera.videoRef, camera.ready, onFrame, gloves.latest);
+  const [sessionMode, setSessionModeState] = useState<{ mode: Mode; target: string | null }>({ mode: "translate", target: null });
+  const session = useSession(sessionMode.mode, sessionMode.target);
+  const { vocab, error: vocabError } = useVocab();
+  const [translate, translateDispatch] = useReducer(translateReducer, TRANSLATE_INITIAL);
+  const [takes, setTakes] = useState<SavedTake[]>([]);
+
+  // Las etiquetas y la oración de Traducción se derivan de todos los mensajes, aunque la pestaña no esté abierta.
+  const lastSeen = useRef<ServerMsg | null>(null);
+  useEffect(() => {
+    const fresh = newEvents(session.events, lastSeen.current);
+    if (fresh.length === 0) return;
+    lastSeen.current = fresh[fresh.length - 1];
+    for (const msg of fresh) translateDispatch({ kind: "msg", msg });
+  }, [session.events]);
+
+  const setFrameSink = useCallback((fn: FrameSink | null) => {
+    sinkRef.current = fn;
+  }, []);
+  const setSessionMode = useCallback((mode: Mode, target: string | null) => {
+    setSessionModeState((prev) => (prev.mode === mode && prev.target === target ? prev : { mode, target }));
+  }, []);
+  const addTake = useCallback((t: SavedTake) => setTakes((prev) => [t, ...prev]), []);
+
+  const cameraStatus: CameraStatus = camera.error || vision.error ? "error" : camera.ready && !vision.loading ? "ready" : "loading";
+
+  const select = useCallback((id: TabId, focus = false) => {
+    setActive(id);
+    if (window.location.hash !== `#${id}`) history.replaceState(null, "", `#${id}`);
+    if (focus) tabRefs.current[id]?.focus();
+  }, []);
+
+  /** Navegación desde un botón de una pantalla: cambia de pestaña y lleva el foco al panel nuevo. */
+  const go = useCallback(
+    (id: TabId) => {
+      select(id);
+      window.scrollTo({ top: 0 });
+      requestAnimationFrame(() => document.getElementById(`panel-${id}`)?.focus({ preventScroll: true }));
+    },
+    [select],
+  );
+
+  const ctx: AppState = useMemo(
+    () => ({
+      camera,
+      vision,
+      gloves,
+      session,
+      cameraStatus,
+      vocab,
+      vocabError,
+      setFrameSink,
+      setSessionMode,
+      translate,
+      translateDispatch,
+      takes,
+      addTake,
+      go,
+    }),
+    [camera, vision, gloves, session, cameraStatus, vocab, vocabError, setFrameSink, setSessionMode, translate, takes, addTake, go],
+  );
+
   useEffect(() => {
     // Solo reacciona a hashes de pestaña; "#contenido" (saltar al contenido) no cambia la pestaña.
     const onHash = () => {
@@ -30,12 +118,6 @@ export default function App() {
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-
-  const select = useCallback((id: TabId, focus = false) => {
-    setActive(id);
-    if (window.location.hash !== `#${id}`) history.replaceState(null, "", `#${id}`);
-    if (focus) tabRefs.current[id]?.focus();
   }, []);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -50,8 +132,11 @@ export default function App() {
     select(TABS[next].id, true);
   };
 
+  const activeTab = TABS.find((t) => t.id === active)!;
+  const Screen = SCREENS[active];
+
   return (
-    <>
+    <AppContext.Provider value={ctx}>
       <a className="skip-link" href="#contenido">
         Saltar al contenido
       </a>
@@ -92,16 +177,19 @@ export default function App() {
           <section
             key={t.id}
             id={`panel-${t.id}`}
-            className="panel"
+            className="screen-panel"
             role="tabpanel"
             aria-labelledby={`tab-${t.id}`}
             hidden={t.id !== active}
+            tabIndex={-1}
           >
-            <h2 className="panel__title">{t.label}</h2>
-            <p className="panel__body">Esta sección todavía no tiene contenido.</p>
+            {/* Solo se monta la pantalla activa: sus bucles de dibujo y temporizadores se detienen al salir. */}
+            {t.id === active ? <Screen /> : null}
           </section>
         ))}
+        {/* Sin CameraView en pantalla, un <video> oculto mantiene la cámara reproduciendo (estado veraz en la barra). */}
+        {activeTab.camera ? null : <video ref={camera.videoRef} hidden muted playsInline aria-hidden="true" />}
       </main>
-    </>
+    </AppContext.Provider>
   );
 }
