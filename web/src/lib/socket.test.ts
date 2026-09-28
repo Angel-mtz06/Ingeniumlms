@@ -53,6 +53,7 @@ describe("SessionSocket", () => {
       FakeWS.last.openNow();
       expect(FakeWS.last.sent).toHaveLength(1);
       expect(JSON.parse(FakeWS.last.sent[0])).toEqual(helloB);
+      expect(s.opens).toBe(1);
 
       // Simulate drop
       FakeWS.last.close();
@@ -63,6 +64,7 @@ describe("SessionSocket", () => {
 
       // Open second connection → should send helloB exactly once
       FakeWS.last.openNow();
+      expect(s.opens).toBe(2);
       expect(FakeWS.last.sent).toHaveLength(1);
       expect(JSON.parse(FakeWS.last.sent[0])).toEqual(helloB);
 

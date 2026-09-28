@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IconCheck, IconError, IconWarning, ToneIcon } from "../components/icons";
 import type { FramePayload } from "../lib/protocol";
-import { CameraStage, GloveControls, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
+import { CalibrationLostNotice, CameraStage, GloveControls, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
 const COUNTDOWN_S = 3;
 const RECORD_S = 2;
@@ -36,7 +36,7 @@ function activeStep(p: Phase): number {
  * para que el cambio de postura durante la cuenta regresiva no contamine las muestras.
  */
 export function Calibration() {
-  const { session, gloves, cameraStatus } = useApp();
+  const { session, gloves, cameraStatus, calibration } = useApp();
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const forwarding = useRef(false);
   const runId = useRef(0);
@@ -55,6 +55,23 @@ export function Calibration() {
     },
     [],
   );
+
+  // Reconexión del WebSocket: el servidor abrió una sesión nueva sin calibración. Un intento en curso
+  // ya no sirve (sus pasos quedaron en la sesión anterior) y un resultado "calibrado" ya no es cierto.
+  const generationAtStart = useRef(0);
+  const phaseKind = phase.kind;
+  useEffect(() => {
+    const g = session.generation;
+    const running = phaseKind === "countdown" || phaseKind === "recording" || phaseKind === "finishing";
+    if (running && generationAtStart.current > 0 && g > 0 && g !== generationAtStart.current) {
+      runId.current++;
+      forwarding.current = false;
+      setPhase({ kind: "error", message: "Se reinició la conexión durante la calibración. Vuelve a calibrar los guantes." });
+    }
+  }, [session.generation, phaseKind]);
+  useEffect(() => {
+    if (calibration.lost && phaseKind === "done") setPhase({ kind: "idle" });
+  }, [calibration.lost, phaseKind]);
 
   // Resultado de "calibrate done".
   const cal = session.last.calibration;
@@ -80,6 +97,7 @@ export function Calibration() {
     const id = ++runId.current;
     const alive = () => runId.current === id;
     had.current = { L: gloves.sides.L.connected, R: gloves.sides.R.connected };
+    generationAtStart.current = session.generation;
     for (const step of [0, 1] as const) {
       for (let n = COUNTDOWN_S; n > 0; n--) {
         setPhase({ kind: "countdown", step, left: n });
@@ -150,6 +168,7 @@ export function Calibration() {
       </header>
 
       <ServerNotice />
+      <CalibrationLostNotice />
 
       <div className="calib-grid">
         <section className="sheet" aria-labelledby="calib-pasos">

@@ -5,7 +5,7 @@ import { IconWarning } from "../components/icons";
 import { ReferencePlayer } from "../components/ReferencePlayer";
 import { ScoreCard } from "../components/ScoreCard";
 import { glossLabel, percent } from "../lib/ui";
-import { CameraStage, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
+import { CalibrationLostNotice, CameraStage, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
 // Las 121 señas no deben re-renderizarse con cada mensaje `live` (~15 por segundo).
 const MemoCatalog = memo(Catalog);
@@ -17,7 +17,7 @@ const WARNING_MS = 6000;
  * la calificación de la última toma y el estado de cada dedo en vivo.
  */
 export function Practice() {
-  const { session, vocab, vocabError } = useApp();
+  const { session, vocab, vocabError, go } = useApp();
   const [target, setTarget] = useState<string | null>(null);
 
   // En el catálogo no se cambia el modo: así no se pierden las señas pendientes de Traducción.
@@ -37,6 +37,7 @@ export function Practice() {
           <p className="screen__lead">Verás cómo se hace y la app te dirá qué corregir en la configuración, ubicación, movimiento y orientación.</p>
         </header>
         <ServerNotice />
+        <CalibrationLostNotice onCalibrate={() => go("calibracion")} />
         <section className="sheet" aria-label="Catálogo de señas">
           <MemoCatalog vocab={vocab} onPick={pick} error={vocabError} />
         </section>
@@ -48,7 +49,7 @@ export function Practice() {
 }
 
 function PracticeSession({ target, hasReference, onChange }: { target: string; hasReference: boolean; onChange(): void }) {
-  const { session } = useApp();
+  const { session, go } = useApp();
   const { live, evaluation, warning, ready } = session.last;
   const label = glossLabel(target);
   const canScore = (ready?.target === target ? ready.has_reference : hasReference) !== false;
@@ -85,6 +86,7 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
       </header>
 
       <ServerNotice />
+      <CalibrationLostNotice onCalibrate={() => go("calibracion")} />
       {canScore ? null : (
         <p className="notice notice--warn" role="status">
           <IconWarning />

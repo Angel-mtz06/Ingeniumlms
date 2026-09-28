@@ -5,12 +5,13 @@
  */
 import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type ReactNode } from "react";
 import { CameraView } from "../components/CameraView";
-import { IconError, IconGlove, ToneIcon } from "../components/icons";
+import { IconError, IconGlove, IconWarning, ToneIcon } from "../components/icons";
 import type { CameraStatus } from "../components/StatusBar";
 import type { CameraHandle } from "../hooks/useCamera";
 import type { GlovesHandle } from "../hooks/useGloves";
 import type { SessionHandle } from "../hooks/useSession";
 import type { VisionHandle } from "../hooks/useVision";
+import type { CalibrationState } from "../lib/calibration";
 import type { FramePayload, Mode } from "../lib/protocol";
 import type { SavedRecording } from "../lib/record";
 import type { TranslateAction, TranslateState } from "../lib/translate";
@@ -37,6 +38,8 @@ export interface AppState {
   setSessionMode(mode: Mode, target: string | null): void;
   translate: TranslateState;
   translateDispatch: Dispatch<TranslateAction>;
+  /** Guantes calibrados en la sesión actual del servidor (se pierde al reconectar el WebSocket). */
+  calibration: CalibrationState;
   /** Tomas guardadas en esta sesión del navegador (pantalla Grabar). */
   takes: SavedTake[];
   addTake(t: SavedTake): void;
@@ -110,6 +113,26 @@ export function ServerNotice() {
       <IconError />
       <span>Sin conexión con el servidor. Revisa que esté encendido; la app se reconecta sola.</span>
     </p>
+  );
+}
+
+/**
+ * Aviso tras una reconexión del WebSocket: el servidor abrió una sesión nueva y los guantes que
+ * estaban calibrados ya no lo están. Con `onCalibrate` muestra el botón para ir a calibrar.
+ */
+export function CalibrationLostNotice({ onCalibrate }: { onCalibrate?: () => void }) {
+  const { calibration } = useApp();
+  if (!calibration.lost) return null;
+  return (
+    <div className="notice notice--warn notice--action" role="alert">
+      <IconWarning />
+      <span className="notice__text">Se reinició la conexión: vuelve a calibrar los guantes. Hasta entonces la app usa solo la cámara.</span>
+      {onCalibrate ? (
+        <button type="button" className="btn btn--secondary" onClick={onCalibrate}>
+          Ir a Calibración
+        </button>
+      ) : null}
+    </div>
   );
 }
 

@@ -12,6 +12,11 @@ export interface SessionHandle {
   connected: boolean;
   /** Mensajes recientes (los más nuevos al final), máximo EVENTS_MAX. */
   events: ServerMsg[];
+  /**
+   * Número de conexión del socket actual (0 = aún no abre, 1 = primera). Si sube de 1, el
+   * WebSocket se reconectó y el servidor empezó una Session nueva (sin calibración).
+   */
+  generation: number;
 }
 
 export const EVENTS_MAX = 200;
@@ -36,16 +41,21 @@ export function useSession(mode: Mode, target: string | null): SessionHandle {
   const socketRef = useRef<SessionSocket | null>(null);
   const [state, dispatch] = useReducer(sessionReducer, { last: {}, events: [] });
   const [connected, setConnected] = useState(false);
+  const [generation, setGeneration] = useState(0);
 
   useEffect(() => {
     const socket = new SessionSocket(wsUrl(window.location), (msg) => dispatch({ kind: "msg", msg }));
     socketRef.current = socket;
-    const id = window.setInterval(() => setConnected(socket.open), POLL_MS);
+    const id = window.setInterval(() => {
+      setConnected(socket.open);
+      setGeneration(socket.opens);
+    }, POLL_MS);
     return () => {
       window.clearInterval(id);
       socket.close();
       if (socketRef.current === socket) socketRef.current = null;
       setConnected(false);
+      setGeneration(0);
     };
   }, []);
 
@@ -56,5 +66,5 @@ export function useSession(mode: Mode, target: string | null): SessionHandle {
 
   const send = useCallback((m: ClientMsg) => socketRef.current?.send(m) ?? false, []);
 
-  return { send, last: state.last, connected, events: state.events };
+  return { send, last: state.last, connected, events: state.events, generation };
 }

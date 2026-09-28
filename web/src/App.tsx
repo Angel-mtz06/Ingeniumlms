@@ -4,6 +4,7 @@ import { useCamera } from "./hooks/useCamera";
 import { useGloves } from "./hooks/useGloves";
 import { useSession } from "./hooks/useSession";
 import { useVision } from "./hooks/useVision";
+import { CALIBRATION_INITIAL, calibrationReducer } from "./lib/calibration";
 import type { FramePayload, Mode, ServerMsg } from "./lib/protocol";
 import { newEvents, TRANSLATE_INITIAL, translateReducer } from "./lib/translate";
 import { Calibration } from "./screens/Calibration";
@@ -55,6 +56,7 @@ export default function App() {
   const session = useSession(sessionMode.mode, sessionMode.target);
   const { vocab, error: vocabError } = useVocab();
   const [translate, translateDispatch] = useReducer(translateReducer, TRANSLATE_INITIAL);
+  const [calibration, calibrationDispatch] = useReducer(calibrationReducer, CALIBRATION_INITIAL);
   const [takes, setTakes] = useState<SavedTake[]>([]);
 
   // Las etiquetas y la oración de Traducción se derivan de todos los mensajes, aunque la pestaña no esté abierta.
@@ -63,8 +65,20 @@ export default function App() {
     const fresh = newEvents(session.events, lastSeen.current);
     if (fresh.length === 0) return;
     lastSeen.current = fresh[fresh.length - 1];
-    for (const msg of fresh) translateDispatch({ kind: "msg", msg });
+    for (const msg of fresh) {
+      translateDispatch({ kind: "msg", msg });
+      calibrationDispatch({ kind: "msg", msg });
+    }
   }, [session.events]);
+
+  // Cada conexión del WebSocket es una Session nueva en el servidor: tras una reconexión la
+  // calibración de los guantes ya no existe y la UI lo marca (aviso en Calibración y Práctica).
+  const lastGeneration = useRef(0);
+  useEffect(() => {
+    const g = session.generation;
+    if (g > 1 && g !== lastGeneration.current) calibrationDispatch({ kind: "reconnect" });
+    if (g > 0) lastGeneration.current = g;
+  }, [session.generation]);
 
   const setFrameSink = useCallback((fn: FrameSink | null) => {
     sinkRef.current = fn;
@@ -105,11 +119,12 @@ export default function App() {
       setSessionMode,
       translate,
       translateDispatch,
+      calibration,
       takes,
       addTake,
       go,
     }),
-    [camera, vision, gloves, session, cameraStatus, vocab, vocabError, setFrameSink, setSessionMode, translate, takes, addTake, go],
+    [camera, vision, gloves, session, cameraStatus, vocab, vocabError, setFrameSink, setSessionMode, translate, calibration, takes, addTake, go],
   );
 
   useEffect(() => {

@@ -8,6 +8,7 @@ export class SessionSocket {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly Impl: typeof WebSocket;
   private readonly retryMs: number;
+  private openCount = 0;
 
   constructor(private url: string, private onMsg: (m: ServerMsg) => void,
               opts: { WebSocketImpl?: typeof WebSocket; retryMs?: number } = {}) {
@@ -18,11 +19,18 @@ export class SessionSocket {
 
   get open(): boolean { return this.ws?.readyState === 1; }
 
+  /**
+   * Conexiones abiertas hasta ahora (1 = la primera). Cada conexión es una Session nueva en el
+   * servidor, así que un valor > 1 significa que se perdió el estado del servidor (p. ej. la calibración).
+   */
+  get opens(): number { return this.openCount; }
+
   private connect() {
     if (this.closed) return;
     const ws = new this.Impl(this.url);
     this.ws = ws;
     ws.onopen = () => {
+      this.openCount++;
       const pending = this.hello ? [this.hello, ...this.queue] : this.queue;
       this.queue = [];
       pending.forEach((m) => ws.send(JSON.stringify(m)));
