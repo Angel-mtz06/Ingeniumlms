@@ -27,6 +27,9 @@ export class GloveSerial {
 
   async connect(): Promise<"L" | "R"> {
     try {
+      // Clean up any previous connection
+      if (this.port) await this.disconnect();
+
       this.port = await navigator.serial.requestPort();
       await this.port.open({ baudRate: 921600 });
       const decoder = new TextDecoderStream();
@@ -38,6 +41,7 @@ export class GloveSerial {
       const buf = new LineBuffer();
       const deadline = Date.now() + 3000;
       let resolveSide: (s: "L" | "R") => void = () => {};
+      let timeoutId: ReturnType<typeof setTimeout> = 0 as any;
       const got = new Promise<"L" | "R">((res) => (resolveSide = res));
 
       // Capture reader to detect orphaned loops
@@ -49,7 +53,7 @@ export class GloveSerial {
           if (done) break;
           for (const line of buf.push(value ?? "")) {
             const id = parseIdLine(line);
-            if (id) { this.side = id.side; resolveSide(id.side); }
+            if (id) { this.side = id.side; clearTimeout(timeoutId); resolveSide(id.side); }
             else if (acceptLine(state, line, performance.now())) {
               this.last = state.last;
               this.seen = state.seen;
@@ -57,7 +61,10 @@ export class GloveSerial {
           }
         }
       })();
-      return Promise.race([got, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("El guante no respondió a ID?")), deadline - Date.now()))]);
+
+      return await Promise.race([got, new Promise<never>((_, rej) => {
+        timeoutId = setTimeout(() => rej(new Error("El guante no respondió a ID?")), deadline - Date.now());
+      })]);
     } catch (err) {
       await this.disconnect();
       throw err;

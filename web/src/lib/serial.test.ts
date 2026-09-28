@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { acceptLine } from "./serial";
+import { describe, expect, it, vi, test } from "vitest";
+import { acceptLine, GloveSerial } from "./serial";
 
 describe("acceptLine", () => {
   it("actualiza seen con una línea D nueva", () => {
@@ -27,4 +27,64 @@ describe("acceptLine", () => {
     expect(state.last).toBeNull();
     expect(state.seen).toBe(0);
   });
+});
+
+describe("GloveSerial", () => {
+  test(
+    "cierra puerto y desconecta en timeout de ID",
+    async () => {
+      vi.useFakeTimers();
+      const closeSpy = vi.fn().mockResolvedValue(undefined);
+
+      // Mock TextDecoderStream: su readable cierra inmediatamente
+      class FakeTextDecoderStream {
+        readable = new ReadableStream<string>({
+          start: (controller: ReadableStreamDefaultController<string>) => {
+            controller.close();
+          },
+        });
+        writable = new WritableStream<Uint8Array>();
+      }
+
+      const fakePort = {
+        open: vi.fn().mockResolvedValue(undefined),
+        close: closeSpy,
+        readable: new ReadableStream<Uint8Array>({
+          start: () => {},
+        }),
+        writable: new WritableStream<Uint8Array>(),
+      } as any;
+
+      vi.stubGlobal("navigator", {
+        serial: {
+          requestPort: vi.fn().mockResolvedValue(fakePort),
+        },
+      });
+
+      // @ts-ignore
+      globalThis.TextDecoderStream = FakeTextDecoderStream;
+
+      const glove = new GloveSerial();
+      const connectPromise = glove.connect();
+
+      // Ejecutar todos los timers
+      await vi.runAllTimersAsync();
+
+      // Capturar rechazo
+      let rejectError: unknown;
+      await connectPromise.catch((err) => {
+        rejectError = err;
+      });
+
+      // Verificar
+      expect(rejectError).toBeInstanceOf(Error);
+      expect((rejectError as Error).message).toBe("El guante no respondió a ID?");
+      expect(closeSpy).toHaveBeenCalled();
+
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    },
+    { timeout: 10000 }
+  );
 });
