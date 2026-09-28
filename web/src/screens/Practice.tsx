@@ -20,7 +20,8 @@ export function Practice() {
   const { session, vocab, vocabError } = useApp();
   const [target, setTarget] = useState<string | null>(null);
 
-  useSessionMode("practice", target);
+  // En el catálogo no se cambia el modo: así no se pierden las señas pendientes de Traducción.
+  useSessionMode("practice", target, target !== null);
   useFrameSink(target ? (f) => session.send(f) : null);
 
   const pick = useCallback((g: string) => {

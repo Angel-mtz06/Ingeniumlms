@@ -44,7 +44,6 @@ export function Calibration() {
   const prevErr = useRef<unknown>(null);
   const had = useRef({ L: false, R: false });
 
-  useSessionMode("practice", null);
   useFrameSink((f) => {
     if (forwarding.current) session.send(f);
   });
@@ -121,6 +120,9 @@ export function Calibration() {
 
   const noGloves = !gloves.sides.L.connected && !gloves.sides.R.connected;
   const running = phase.kind === "countdown" || phase.kind === "recording" || phase.kind === "finishing";
+  // Modo práctica sin seña solo mientras se calibra (el segmentador de traducción no emite señas);
+  // abrir la pantalla sin calibrar no vacía las señas pendientes de Traducción.
+  useSessionMode("practice", null, running);
   const cur = activeStep(phase);
 
   // Los avisos sobre el video son solo visuales: el único anuncio accesible es `.calib-status` (abajo).

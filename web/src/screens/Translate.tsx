@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { GlossChips } from "../components/GlossChips";
-import { IconSpeaker } from "../components/icons";
+import { IconSpeaker, IconWarning } from "../components/icons";
 import { SentencePanel } from "../components/SentencePanel";
 import { CameraStage, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
@@ -96,6 +96,18 @@ export function Translate() {
       </header>
 
       <ServerNotice />
+      {translate.lost > 0 ? (
+        <div className="notice notice--warn notice--action" role="status">
+          <IconWarning />
+          <span className="notice__text">
+            {translate.lost === 1 ? "Se borró 1 seña" : `Se borraron ${translate.lost} señas`} sin formar oración al cambiar de modo o al
+            reiniciarse la conexión. Vuelve a hacerlas si las necesitas.
+          </span>
+          <button type="button" className="btn btn--quiet" onClick={() => translateDispatch({ kind: "dismissLost" })}>
+            Entendido
+          </button>
+        </div>
+      ) : null}
 
       <div className="translate-grid">
         <CameraStage />
@@ -104,6 +116,9 @@ export function Translate() {
             Señas reconocidas
           </h3>
           <p className="sheet__hint">Toca una seña para cambiarla o quitarla. Las dudosas dicen “¿revisar?”.</p>
+          {translate.chips.length > 0 ? (
+            <p className="sheet__hint">Forma la oración antes de practicar o calibrar: al cambiar de modo, las señas sin oración se borran.</p>
+          ) : null}
           <GlossChips
             items={translate.chips}
             onConfirm={(index, gloss) => {

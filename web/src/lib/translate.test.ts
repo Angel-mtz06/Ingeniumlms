@@ -50,6 +50,30 @@ describe("translateReducer", () => {
   });
 });
 
+describe("señas perdidas", () => {
+  const ready: ServerMsg = { type: "ready", mode: "practice", target: "HOLA", has_reference: true };
+  it("un ready con señas pendientes cuenta las perdidas hasta que se descarta el aviso", () => {
+    let s = run(TRANSLATE_INITIAL, sign(0, "HOLA"), sign(1, "GRACIAS"), ready);
+    expect(s.chips).toEqual([]);
+    expect(s.lost).toBe(2);
+    s = run(s, sign(0, "BUENO"), ready);
+    expect(s.lost).toBe(3);
+    s = translateReducer(s, { kind: "dismissLost" });
+    expect(s.lost).toBe(0);
+  });
+  it("sin señas o tras Borrar todo no avisa", () => {
+    expect(run(TRANSLATE_INITIAL, ready).lost).toBe(0);
+    let s = run(TRANSLATE_INITIAL, sign(0, "HOLA"));
+    s = translateReducer(s, { kind: "clear" });
+    // una seña en vuelo antes de que el servidor procese el reset
+    s = run(s, sign(0, "GRACIAS"), ready);
+    expect(s.lost).toBe(0);
+    expect(s.awaitingReset).toBe(false);
+    // el siguiente ready ya sí es una pérdida
+    expect(run(s, sign(0, "BUENO"), ready).lost).toBe(1);
+  });
+});
+
 describe("newEvents", () => {
   it("devuelve solo lo posterior al último visto", () => {
     const a = { n: 1 };

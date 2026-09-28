@@ -140,6 +140,16 @@
   color: var(--color-text-muted);
 }
 
+/* Aviso con una acción (p. ej. "Entendido"): el botón baja de línea si no cabe. */
+.notice--action {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.notice__text {
+  flex: 1 1 16rem;
+}
+
 /* ---------- Guantes ---------- */
 .gloves {
   display: grid;

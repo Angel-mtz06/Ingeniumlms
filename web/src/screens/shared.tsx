@@ -64,12 +64,16 @@ export function useFrameSink(fn: FrameSink | null) {
   }, [active, setFrameSink]);
 }
 
-/** Pide a la sesión el modo y la seña de esta pantalla (useSession manda `hello` solo si cambian). */
-export function useSessionMode(mode: Mode, target: string | null) {
+/**
+ * Pide a la sesión el modo y la seña de esta pantalla (useSession manda `hello` solo si cambian).
+ * Con `enabled = false` no toca el modo: cada `hello` vacía en el servidor las señas pendientes de
+ * Traducción, así que solo se cambia de modo cuando la pantalla de verdad lo necesita.
+ */
+export function useSessionMode(mode: Mode, target: string | null, enabled = true) {
   const { setSessionMode } = useApp();
   useEffect(() => {
-    setSessionMode(mode, target);
-  }, [mode, target, setSessionMode]);
+    if (enabled) setSessionMode(mode, target);
+  }, [mode, target, enabled, setSessionMode]);
 }
 
 /** La cámara compartida, con avisos superpuestos (cuenta regresiva, "no veo tus manos"). */
