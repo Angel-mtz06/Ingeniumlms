@@ -269,3 +269,27 @@ def test_frame_with_non_finite_or_non_positive_size_is_error():
     for b in (dict(good, w=float("inf")), dict(good, h=float("nan")), dict(good, w=0), dict(good, h=-480)):
         assert asyncio.run(s.handle(b)) == [{"type": "error", "message": "cuadro inválido"}], b
     assert s.idx == -1 and s.hands == []
+
+
+def test_calibrate_open_restarts_after_cancel():
+    """Cancelar a media calibración y volver a empezar no mezcla muestras del intento anterior."""
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    msgs = [{"type": "hello", "mode": "practice", "target": None}, {"type": "calibrate", "step": "open"}]
+    msgs += [frame((0, 1.0), simulate_line("R", i, i, flex=(0,) * 5)) for i in range(12)]
+    msgs += [{"type": "calibrate", "step": "fist"}]
+    msgs += [frame((0, 1.0), simulate_line("R", 100 + i, i, flex=(80,) * 5)) for i in range(12)]
+    asyncio.run(run(s, msgs))  # se cancela aquí (sin "done")
+    out = asyncio.run(run(s, [{"type": "calibrate", "step": "open"}]))
+    assert out == [{"type": "calibration", "step": "open", "status": "recording"}]
+    assert s.calibrator.samples["R"] == {"open": [], "fist": []}
+
+
+def test_rounded_frame_is_accepted():
+    """El navegador redondea coordenadas (x, y, z a 1 decimal) y ángulos del guante: el servidor lo acepta."""
+    s = calibrated_session()
+    f = frame((0.3, 1.0), simulate_line("R", 900, 0, flex=(40,) * 5))
+    f["hands"] = [[[round(v, 1) for v in p] for p in hand] for hand in f["hands"]]
+    f["pose"] = [[round(p[0], 1), round(p[1], 1), round(p[2], 1), round(p[3], 2)] for p in f["pose"]]
+    out = asyncio.run(run(s, [f]))
+    assert all(m["type"] != "error" for m in out)
+    assert not np.isnan(s.gflex[-1][0]).all()

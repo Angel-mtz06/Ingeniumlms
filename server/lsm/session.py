@@ -220,7 +220,9 @@ class Session:
 
     def _calibrate(self, step: str | None) -> list[dict]:
         if step in ("open", "fist"):
-            self.calibrator = self.calibrator or Calibrator()
+            # "open" es siempre el primer paso: empieza de cero (p. ej. tras Cancelar a media calibración).
+            if step == "open" or self.calibrator is None:
+                self.calibrator = Calibrator()
             self.calibrator.step = step
             return [{"type": "calibration", "step": step, "status": "recording"}]
         if step == "done" and self.calibrator is not None:
