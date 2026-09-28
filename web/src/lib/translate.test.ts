@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ServerMsg } from "./protocol";
-import { newEvents, TRANSLATE_INITIAL, translateReducer, type TranslateState } from "./translate";
+import { newEvents, TRANSLATE_INITIAL, translateReducer, type TranslateState, lostMessage } from "./translate";
 
 const sign = (index: number, gloss: string, confident = true): ServerMsg => ({
   type: "sign",
@@ -83,5 +83,13 @@ describe("newEvents", () => {
     expect(newEvents([a, b, c], b)).toEqual([c]);
     expect(newEvents([a, b, c], c)).toEqual([]);
     expect(newEvents([b, c], { n: 9 })).toEqual([b, c]);
+  });
+});
+
+describe("lostMessage", () => {
+  it("texto del aviso de señas borradas (vacío si no hay)", () => {
+    expect(lostMessage(0)).toBe("");
+    expect(lostMessage(1)).toBe("Se borró 1 seña sin formar oración al cambiar de modo o al reiniciarse la conexión. Vuelve a hacerla si la necesitas.");
+    expect(lostMessage(3)).toBe("Se borraron 3 señas sin formar oración al cambiar de modo o al reiniciarse la conexión. Vuelve a hacerlas si las necesitas.");
   });
 });

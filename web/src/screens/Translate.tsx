@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { GlossChips } from "../components/GlossChips";
 import { IconSpeaker, IconWarning } from "../components/icons";
 import { SentencePanel } from "../components/SentencePanel";
+import { lostMessage } from "../lib/translate";
 import { CameraStage, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
 const VOICE_KEY = "lsm.voz";
@@ -45,6 +46,18 @@ export function Translate() {
     wasConfirming.current = confirmClear;
   }, [confirmClear]);
   const canSpeak = speechSupported();
+
+  // Texto de la región viva de señas borradas: se escribe después de montar la región.
+  const [lostAnnounce, setLostAnnounce] = useState("");
+  useEffect(() => {
+    const text = lostMessage(translate.lost);
+    if (!text) {
+      setLostAnnounce("");
+      return;
+    }
+    const id = window.setTimeout(() => setLostAnnounce(text), 150);
+    return () => window.clearTimeout(id);
+  }, [translate.lost]);
 
   useSessionMode("translate", null);
   // Mientras se corrige una seña dudosa no se mandan cuadros: así el contador de quietud del
@@ -101,13 +114,14 @@ export function Translate() {
       </header>
 
       <ServerNotice />
+      {/* Región viva siempre montada (vacía al montar) y rellenada después: así sí se anuncia. */}
+      <p className="visually-hidden" role="status">
+        {lostAnnounce}
+      </p>
       {translate.lost > 0 ? (
-        <div className="notice notice--warn notice--action" role="status">
+        <div className="notice notice--warn notice--action">
           <IconWarning />
-          <span className="notice__text">
-            {translate.lost === 1 ? "Se borró 1 seña" : `Se borraron ${translate.lost} señas`} sin formar oración al cambiar de modo o al
-            reiniciarse la conexión. Vuelve a hacerlas si las necesitas.
-          </span>
+          <span className="notice__text">{lostMessage(translate.lost)}</span>
           <button type="button" className="btn btn--quiet" onClick={() => translateDispatch({ kind: "dismissLost" })}>
             Entendido
           </button>

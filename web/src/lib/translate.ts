@@ -107,3 +107,11 @@ export function newEvents<T>(events: readonly T[], lastSeen: T | null): T[] {
   const i = events.lastIndexOf(lastSeen);
   return i < 0 ? [...events] : events.slice(i + 1);
 }
+
+/** Aviso de señas pendientes que se borraron sin formar oración; "" si no hay. */
+export function lostMessage(n: number): string {
+  if (n <= 0) return "";
+  const what = n === 1 ? "Se borró 1 seña" : `Se borraron ${n} señas`;
+  const again = n === 1 ? "Vuelve a hacerla si la necesitas." : "Vuelve a hacerlas si las necesitas.";
+  return `${what} sin formar oración al cambiar de modo o al reiniciarse la conexión. ${again}`;
+}
