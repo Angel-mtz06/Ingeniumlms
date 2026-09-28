@@ -38,12 +38,13 @@ class Session:
         self.paragraph: list[str] = []
         self._reset_stream()
 
-    def _reset_stream(self) -> None:
+    def _reset_stream(self, keep_calib: bool = False) -> None:
+        calib = self.calib if keep_calib else {"L": None, "R": None}
         self.normalizer, self.segmenter = LiveNormalizer(), Segmenter()
         self.hands, self.present, self.gflex, self.gcont = [], [], [], []
         self.base, self.idx = 0, -1
         self.gloves: dict[str, GloveReading | None] = {"L": None, "R": None}
-        self.calib: dict = {"L": None, "R": None}
+        self.calib: dict = calib
         self.calibrator: Calibrator | None = None
         self.pending: list[dict] = []
         self.no_hand = 0
@@ -56,31 +57,30 @@ class Session:
         t = msg.get("type")
         if t == "hello":
             self.mode, self.target = msg.get("mode", "translate"), msg.get("target")
-            calib = self.calib
-            self._reset_stream()
-            self.calib = calib  # la calibración sobrevive al cambio de modo
+            self._reset_stream(keep_calib=True)  # la calibración sobrevive al cambio de modo
             return [self._ready()]
         if t == "frame":
             return await self._frame(msg)
         if t == "calibrate":
             return self._calibrate(msg.get("step"))
-        if t == "confirm_gloss":
-            i = int(msg["index"])
-            if 0 <= i < len(self.pending):
-                self.pending[i].update(gloss=msg["gloss"], confident=True)
-            return [{"type": "pending", "glosses": [p["gloss"] for p in self.pending]}]
-        if t == "remove_gloss":
-            i = int(msg["index"])
-            if 0 <= i < len(self.pending):
-                self.pending.pop(i)
+        if t in ("confirm_gloss", "remove_gloss"):
+            try:
+                if t == "confirm_gloss":
+                    i = int(msg["index"])
+                    if 0 <= i < len(self.pending):
+                        self.pending[i].update(gloss=msg["gloss"], confident=True)
+                else:
+                    i = int(msg["index"])
+                    if 0 <= i < len(self.pending):
+                        self.pending.pop(i)
+            except (KeyError, ValueError, TypeError):
+                return [{"type": "error", "message": f"mensaje inválido: {t}"}]
             return [{"type": "pending", "glosses": [p["gloss"] for p in self.pending]}]
         if t == "build_sentence":
             return await self._sentence()
         if t == "reset":
             self.paragraph = []
-            calib = self.calib
-            self._reset_stream()
-            self.calib = calib
+            self._reset_stream(keep_calib=True)
             return [self._ready()]
         return [{"type": "error", "message": f"tipo de mensaje desconocido: {t}"}]
 

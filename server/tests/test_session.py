@@ -107,3 +107,25 @@ def test_calibration_with_simulated_glove():
 def test_unknown_message_is_error():
     out = asyncio.run(Session().handle({"type": "zzz"}))
     assert out[0]["type"] == "error"
+
+
+def test_malformed_confirm_is_error():
+    s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
+    out = asyncio.run(run(s, [{"type": "confirm_gloss"}]))
+    assert len(out) == 1 and out[0]["type"] == "error"
+    out = asyncio.run(run(s, [{"type": "remove_gloss", "index": "x"}]))
+    assert len(out) == 1 and out[0]["type"] == "error"
+
+
+def test_calibration_survives_hello_and_reset():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    msgs = [{"type": "hello", "mode": "practice", "target": None}, {"type": "calibrate", "step": "open"}]
+    msgs += [frame((0, 1.0), simulate_line("R", i, i, flex=(0,) * 5)) for i in range(12)]
+    msgs += [{"type": "calibrate", "step": "fist"}]
+    msgs += [frame((0, 1.0), simulate_line("R", i, i, flex=(80,) * 5)) for i in range(12)]
+    msgs += [{"type": "calibrate", "step": "done"}]
+    asyncio.run(run(s, msgs))
+    asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": None}]))
+    assert s.calib["R"] is not None
+    asyncio.run(run(s, [{"type": "reset"}]))
+    assert s.calib["R"] is not None
