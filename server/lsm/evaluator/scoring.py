@@ -54,7 +54,7 @@ def finger_status(ref: GlossRef, flex: np.ndarray) -> np.ndarray:
     for s in (0, 1):
         if not ref.slots_used[s]:
             continue
-        z = _flex_z(ref, flex[s], s)
+        z = _flex_z(ref, flex[s], s) - Z_MARGIN  # mismo margen que el puntaje y los consejos
         out[s] = np.where(np.isnan(z), -1, np.where(z < 1, 0, np.where(z < 2, 1, 2)))
     return out
 

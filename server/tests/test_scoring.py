@@ -58,8 +58,9 @@ def test_missing_hand_is_reported():
 
 
 def test_finger_status_codes():
-    st = finger_status(REF, np.array([[0, 90, 40, 90, 90], [np.nan] * 5]))
-    assert st[0].tolist()[:3] == [0, 0, 2] and (st[1] == -1).all()
+    # mismo margen que los consejos: 0 si z − Z_MARGIN < 1, 1 si < 2, 2 si no (FLEX_FLOOR = 12°)
+    st = finger_status(REF, np.array([[0, 90, 40, 72, 60], [np.nan] * 5]))
+    assert st[0].tolist() == [0, 0, 2, 0, 1] and (st[1] == -1).all()  # z: 0, 0, 4.2, 1.5, 2.5
 
 
 def test_max_two_tips():
