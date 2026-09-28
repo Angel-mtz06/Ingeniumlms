@@ -134,14 +134,16 @@ export function RecordScreen() {
     setPhase({ kind: "idle" });
   };
 
+  // Avisos sobre el video solo visuales: el anuncio accesible es `.record-status` (el contador de
+  // décimas de segundo no debe leerse 10 veces por segundo).
   const overlay =
     phase.kind === "countdown" ? (
-      <p className="overlay-count" role="status">
+      <p className="overlay-count" aria-hidden="true">
         <span className="overlay-count__n tabular">{phase.left}</span>
         <span>Prepárate: {glossLabel(phase.label)}</span>
       </p>
     ) : phase.kind === "recording" ? (
-      <div className="overlay-pill overlay-pill--rec" role="status">
+      <div className="overlay-pill overlay-pill--rec" aria-hidden="true">
         <span className="rec-mark" aria-hidden="true" />
         <span>
           Grabando {glossLabel(phase.label)}: <span className="tabular">{Math.min(phase.elapsed, phase.seconds).toFixed(1)}</span> de {phase.seconds} s

@@ -123,14 +123,15 @@ export function Calibration() {
   const running = phase.kind === "countdown" || phase.kind === "recording" || phase.kind === "finishing";
   const cur = activeStep(phase);
 
+  // Los avisos sobre el video son solo visuales: el único anuncio accesible es `.calib-status` (abajo).
   const overlay =
     phase.kind === "countdown" ? (
-      <p className="overlay-count" role="status">
+      <p className="overlay-count" aria-hidden="true">
         <span className="overlay-count__n tabular">{phase.left}</span>
         <span>Prepárate: {STEPS[phase.step].title.toLowerCase()}</span>
       </p>
     ) : phase.kind === "recording" ? (
-      <div className="overlay-pill overlay-pill--rec" role="status">
+      <div className="overlay-pill overlay-pill--rec" aria-hidden="true">
         <span className="rec-mark" aria-hidden="true" />
         <span>Mantén {STEPS[phase.step].title.toLowerCase()}</span>
         <span className="rec-progress" aria-hidden="true">
