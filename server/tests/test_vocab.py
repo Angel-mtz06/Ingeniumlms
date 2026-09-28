@@ -29,3 +29,8 @@ def test_overlaps_are_merged():
 def test_categories():
     assert mendeley_category(36) == "escuela"
     assert mendeley_category(170) == "pronombres"
+
+
+def test_canonical_keeps_decomposed_enye():
+    assert canonical("man\u0303ana") == "MAÑANA"
+    assert canonical("N\u0303") == "Ñ"

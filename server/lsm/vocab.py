@@ -32,7 +32,8 @@ GLOSSES_CATEGORY = "salud_y_frecuentes"
 
 
 def canonical(name: str) -> str:
-    s = name.strip().upper().replace(" ", "_").replace("Ñ", "\0")
+    s = unicodedata.normalize("NFC", name)  # "N" + tilde combinante → "Ñ" antes de proteger la Ñ
+    s = s.strip().upper().replace(" ", "_").replace("Ñ", "\0")
     s = "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
     return s.replace("\0", "Ñ")
 
