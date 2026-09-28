@@ -208,9 +208,10 @@ export function GloveControls({ compact = false }: { compact?: boolean }) {
       </p>
     );
   }
+  // Izquierdo primero: con el video en espejo, lo derecho de la persona queda a la derecha de la pantalla.
   const sides = [
-    { side: "R" as const, label: "Guante derecho" },
     { side: "L" as const, label: "Guante izquierdo" },
+    { side: "R" as const, label: "Guante derecho" },
   ];
   const connectedCount = sides.filter((s) => gloves.sides[s.side].connected).length;
   return (

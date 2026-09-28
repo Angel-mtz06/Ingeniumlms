@@ -100,9 +100,10 @@ export function Diagnostics() {
         <GloveControls compact />
       </section>
 
+      {/* Mismo orden que el espejo de la cámara: izquierdo a la izquierda, derecho a la derecha. */}
       <div className="diag-grid">
-        <GlovePanel title="Guante derecho" connected={gloves.sides.R.connected} stale={gloves.sides.R.stale} view={view.R} />
         <GlovePanel title="Guante izquierdo" connected={gloves.sides.L.connected} stale={gloves.sides.L.stale} view={view.L} />
+        <GlovePanel title="Guante derecho" connected={gloves.sides.R.connected} stale={gloves.sides.R.stale} view={view.R} />
       </div>
     </div>
   );

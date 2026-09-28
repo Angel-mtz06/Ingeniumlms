@@ -144,9 +144,10 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
           <h3 id="practica-dedos" className="sheet__title">
             Tus dedos en vivo
           </h3>
+          {/* El video va en espejo: la mano derecha (slot 0) se ve a la DERECHA de la pantalla, igual aquí. */}
           <div className="hands-panel__pair">
-            <HandDiagram side="derecha" fingers={live?.fingers[0] ?? []} />
             <HandDiagram side="izquierda" fingers={live?.fingers[1] ?? []} />
+            <HandDiagram side="derecha" fingers={live?.fingers[0] ?? []} />
           </div>
         </section>
       </div>
