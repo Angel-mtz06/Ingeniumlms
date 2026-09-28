@@ -32,6 +32,16 @@ class RecordingIn(BaseModel):
     frames: list[dict]
 
 
+class WebFiles(StaticFiles):
+    """Archivos de la web. index.html sin caché (siempre la versión nueva); los assets con hash sí se cachean."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.headers.get("content-type", "").startswith("text/html"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def create_app(classifier=None, references: dict | None = None, sentences: SentenceBuilder | None = None,
                static_dir: str | Path | None = None, own_dir: str | Path | None = None) -> FastAPI:
     references = references or {}
@@ -126,7 +136,7 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
                 await ws.send_json({"type": "error", "message": f"error interno: {type(e).__name__}"})
 
     if static_dir and Path(static_dir).exists():
-        app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="web")
+        app.mount("/", WebFiles(directory=str(static_dir), html=True), name="web")
     return app
 
 

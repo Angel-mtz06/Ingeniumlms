@@ -117,3 +117,20 @@ def test_recording_rejects_bad_frame_size(tmp_path):
         assert c.post("/api/recordings", json={"label": "hola", "signer": "angel", "frames": frames}) \
             .status_code == 400, bad
     assert not list((tmp_path / "own").rglob("*.npz"))
+
+
+def test_index_html_is_not_cached_but_assets_are(tmp_path):
+    web = tmp_path / "dist"
+    (web / "assets").mkdir(parents=True)
+    (web / "index.html").write_text("<!doctype html><title>x</title>", encoding="utf-8")
+    (web / "assets" / "app-abc123.js").write_text("console.log(1)", encoding="utf-8")
+    app = create_app(FakeClassifier(), {"HOLA": ref()}, SentenceBuilder(llm=None, provider="none"),
+                     static_dir=web, own_dir=tmp_path / "own")
+    c = TestClient(app)
+    for path in ("/", "/index.html"):
+        r = c.get(path)
+        assert r.status_code == 200 and "<title>x</title>" in r.text
+        assert r.headers["cache-control"] == "no-cache", path
+    r = c.get("/assets/app-abc123.js")
+    assert r.status_code == 200 and "no-cache" not in r.headers.get("cache-control", "")
+    assert c.get("/api/health").json()["classifier"] is True
