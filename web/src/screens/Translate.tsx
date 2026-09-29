@@ -110,7 +110,7 @@ export function Translate() {
   return (
     <div className="screen">
       <header className="screen__head">
-        <h2 className="screen__title">Traducción en vivo</h2>
+        <h2 className="screen__title">Interpretación en vivo</h2>
         <p className="screen__lead">Haz las señas una tras otra. Cuando haces una pausa, la app forma la oración en español.</p>
       </header>
 

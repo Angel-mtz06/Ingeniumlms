@@ -46,10 +46,10 @@ export function SentencePanel({ text, paragraph, source, onSpeak, onCopy }: Sent
   };
 
   return (
-    <section className="sentence" aria-label="Traducción">
+    <section className="sentence" aria-label="Interpretación">
       {/* Región viva siempre montada: si naciera junto con el texto, la primera oración no se anunciaría. */}
       <p className="visually-hidden" aria-live="polite">
-        {empty ? "" : `Traducción: ${text}`}
+        {empty ? "" : `Interpretación: ${text}`}
       </p>
       {empty ? (
         <p className="sentence__empty">La oración aparecerá aquí cuando termines de señar.</p>
