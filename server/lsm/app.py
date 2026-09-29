@@ -13,7 +13,8 @@ from pydantic import BaseModel
 
 from lsm.evaluator.references import _to_json, load_references
 from lsm.live import frames_to_raw
-from lsm.paths import DATASETS, MODELS, PROCESSED, ROOT, active_model_path
+from lsm.paths import (DATASETS, MODELS, PROCESSED, ROOT, active_model_name, active_references_path,
+                       active_vocab_path)
 from lsm.sentences import SentenceBuilder
 from lsm.session import Session, valid_dim
 from lsm.vocab import canonical
@@ -45,7 +46,7 @@ class WebFiles(StaticFiles):
 
 def create_app(classifier=None, references: dict | None = None, sentences: SentenceBuilder | None = None,
                static_dir: str | Path | None = None, own_dir: str | Path | None = None,
-               model_name: str | None = None) -> FastAPI:
+               model_name: str | None = None, vocab_csv: str | Path | None = None) -> FastAPI:
     references = references or {}
     sentences = sentences or SentenceBuilder()
     own = Path(own_dir) if own_dir else DATASETS / "own"
@@ -58,8 +59,9 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
 
     @app.get("/api/vocab")
     def vocab():
-        if Path(VOCAB_CSV).exists():
-            rows = csv.DictReader(open(VOCAB_CSV, encoding="utf-8"))
+        path = Path(vocab_csv or VOCAB_CSV)  # el catálogo del modelo activo
+        if path.exists():
+            rows = csv.DictReader(open(path, encoding="utf-8"))
             return [{"gloss": r["gloss"], "category": r["category"], "has_reference": r["gloss"] in references}
                     for r in rows if r["gloss"] != NONE_GLOSS]  # NINGUNA no es una seña del catálogo
         return [{"gloss": g, "category": "", "has_reference": True} for g in sorted(references) if g != NONE_GLOSS]
@@ -152,12 +154,15 @@ def main() -> None:
     load_env_file(ROOT / ".env")  # OPENAI_API_KEY, SENTENCES_PROVIDER…; antes de crear SentenceBuilder
     torch.set_num_threads(2)  # inferencia en CPU: deja núcleos libres para el servidor y MediaPipe
 
-    clf_path, ref_path = active_model_path(), MODELS / "references.json"
+    name = active_model_name()
+    clf_path = MODELS / f"{name}.pt"
+    ref_path, vocab_path = active_references_path(name), active_vocab_path(name)
     classifier = Classifier.load(clf_path) if clf_path.exists() else None
     references = load_references(ref_path) if ref_path.exists() else {}
-    print(f"modelo activo: {clf_path.stem}" + ("" if classifier else " (no encontrado)"), flush=True)
+    print(f"modelo activo: {name}" + ("" if classifier else " (no encontrado)")
+          + f"; referencias: {ref_path.name}; catálogo: {vocab_path.parent.name}/{vocab_path.name}", flush=True)
     app = create_app(classifier, references, SentenceBuilder(), static_dir=ROOT / "web" / "dist",
-                     model_name=clf_path.stem if classifier else None)
+                     model_name=name if classifier else None, vocab_csv=vocab_path)
     uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8000")))
 
 

@@ -32,3 +32,20 @@ def test_comparison_marks_missing_metrics():
     assert rows["exactitud val (personas no vistas)"] == ("0.940", "0.900")
     assert rows["exactitud en grabaciones propias (val)"] == ("—", "0.800")
     assert rows["clases"] == ("121", "124")
+
+
+def test_is_worse_more_than_two_points():
+    import compare_models
+    old = {"val_acc": 0.94, "test_acc": 0.76}
+    assert not compare_models.is_worse(old, {"val_acc": 0.925, "test_acc": 0.745})  # 1.5 puntos: igual
+    assert compare_models.is_worse(old, {"val_acc": 0.91, "test_acc": 0.80})  # val cae 3 puntos
+    assert compare_models.is_worse(old, {"val_acc": 0.95, "test_acc": 0.73})  # test cae 3 puntos
+    assert not compare_models.is_worse({}, {"val_acc": 0.1, "test_acc": 0.1})  # sin reporte del activo
+    assert not compare_models.is_worse(old, {})
+
+
+def test_train_accepts_out_dir():
+    ap = train.parser()
+    a = ap.parse_args(["--out", "classifier_v2", "--out-dir", "D:/x", "--epochs", "2"])
+    assert a.out == "classifier_v2" and str(a.out_dir) == "D:/x" and a.epochs == 2
+    assert train.parser().parse_args([]).out_dir is None

@@ -22,6 +22,7 @@ LIVE_EVERY = 2
 KEEP = 900
 DROP = 300
 CONF_MIN = 0.6
+NONE_MIN = 0.5  # Traducción descarta un segmento solo si NINGUNA es top-1 con al menos esta probabilidad
 NO_HAND_WARN = 60
 GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
 SIDE_OF_SLOT = ("R", "L")
@@ -179,27 +180,28 @@ class Session:
             return []
         b = self._trim_descent(a, b)
         seq = NormSequence(np.stack(self.hands[a:b + 1]), np.stack(self.present[a:b + 1]))
-        # k=4: si NINGUNA sale entre las alternativas, en Traducción se quita y aún quedan 3
+        # k=4: NINGUNA nunca se muestra como alternativa; quitándola aún quedan 3
         top = [[g, round(float(p), 3)] for g, p in self.classifier.predict(seq, k=4)] if self.classifier else []
-        top3 = top[:3]
+        none_top1 = bool(top) and top[0][0] == NONE_GLOSS
+        top3 = [t for t in top if t[0] != NONE_GLOSS][:3]
         if self.mode == "practice":
+            recognized = [] if none_top1 else top3  # NINGUNA arriba = "no se reconoció ninguna seña"
             ref = self.references.get(self.target)
             if ref is None:
-                return [{"type": "evaluation", "target": self.target, "recognized": top3, "scores": {},
+                return [{"type": "evaluation", "target": self.target, "recognized": recognized, "scores": {},
                          "total": 0.0, "tips": ["No hay referencia para esta seña"], "fingers": [],
                          "evaluable": False}]
             q = (b - a) // 4
             gflex = _nanmedian(np.stack(self.gflex[a + q:b - q + 1]))
             gcont = _nanmedian(np.stack(self.gcont[a + q:b - q + 1]))
             ev = evaluate(ref, seq, gflex, gcont)
-            return [{"type": "evaluation", "target": self.target, "recognized": top3, "scores": ev.scores,
+            return [{"type": "evaluation", "target": self.target, "recognized": recognized, "scores": ev.scores,
                      "total": ev.total, "tips": messages(ev, ref),
                      "fingers": finger_status(ref, ev.finger_flex).tolist(),
                      # False si una mano que la seña requiere no se vio (el puntaje no es comparable)
                      "evaluable": not any(i.param == "mano" for i in ev.issues)}]
-        if not top or top[0][0] == NONE_GLOSS:
-            return []  # NINGUNA (movimiento que no es seña): se descarta en silencio
-        top3 = [t for t in top if t[0] != NONE_GLOSS][:3]
+        if not top3 or (none_top1 and top[0][1] >= NONE_MIN):
+            return []  # NINGUNA segura (movimiento que no es seña): se descarta en silencio
         item = {"gloss": top3[0][0], "top3": top3, "confident": top3[0][1] >= CONF_MIN}
         self.pending.append(item)
         return [{"type": "sign", "index": len(self.pending) - 1, **item}]

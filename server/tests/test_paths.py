@@ -44,3 +44,49 @@ def test_invalid_or_missing_model_falls_back_to_v1(tmp_path, monkeypatch, caplog
     with caplog.at_level("WARNING"):
         assert paths.active_model_name() == "classifier_v1"
     assert "no_existe" in caplog.text
+
+
+def test_active_model_file_utf16_bom(tmp_path, monkeypatch):
+    # PowerShell 5.1 con `>` escribe UTF-16 LE con BOM
+    m = _models(tmp_path, monkeypatch, "classifier_v1", "classifier_v2")
+    (m / "ACTIVE_MODEL").write_bytes("classifier_v2\r\n".encode("utf-16"))
+    assert paths.active_model_name() == "classifier_v2"
+
+
+def test_unreadable_active_model_file_falls_back(tmp_path, monkeypatch, caplog):
+    m = _models(tmp_path, monkeypatch, "classifier_v1")
+    (m / "ACTIVE_MODEL").write_bytes(b"\xff\xfe\x00\xd8")  # UTF-16 inválido (sustituto suelto)
+    with caplog.at_level("WARNING"):
+        assert paths.active_model_name() == "classifier_v1"
+    (m / "ACTIVE_MODEL").write_bytes(b"\x80\x81classifier")  # UTF-8 inválido
+    assert paths.active_model_name() == "classifier_v1"
+    (m / "ACTIVE_MODEL").unlink()
+    (m / "ACTIVE_MODEL").mkdir()  # no se puede leer como archivo: OSError
+    assert paths.active_model_name() == "classifier_v1"
+
+
+def test_references_and_vocab_follow_active_model(tmp_path, monkeypatch):
+    _models(tmp_path, monkeypatch, "classifier_v1", "classifier_v2")
+    monkeypatch.setattr(paths, "DATASETS", tmp_path / "datasets")
+    monkeypatch.setattr(paths, "PROCESSED", tmp_path / "datasets" / "processed")
+    # sin archivos propios del modelo: los de siempre (los de v1)
+    assert paths.active_references_path("classifier_v2") == tmp_path / "references.json"
+    assert paths.active_vocab_path("classifier_v2") == tmp_path / "datasets" / "processed" / "vocab.csv"
+    (tmp_path / "references_classifier_v2.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "datasets" / "processed_classifier_v2").mkdir(parents=True)
+    (tmp_path / "datasets" / "processed_classifier_v2" / "vocab.csv").write_text("gloss\n", encoding="utf-8")
+    assert paths.active_references_path("classifier_v2") == tmp_path / "references_classifier_v2.json"
+    assert paths.active_vocab_path("classifier_v2") == tmp_path / "datasets" / "processed_classifier_v2" / "vocab.csv"
+    assert paths.active_references_path("classifier_v1") == tmp_path / "references.json"
+
+
+def test_processed_dir_can_be_overridden(monkeypatch):
+    import importlib
+    monkeypatch.setenv("LSM_PROCESSED", "D:/Ingenium/tools/tmp/otro_processed")
+    try:
+        importlib.reload(paths)
+        assert str(paths.PROCESSED).replace("\\", "/") == "D:/Ingenium/tools/tmp/otro_processed"
+    finally:
+        monkeypatch.delenv("LSM_PROCESSED")
+        importlib.reload(paths)
+    assert paths.PROCESSED == paths.DATASETS / "processed"

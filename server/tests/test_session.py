@@ -296,33 +296,54 @@ def test_rounded_frame_is_accepted():
 
 
 class NoneClassifier:
-    """Clasificador falso con NINGUNA en la posición `pos` (0 = top-1)."""
+    """Clasificador falso con NINGUNA (probabilidad `p_none`) en la posición `pos` (0 = top-1)."""
 
-    def __init__(self, pos=0):
-        self.pos = pos
+    def __init__(self, pos=0, p_none=0.8):
+        self.pos, self.p_none = pos, p_none
 
     def predict(self, norm, k=3):
-        others = [("HOLA", 0.5), ("ADIOS", 0.2), ("SI", 0.1), ("NO", 0.05)]
-        out = others[:self.pos] + [("NINGUNA", 0.8 if self.pos == 0 else 0.15)] + others[self.pos:]
+        others = [("HOLA", 0.3), ("ADIOS", 0.2), ("SI", 0.1), ("NO", 0.05)]
+        out = others[:self.pos] + [("NINGUNA", self.p_none)] + others[self.pos:]
         return out[:k]
 
 
-def test_translate_discards_none_silently():
-    s = Session(NoneClassifier(0), {}, SentenceBuilder(llm=None, provider="none"))
-    out = asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}] + sign_frames()))
+def _translate(clf):
+    s = Session(clf, {}, SentenceBuilder(llm=None, provider="none"))
+    return s, asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}] + sign_frames()))
+
+
+def test_translate_discards_confident_none_silently():
+    s, out = _translate(NoneClassifier(0, p_none=0.5))
     assert [m["type"] for m in out] == ["ready"]  # ni seña ni oración
     assert s.pending == []
 
 
+def test_translate_weak_none_uses_first_real_alternative():
+    s, out = _translate(NoneClassifier(0, p_none=0.45))
+    sign = next(m for m in out if m["type"] == "sign")
+    assert sign["gloss"] == "HOLA" and [g for g, _ in sign["top3"]] == ["HOLA", "ADIOS", "SI"]
+    assert sign["confident"] is False  # 0.3 < CONF_MIN
+    assert next(m for m in out if m["type"] == "sentence")["glosses"] == ["HOLA"]
+
+
 def test_translate_filters_none_from_alternatives():
-    s = Session(NoneClassifier(1), {}, SentenceBuilder(llm=None, provider="none"))
-    out = asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}] + sign_frames()))
+    s, out = _translate(NoneClassifier(1, p_none=0.15))
     sign = next(m for m in out if m["type"] == "sign")
     assert sign["gloss"] == "HOLA" and [g for g, _ in sign["top3"]] == ["HOLA", "ADIOS", "SI"]
 
 
-def test_practice_recognized_keeps_none():
-    s = Session(NoneClassifier(0), {"HOLA": ref()}, SentenceBuilder(llm=None, provider="none"))
+def _practice(clf):
+    s = Session(clf, {"HOLA": ref()}, SentenceBuilder(llm=None, provider="none"))
     out = asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}] + sign_frames()))
-    ev = next(m for m in out if m["type"] == "evaluation")
-    assert [g for g, _ in ev["recognized"]] == ["NINGUNA", "HOLA", "ADIOS"]
+    return next(m for m in out if m["type"] == "evaluation")
+
+
+def test_practice_none_top1_shows_as_not_recognized():
+    # la UI no muestra "La app reconoció: NINGUNA": con lista vacía no muestra reconocimiento
+    ev = _practice(NoneClassifier(0, p_none=0.8))
+    assert ev["recognized"] == [] and "total" in ev
+
+
+def test_practice_none_removed_from_alternatives():
+    ev = _practice(NoneClassifier(1, p_none=0.15))
+    assert [g for g, _ in ev["recognized"]] == ["HOLA", "ADIOS", "SI"]

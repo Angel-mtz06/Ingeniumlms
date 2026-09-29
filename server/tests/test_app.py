@@ -40,6 +40,14 @@ def test_vocab_hides_none_class(tmp_path, monkeypatch):
     assert [v["gloss"] for v in TestClient(app).get("/api/vocab").json()] == ["HOLA"]
 
 
+def test_vocab_csv_of_active_model(tmp_path):
+    v2 = tmp_path / "vocab_v2.csv"
+    v2.write_text("gloss,category,sources\nHOLA,saludos,x\nMAÑANA,propias,own\n", encoding="utf-8")
+    app = create_app(FakeClassifier(), {"HOLA": ref()}, SentenceBuilder(llm=None, provider="none"),
+                     own_dir=tmp_path / "own", vocab_csv=v2)
+    assert [v["gloss"] for v in TestClient(app).get("/api/vocab").json()] == ["HOLA", "MAÑANA"]
+
+
 def test_vocab_falls_back_to_references(tmp_path, monkeypatch):
     monkeypatch.setattr("lsm.app.VOCAB_CSV", tmp_path / "no.csv")
     assert client(tmp_path).get("/api/vocab").json() == [{"gloss": "HOLA", "category": "", "has_reference": True}]

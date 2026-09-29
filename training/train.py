@@ -5,6 +5,7 @@ import argparse
 import csv
 import json
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -60,11 +61,17 @@ def predict(model, ds, batch=256):
     return torch.cat([torch.softmax(model(x), 1) for x, _ in dl]).numpy()
 
 
-def main():
+def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
     ap.add_argument("--epochs", type=int, default=150)
     ap.add_argument("--out", default="classifier_v1")
-    args = ap.parse_args()
+    ap.add_argument("--out-dir", default=None, help="carpeta de salida (por defecto models/)")
+    return ap
+
+
+def main():
+    args = parser().parse_args()
+    out_dir = Path(args.out_dir) if args.out_dir else MODELS
     torch.manual_seed(0)
     rows = list(csv.DictReader(open(PROCESSED / "manifest.csv", encoding="utf-8")))
     labels = sorted({r["gloss"] for r in rows if r["split"] == "train"})
@@ -112,11 +119,11 @@ def main():
               "own_val_acc": own_val_acc, "n_own_train": sum(r["dataset"] == "own" for r in select(rows, "train", li)),
               "n_own_val": sum(r["dataset"] == "own" for r in va_rows), "epochs": args.epochs,
               "sec_per_epoch": round(sec_per_epoch, 2)}
-    MODELS.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "labels": labels, "feat_mean": mean, "feat_std": std,
-                "config": {"d": 128, "layers": 3, "heads": 4, "ff": 256}}, MODELS / f"{args.out}.pt")
-    json.dump(report, open(MODELS / f"{args.out}_report.json", "w"), indent=2)
-    with open(MODELS / f"{args.out}_per_class.csv", "w", newline="", encoding="utf-8") as f:
+                "config": {"d": 128, "layers": 3, "heads": 4, "ff": 256}}, out_dir / f"{args.out}.pt")
+    json.dump(report, open(out_dir / f"{args.out}_report.json", "w"), indent=2)
+    with open(out_dir / f"{args.out}_per_class.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["gloss", "n_test", "acc"])
         for c, g in enumerate(labels):

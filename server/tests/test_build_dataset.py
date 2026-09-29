@@ -4,6 +4,7 @@ import sys
 
 import numpy as np
 
+from lsm.normalize import NormSequence
 from tests.conftest import make_hand, raw_with_head
 
 sys.path.insert(0, "D:/Ingenium/training")
@@ -45,9 +46,13 @@ def test_build_dataset_own_and_none(tmp_path, monkeypatch, capsys):
                     "angel_HOLA_003": "train", "angel_HOLA_004": "train"}
     none = [r for r in man if r["gloss"] == "NINGUNA"]
     assert none and all(r["split"] == "train" and "_NINGUNA_000_w" in r["sample_id"] for r in none)
-    # angel: 26 ventanas menos (0,45) y (0,60), sin manos. ana: solo las 4 del final con ≥30 % de manos
-    assert sum(r["signer"] == "angel" for r in none) == 24
-    assert sum(r["signer"] == "ana" for r in none) == 4
+    # tope de 8 ventanas por toma. ana (17 % de manos en toda la toma) no se descarta entera: quedan sus
+    # 9 ventanas del final con ≥30 % de manos, recortadas a 8
+    assert sum(r["signer"] == "angel" for r in none) == 8
+    assert sum(r["signer"] == "ana" for r in none) == 8
+    for r in none:
+        if r["signer"] == "ana":
+            assert NormSequence.load(r["norm_path"]).present.any(axis=1).mean() >= 0.3
     for r in none:
         assert (root / "datasets" / "processed" / "norm" / f"{r['sample_id']}.npz").exists()
     out = capsys.readouterr().out
@@ -73,5 +78,28 @@ def test_build_references_excludes_none(tmp_path, monkeypatch):
         w.writerows(rows)
     monkeypatch.setattr(build_references, "PROCESSED", tmp_path)
     monkeypatch.setattr(build_references, "MODELS", tmp_path / "models")
-    build_references.main()
+    build_references.main([])
     assert set(load_references(tmp_path / "models" / "references.json")) == {"HOLA"}
+
+
+def test_build_references_out_path(tmp_path, monkeypatch):
+    import build_references
+    from lsm.evaluator.references import load_references
+    from tests.test_references import seq
+
+    rows = []
+    for i in range(3):
+        p = tmp_path / f"HOLA_{i}.npz"
+        seq(signer=f"p{i}").save(p)
+        rows.append({"sample_id": f"HOLA_{i}", "gloss": "HOLA", "signer": f"p{i}", "dataset": "own",
+                     "norm_path": str(p), "split": "train"})
+    with open(tmp_path / "manifest.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    monkeypatch.setattr(build_references, "PROCESSED", tmp_path)
+    monkeypatch.setattr(build_references, "MODELS", tmp_path / "models")
+    out = tmp_path / "stage" / "references_classifier_v2.json"
+    build_references.main(["--out", str(out)])
+    assert set(load_references(out)) == {"HOLA"}
+    assert not (tmp_path / "models" / "references.json").exists()  # la de v1 no se toca

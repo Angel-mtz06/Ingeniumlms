@@ -7,7 +7,7 @@ import numpy as np
 
 from lsm.classifier.infer import Classifier
 from lsm.evaluator.references import load_references
-from lsm.paths import MODELS, active_model_path
+from lsm.paths import MODELS, active_model_name, active_references_path
 from lsm.schema import RawSequence
 from lsm.sentences import SentenceBuilder
 from lsm.session import Session
@@ -26,7 +26,8 @@ def raw_to_frames(raw: RawSequence) -> list[dict]:
 
 async def run(path, mode, target, rest_frames=60):
     raw = RawSequence.load(path)
-    clf_path, ref_path = active_model_path(), MODELS / "references.json"
+    name = active_model_name()
+    clf_path, ref_path = MODELS / f"{name}.pt", active_references_path(name)
     s = Session(Classifier.load(clf_path) if clf_path.exists() else None,
                 load_references(ref_path) if ref_path.exists() else {}, SentenceBuilder())
     frames = raw_to_frames(raw)
