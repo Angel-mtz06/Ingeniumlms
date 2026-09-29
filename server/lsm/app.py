@@ -17,6 +17,7 @@ from lsm.paths import DATASETS, MODELS, PROCESSED, ROOT, active_model_path
 from lsm.sentences import SentenceBuilder
 from lsm.session import Session, valid_dim
 from lsm.vocab import canonical
+from lsm.windows import NONE_GLOSS
 
 VOCAB_CSV = PROCESSED / "vocab.csv"
 INDEX_FIELDS = ["sample_id", "dataset", "source_label", "signer", "path", "n_frames", "hand_ratio"]
@@ -60,8 +61,8 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
         if Path(VOCAB_CSV).exists():
             rows = csv.DictReader(open(VOCAB_CSV, encoding="utf-8"))
             return [{"gloss": r["gloss"], "category": r["category"], "has_reference": r["gloss"] in references}
-                    for r in rows]
-        return [{"gloss": g, "category": "", "has_reference": True} for g in sorted(references)]
+                    for r in rows if r["gloss"] != NONE_GLOSS]  # NINGUNA no es una seña del catálogo
+        return [{"gloss": g, "category": "", "has_reference": True} for g in sorted(references) if g != NONE_GLOSS]
 
     @app.get("/api/reference/{gloss}")
     def reference(gloss: str):

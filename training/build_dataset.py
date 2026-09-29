@@ -12,6 +12,7 @@ from lsm.paths import DATASETS, PROCESSED, RAW_LANDMARKS
 from lsm.schema import RawSequence
 from lsm.splits import split_of
 from lsm.vocab import build_vocab, lookup, write_vocab_csv
+from lsm.windows import NONE_GLOSS, windows
 
 MIN_HAND_RATIO = 0.3
 TRAIN_DATASETS = ("glosses", "own")
@@ -38,7 +39,9 @@ def main():
             if r["dataset"] not in TRAIN_DATASETS:
                 skipped["dataset_excluido"] += 1
                 continue
-            if float(r["hand_ratio"]) < MIN_HAND_RATIO:
+            gloss = lookup(r["dataset"], r["source_label"])
+            is_none = r["dataset"] == "own" and gloss == NONE_GLOSS
+            if float(r["hand_ratio"]) < MIN_HAND_RATIO and not is_none:  # NINGUNA: se filtra por ventana
                 skipped["pocas_manos"] += 1
                 continue
             anchor = None
@@ -52,11 +55,16 @@ def main():
             except AnchorError:
                 skipped["sin_cabeza"] += 1
                 continue
-            dst = norm_dir / f"{r['sample_id']}.npz"
-            n.save(dst)
-            rows.append({"sample_id": r["sample_id"], "gloss": lookup(r["dataset"], r["source_label"]),
-                         "signer": r["signer"], "dataset": r["dataset"], "norm_path": str(dst),
-                         "split": split_of(r["signer"])})
+            parts = windows(n, min_hand_ratio=MIN_HAND_RATIO) if is_none else [n]
+            if not parts:
+                skipped["pocas_manos"] += 1
+                continue
+            for part in parts:
+                dst = norm_dir / f"{part.sample_id}.npz"
+                part.save(dst)
+                rows.append({"sample_id": part.sample_id, "gloss": gloss, "signer": r["signer"],
+                             "dataset": r["dataset"], "norm_path": str(dst),
+                             "split": split_of(r["signer"], r["dataset"], part.sample_id, gloss)})
     with open(PROCESSED / "manifest.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
@@ -70,6 +78,15 @@ def main():
     print("muestras:", len(rows), "omitidas:", dict(skipped))
     print("por split:", Counter(r["split"] for r in rows))
     print("glosas:", len(manifest_glosses))
+    own = Counter((r["gloss"], r["split"]) for r in rows if r["dataset"] == "own")
+    if own:
+        print("grabaciones propias por glosa (train/val; NINGUNA en ventanas):")
+        for g in sorted({g for g, _ in own}):
+            print(f"  {g}: {own[g, 'train']}/{own[g, 'val']}")
+            if not own[g, "train"]:
+                print(f"  AVISO: {g} no tiene tomas de entrenamiento (graba al menos 5 tomas: la 000, 005… van a val)")
+    else:
+        print("grabaciones propias: ninguna")
 
 
 if __name__ == "__main__":

@@ -29,6 +29,17 @@ def test_health_reports_model_name(tmp_path):
     assert TestClient(app).get("/api/health").json()["model"] == "classifier_v2"
 
 
+def test_vocab_hides_none_class(tmp_path, monkeypatch):
+    vocab_csv = tmp_path / "vocab.csv"
+    vocab_csv.write_text("gloss,category,sources\nHOLA,saludos,x\nNINGUNA,propias,own\n", encoding="utf-8")
+    monkeypatch.setattr("lsm.app.VOCAB_CSV", vocab_csv)
+    assert [v["gloss"] for v in client(tmp_path).get("/api/vocab").json()] == ["HOLA"]
+    monkeypatch.setattr("lsm.app.VOCAB_CSV", tmp_path / "no.csv")
+    app = create_app(FakeClassifier(), {"HOLA": ref(), "NINGUNA": ref()}, SentenceBuilder(llm=None, provider="none"),
+                     own_dir=tmp_path / "own")
+    assert [v["gloss"] for v in TestClient(app).get("/api/vocab").json()] == ["HOLA"]
+
+
 def test_vocab_falls_back_to_references(tmp_path, monkeypatch):
     monkeypatch.setattr("lsm.app.VOCAB_CSV", tmp_path / "no.csv")
     assert client(tmp_path).get("/api/vocab").json() == [{"gloss": "HOLA", "category": "", "has_reference": True}]

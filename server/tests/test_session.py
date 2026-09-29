@@ -293,3 +293,36 @@ def test_rounded_frame_is_accepted():
     out = asyncio.run(run(s, [f]))
     assert all(m["type"] != "error" for m in out)
     assert not np.isnan(s.gflex[-1][0]).all()
+
+
+class NoneClassifier:
+    """Clasificador falso con NINGUNA en la posición `pos` (0 = top-1)."""
+
+    def __init__(self, pos=0):
+        self.pos = pos
+
+    def predict(self, norm, k=3):
+        others = [("HOLA", 0.5), ("ADIOS", 0.2), ("SI", 0.1), ("NO", 0.05)]
+        out = others[:self.pos] + [("NINGUNA", 0.8 if self.pos == 0 else 0.15)] + others[self.pos:]
+        return out[:k]
+
+
+def test_translate_discards_none_silently():
+    s = Session(NoneClassifier(0), {}, SentenceBuilder(llm=None, provider="none"))
+    out = asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}] + sign_frames()))
+    assert [m["type"] for m in out] == ["ready"]  # ni seña ni oración
+    assert s.pending == []
+
+
+def test_translate_filters_none_from_alternatives():
+    s = Session(NoneClassifier(1), {}, SentenceBuilder(llm=None, provider="none"))
+    out = asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}] + sign_frames()))
+    sign = next(m for m in out if m["type"] == "sign")
+    assert sign["gloss"] == "HOLA" and [g for g, _ in sign["top3"]] == ["HOLA", "ADIOS", "SI"]
+
+
+def test_practice_recognized_keeps_none():
+    s = Session(NoneClassifier(0), {"HOLA": ref()}, SentenceBuilder(llm=None, provider="none"))
+    out = asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}] + sign_frames()))
+    ev = next(m for m in out if m["type"] == "evaluation")
+    assert [g for g, _ in ev["recognized"]] == ["NINGUNA", "HOLA", "ADIOS"]

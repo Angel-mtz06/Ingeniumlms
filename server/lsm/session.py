@@ -16,6 +16,7 @@ from lsm.normalize import NormSequence
 from lsm.segmenter import Segmenter, trim_descent
 from lsm.sentences import SentenceBuilder
 from lsm.vocab import canonical
+from lsm.windows import NONE_GLOSS
 
 LIVE_EVERY = 2
 KEEP = 900
@@ -178,7 +179,9 @@ class Session:
             return []
         b = self._trim_descent(a, b)
         seq = NormSequence(np.stack(self.hands[a:b + 1]), np.stack(self.present[a:b + 1]))
-        top3 = [[g, round(float(p), 3)] for g, p in self.classifier.predict(seq, k=3)] if self.classifier else []
+        # k=4: si NINGUNA sale entre las alternativas, en Traducción se quita y aún quedan 3
+        top = [[g, round(float(p), 3)] for g, p in self.classifier.predict(seq, k=4)] if self.classifier else []
+        top3 = top[:3]
         if self.mode == "practice":
             ref = self.references.get(self.target)
             if ref is None:
@@ -194,8 +197,9 @@ class Session:
                      "fingers": finger_status(ref, ev.finger_flex).tolist(),
                      # False si una mano que la seña requiere no se vio (el puntaje no es comparable)
                      "evaluable": not any(i.param == "mano" for i in ev.issues)}]
-        if not top3:
-            return []
+        if not top or top[0][0] == NONE_GLOSS:
+            return []  # NINGUNA (movimiento que no es seña): se descarta en silencio
+        top3 = [t for t in top if t[0] != NONE_GLOSS][:3]
         item = {"gloss": top3[0][0], "top3": top3, "confident": top3[0][1] >= CONF_MIN}
         self.pending.append(item)
         return [{"type": "sign", "index": len(self.pending) - 1, **item}]
