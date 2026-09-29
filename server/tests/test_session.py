@@ -347,3 +347,81 @@ def test_practice_none_top1_shows_as_not_recognized():
 def test_practice_none_removed_from_alternatives():
     ev = _practice(NoneClassifier(1, p_none=0.15))
     assert [g for g, _ in ev["recognized"]] == ["HOLA", "ADIOS", "SI"]
+
+
+# --- tasa de cuadros real (campo opcional "t" en ms) ---
+
+from lsm.session import FrameRate  # noqa: E402
+
+
+def test_frame_rate_defaults_to_30_and_estimates_from_dt():
+    r = FrameRate()
+    assert r.fps == 30.0
+    r.push(None)
+    assert r.fps == 30.0
+    for k in range(20):
+        r.push(1000.0 + k * 1000 / 15)
+    assert abs(r.fps - 15.0) < 0.01
+
+
+def test_frame_rate_is_clamped_and_ignores_gaps_and_bad_values():
+    r = FrameRate()
+    for k in range(10):
+        r.push(k * 2.0)  # 500 fps → 60
+    assert r.fps == 60.0
+    r = FrameRate()
+    for k in range(10):
+        r.push(k * 400.0)  # 2.5 fps → 5
+    assert r.fps == 5.0
+    r = FrameRate()
+    for t in (0.0, 66.7, 133.3, 5000.0, 5066.7, 5066.7, 100.0, float("nan"), "x", True):
+        r.push(t)  # hueco de 5 s (pestaña oculta), repetido, hacia atrás y basura: se ignoran
+    assert abs(r.fps - 15.0) < 0.1
+
+
+def timed(frames, fps, t0=1000.0):
+    return [dict(f, t=round(t0 + k * 1000 / fps, 1)) for k, f in enumerate(frames)]
+
+
+def test_session_uses_frame_timestamps_for_segmenter_rate():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}] + timed([frame(None)] * 20, 15)))
+    assert abs(s.rate.fps - 15.0) < 0.1 and abs(s.segmenter.rate - 0.5) < 0.01
+    # el cambio de modo conserva la tasa medida
+    asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}]))
+    assert abs(s.segmenter.rate - 0.5) < 0.01
+
+
+def test_invalid_timestamp_is_ignored_not_an_error():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    for t in ("x", None, float("inf"), True, [1]):
+        out = asyncio.run(s.handle(dict(frame((0, 1.0)), t=t)))
+        assert all(m["type"] != "error" for m in out), t
+    assert s.rate.fps == 30.0
+
+
+def timed_sign(fps):
+    """Reposo 0.3 s, seña de 1 s, reposo 2 s, muestreados a `fps` con su marca de tiempo."""
+    n = lambda sec: int(round(sec * fps))  # noqa: E731
+    frames = [frame((-1.0, 5.0))] * n(0.3) + [frame((-1.0 + 2.0 * k / n(1.0), 1.0)) for k in range(n(1.0))]
+    return timed(frames + [frame((-1.0, 5.0))] * n(2.0), fps), n(0.3) + n(1.0)
+
+
+def test_practice_evaluation_arrives_as_fast_at_15_fps():
+    for fps in (30, 15):
+        s = Session(FakeClassifier(), {"HOLA": ref()}, SentenceBuilder(llm=None, provider="none"))
+        frames, first_rest = timed_sign(fps)
+        asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}]))
+        for i, f in enumerate(frames):
+            if any(m["type"] == "evaluation" for m in asyncio.run(s.handle(f))):
+                break
+        latency = (i - first_rest + 1) / fps  # desde que la mano deja de verse arriba
+        assert latency <= 0.2 + 1e-6, (fps, latency)
+
+
+def test_no_hand_warning_after_same_time_at_15_fps():
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}]))
+    at = [i for i, f in enumerate(timed([frame(None)] * 70, 15))
+          if any(m["type"] == "warning" for m in asyncio.run(s.handle(f)))]
+    assert len(at) == 1 and 28 <= at[0] <= 31  # ~2 s, como 60 cuadros a 30 fps

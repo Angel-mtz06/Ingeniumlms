@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import warnings
+from collections import deque
 
 import numpy as np
 
@@ -13,7 +14,7 @@ from lsm.glove.calibration import Calibrator
 from lsm.glove.protocol import GloveReading, parse_line
 from lsm.live import LiveNormalizer, frame_to_raw
 from lsm.normalize import NormSequence
-from lsm.segmenter import Segmenter, trim_descent
+from lsm.segmenter import BASE_FPS, Segmenter, scale_frames, trim_descent
 from lsm.sentences import SentenceBuilder
 from lsm.vocab import canonical
 from lsm.windows import NONE_GLOSS
@@ -23,9 +24,45 @@ KEEP = 900
 DROP = 300
 CONF_MIN = 0.6
 NONE_MIN = 0.5  # Traducción descarta un segmento solo si NINGUNA es top-1 con al menos esta probabilidad
-NO_HAND_WARN = 60
+NO_HAND_WARN = 60  # cuadros a 30 fps (2 s); se escala con la tasa real
 GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
 SIDE_OF_SLOT = ("R", "L")
+
+
+FPS_MIN, FPS_MAX = 5.0, 60.0
+FPS_WINDOW = 30  # dt promediados
+MAX_GAP_MS = 1000.0  # un hueco mayor (pestaña oculta, pausa) no cuenta para la tasa
+
+
+def _is_num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+class FrameRate:
+    """FPS estimados con la media móvil de los dt entre marcas de tiempo `t` (ms) de los cuadros.
+    Sin marcas de tiempo se asume BASE_FPS (30): todo se comporta como antes."""
+
+    def __init__(self):
+        self.last: float | None = None
+        self.dts: deque[float] = deque(maxlen=FPS_WINDOW)
+
+    def push(self, t) -> None:
+        if not _is_num(t):
+            return
+        t = float(t)
+        if self.last is not None:
+            dt = t - self.last
+            if dt == 0:
+                return  # cuadro repetido
+            if 0 < dt <= MAX_GAP_MS:
+                self.dts.append(dt)
+        self.last = t
+
+    @property
+    def fps(self) -> float:
+        if not self.dts:
+            return BASE_FPS
+        return min(FPS_MAX, max(FPS_MIN, 1000.0 * len(self.dts) / sum(self.dts)))
 
 
 def _nanmedian(a: np.ndarray) -> np.ndarray:
@@ -61,14 +98,16 @@ class Session:
         self.sentences = sentences or SentenceBuilder()
         self.mode, self.target = "translate", None
         self.paragraph: list[str] = []
+        self.rate = FrameRate()  # la tasa de la cámara no cambia con el modo: sobrevive a hello/reset
         self._reset_stream()
 
     def _reset_stream(self, keep_calib: bool = False) -> None:
         calib = self.calib if keep_calib else {"L": None, "R": None}
         self.normalizer = LiveNormalizer()
         # Práctica: solo cierra al volver al reposo (una seña por intento); Traducción: también por quietud
-        self.segmenter = (Segmenter(still_frames=10**6, max_len=150) if self.mode == "practice"
-                          else Segmenter(max_len=120))
+        rate = self.rate.fps / BASE_FPS
+        self.segmenter = (Segmenter(still_frames=10**6, max_len=150, rate=rate) if self.mode == "practice"
+                          else Segmenter(max_len=120, rate=rate))
         self.hands, self.present, self.gflex, self.gcont = [], [], [], []
         self.base, self.idx = 0, -1
         self.gloves: dict[str, GloveReading | None] = {"L": None, "R": None}
@@ -78,6 +117,7 @@ class Session:
         self.calibrator: Calibrator | None = None
         self.pending: list[dict] = []
         self.no_hand = 0
+        self.warned = False
 
     def _ready(self) -> dict:
         return {"type": "ready", "mode": self.mode, "target": self.target,
@@ -123,6 +163,8 @@ class Session:
             return [{"type": "error", "message": "cuadro inválido"}]
         hands, present = self.normalizer.push(raw)
         self.idx += 1
+        self.rate.push(msg.get("t"))  # opcional: marca de tiempo en ms; sin ella, 30 fps
+        self.segmenter.set_rate(self.rate.fps / BASE_FPS)
         fresh = self._update_gloves(msg.get("gloves") or {})
         gf, gc = np.full((2, 5), np.nan, np.float32), np.full((2, 4), np.nan, np.float32)
         cam = np.full((2, 5), np.nan, np.float32)
@@ -148,7 +190,11 @@ class Session:
             out.append({"type": "live", "fingers": finger_status(ref, flex).tolist(),
                         "hands": present.tolist(), "segment": self.segmenter.state})
         self.no_hand = 0 if present.any() else self.no_hand + 1
-        if self.no_hand == NO_HAND_WARN and self.mode == "practice":
+        if not self.no_hand:
+            self.warned = False
+        elif (not self.warned and self.no_hand >= scale_frames(NO_HAND_WARN, self.segmenter.rate, 2)
+              and self.mode == "practice"):
+            self.warned = True
             out.append({"type": "warning", "code": "no_hand",
                         "message": "No veo tus manos: acércate a la cámara o mejora la luz"})
         for ev in self.segmenter.update(self.idx, hands, present):
@@ -212,7 +258,7 @@ class Session:
 
     def _trim_descent(self, a: int, b: int) -> int:
         """Quita del final los cuadros en que la mano solo baja al reposo (≤40 % del segmento)."""
-        return a + trim_descent([self._top_y(i) for i in range(a, b + 1)])
+        return a + trim_descent([self._top_y(i) for i in range(a, b + 1)], self.segmenter.rate)
 
     async def _sentence(self) -> list[dict]:
         if not self.pending:
