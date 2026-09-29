@@ -9,6 +9,8 @@ export interface FramePayload {
   pose: number[][] | null;
   face: number[][] | null;
   gloves: { L: string | null; R: string | null };
+  /** Opcional: marca de tiempo del cuadro en ms (monótona, la que recibe MediaPipe). El servidor estima los FPS. */
+  t?: number;
 }
 
 export type ClientMsg =

@@ -32,9 +32,11 @@ export function roundGloveLine(line: string): string {
 export function buildFrame(input: {
   w: number; h: number; hands: P[][]; pose: P[] | null; face: P[] | null;
   gloves: { L: string | null; R: string | null };
+  /** Marca de tiempo en ms (monótona); el servidor la usa para estimar los FPS reales. */
+  t?: number;
 }): FramePayload {
   const { w, h } = input;
-  return {
+  const frame: FramePayload = {
     type: "frame", w, h,
     hands: input.hands.slice(0, 2).map((hand) => toPixels(hand, w, h)),
     pose: input.pose ? input.pose.map((p) => [round1(p.x * w), round1(p.y * h), round1(p.z * w), round2(p.visibility ?? 0)]) : null,
@@ -44,4 +46,6 @@ export function buildFrame(input: {
       R: input.gloves.R === null ? null : roundGloveLine(input.gloves.R),
     },
   };
+  if (input.t !== undefined) frame.t = round1(input.t);
+  return frame;
 }

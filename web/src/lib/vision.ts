@@ -37,7 +37,7 @@ export async function createVision(base = "/mediapipe", delegate: Delegate = "GP
       if (n % 2 === 0) lastPose = pose.detectForVideo(video, tsMs).landmarks[0] ?? null;
       if (n % 3 === 0) lastFace = face.detectForVideo(video, tsMs).faceLandmarks[0] ?? null;
       n++;
-      return buildFrame({ w: video.videoWidth, h: video.videoHeight, hands: h.landmarks, pose: lastPose, face: lastFace, gloves });
+      return buildFrame({ w: video.videoWidth, h: video.videoHeight, hands: h.landmarks, pose: lastPose, face: lastFace, gloves, t: tsMs });
     },
     lastHands: () => lastHands,
     close() { hands.close(); pose.close(); face.close(); },

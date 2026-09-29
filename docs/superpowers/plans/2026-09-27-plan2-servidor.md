@@ -30,12 +30,18 @@
 | `type` | Campos | Efecto |
 |---|---|---|
 | `hello` | `mode: "practice"\|"translate"`, `target: str\|null` | Reinicia la sesión en ese modo |
-| `frame` | `w`, `h`, `hands: [[[x,y,z]×21], …≤2]`, `pose: [[x,y,z,v]×33]\|null`, `face: [[x,y,z]×22]\|null`, `gloves: {"L": str\|null, "R": str\|null}` (última línea cruda de cada guante) | Procesa un cuadro |
+| `frame` | `w`, `h`, `hands: [[[x,y,z]×21], …≤2]`, `pose: [[x,y,z,v]×33]\|null`, `face: [[x,y,z]×22]\|null`, `gloves: {"L": str\|null, "R": str\|null}` (última línea cruda de cada guante), `t?: number` (opcional, ms monótonos; ver nota) | Procesa un cuadro |
 | `calibrate` | `step: "open"\|"fist"\|"done"` | Calibración de guantes |
 | `confirm_gloss` | `index: int`, `gloss: str` | Corrige una etiqueta pendiente |
 | `remove_gloss` | `index: int` | Borra una etiqueta pendiente |
 | `build_sentence` | — | Fuerza la oración con las etiquetas pendientes |
 | `reset` | — | Limpia buffers y párrafo |
+
+Nota (aditiva, 2026-09-28): `frame.t` es la marca de tiempo en ms del cuadro (la misma, monótona, que se pasa
+a MediaPipe). El servidor estima los FPS con la media móvil de los dt de los últimos 30 cuadros (acotada a
+5–60 fps; huecos > 1 s, repetidos y valores no numéricos se ignoran) y escala los umbrales del segmentador,
+que están calibrados a 30 fps (`rate = fps/30`: cuadros × rate, velocidades por cuadro ÷ rate). Sin `t`
+se asume 30 fps y todo se comporta como antes. Un `t` inválido no es error: se ignora.
 
 **Servidor → cliente**
 

@@ -54,4 +54,9 @@ describe("frame", () => {
     const f = buildFrame({ w: 10, h: 10, hands: [], pose: null, face: null, gloves: { L: null, R: line } });
     expect(f.gloves).toEqual({ L: null, R: out });
   });
+  it("incluye la marca de tiempo t (ms, 1 decimal) solo si se pasa", () => {
+    const base = { w: 10, h: 10, hands: [], pose: null, face: null, gloves: { L: null, R: null } };
+    expect(buildFrame({ ...base, t: 1234.5678 }).t).toBe(1234.6);
+    expect("t" in buildFrame(base)).toBe(false);
+  });
 });
