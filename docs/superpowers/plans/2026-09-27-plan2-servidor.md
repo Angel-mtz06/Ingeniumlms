@@ -42,6 +42,9 @@ a MediaPipe). El servidor estima los FPS con la media móvil de los dt de los ú
 5–60 fps; huecos > 1 s, repetidos y valores no numéricos se ignoran) y escala los umbrales del segmentador,
 que están calibrados a 30 fps (`rate = fps/30`: cuadros × rate, velocidades por cuadro ÷ rate). Sin `t`
 se asume 30 fps y todo se comporta como antes. Un `t` inválido no es error: se ignora.
+La racha de reposo exige el mismo lapso que 6 cuadros a 30 fps (a 15 fps, 4 cuadros). La altura de reposo
+del segmentador en vivo se puede ajustar con la variable de entorno `LSM_REST_Y` (por defecto 3.5 = `REST_Y`;
+no afecta a los rasgos del modelo). Registro de diagnóstico en `logs/lsm.log` (ver `docs/demo/checklist.md`).
 
 **Servidor → cliente**
 

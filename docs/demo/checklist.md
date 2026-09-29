@@ -26,3 +26,15 @@
 - Sin guantes → solo cámara (todo funciona; solo se pierde la retroalimentación de flexión fina).
 - Sin internet → oraciones con plantillas.
 - Laptop falla → segunda laptop con el repo clonado y probado (hacer esta copia antes del evento).
+
+## Si "tarda en validar" o reconoce mal
+- El servidor escribe `D:\Ingenium\logs\lsm.log` (rotativo, 5 MB × 3; no guarda el texto de las oraciones).
+- Cada seña: `segmento ... seg=<s> motivo=reposo|quietud|max_len fps=<n> top3=... total=... top_y_min/top_y_fin`.
+  Si en Práctica sale `motivo=max_len` (tras ~5 s) en vez de `reposo`, la app no está viendo las manos en reposo.
+- Cada ~5 s: `resumen fps=<n> manos=<%> activos=<%> top_y_med=<y> top_y_p90=<y> rest_y=3.50 estado=...`.
+  Con las manos quietas en el escritorio, `activos` debería ser ~0 %. Si es alto y `top_y_p90` queda justo
+  por debajo de `rest_y` (p. ej. 3.2), las manos en reposo cuentan como seña: subir el umbral con
+  `LSM_REST_Y=<top_y_p90 + 0.3>` en `.env` (o en el entorno) y reiniciar el servidor. Por defecto 3.5; rango válido 1–8.
+  Solo afecta la segmentación en vivo, no al modelo. Alternativa sin tocar nada: bajar las manos al regazo.
+- FPS de la cámara: el servidor ajusta sus umbrales a la tasa real (`fps=` en el registro); a 15 fps la
+  evaluación llega ~0.27 s después de bajar las manos.

@@ -236,3 +236,15 @@ def test_trim_descent_threshold_is_per_second():
 def test_rest_run_is_stable_around_30_fps():
     for fps in (29.0, 29.5, 30.0, 30.6):
         assert Segmenter(rate=fps / 30).frames("rest") == 6, fps
+
+
+def test_rest_y_is_configurable_by_env(monkeypatch):
+    from lsm.features import REST_Y
+    monkeypatch.delenv("LSM_REST_Y", raising=False)
+    assert Segmenter().rest_y == REST_Y == 3.5
+    monkeypatch.setenv("LSM_REST_Y", "4.2")
+    assert Segmenter().rest_y == 4.2
+    assert Segmenter(rest_y=3.0).rest_y == 3.0  # un valor explícito manda
+    for bad in ("abc", "nan", "-1", "50"):
+        monkeypatch.setenv("LSM_REST_Y", bad)
+        assert Segmenter().rest_y == 3.5, bad

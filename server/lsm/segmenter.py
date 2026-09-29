@@ -1,7 +1,9 @@
 """Detecta inicio/fin de señas y pausas de oración en el flujo en vivo."""
 from __future__ import annotations
 
+import logging
 import math
+import os
 from dataclasses import dataclass
 
 import numpy as np
@@ -15,6 +17,27 @@ class SegEvent:
     start: int = -1
     end: int = -1
     reason: str = ""  # solo "end": "reposo" | "quietud" | "max_len"
+
+
+REST_Y_RANGE = (1.0, 8.0)
+
+
+def live_rest_y() -> float:
+    """Altura de reposo del segmentador EN VIVO (anchos de cabeza bajo la nariz). Por defecto REST_Y (3.5);
+    se puede ajustar con la variable de entorno LSM_REST_Y (p. ej. en .env) si, sentado frente a la laptop,
+    las manos en reposo quedan por encima (ver `activos=` y `top_y_*` en logs/lsm.log). No cambia
+    features.REST_Y: el entrenamiento y los rasgos del modelo siguen con 3.5."""
+    v = os.environ.get("LSM_REST_Y")
+    if v is None:
+        return REST_Y
+    try:
+        y = float(v)
+    except ValueError:
+        y = float("nan")
+    if not (REST_Y_RANGE[0] <= y <= REST_Y_RANGE[1]):
+        logging.getLogger("lsm.segmenter").warning("LSM_REST_Y=%r inválido; se usa %.1f", v, REST_Y)
+        return REST_Y
+    return y
 
 
 POST_STILL_MIN = 15  # un segmento que sigue a un cierre por quietud necesita ≥15 cuadros…
@@ -66,10 +89,11 @@ class Segmenter:
     3) max_len: tope de longitud.
     Los parámetros (cuadros y velocidad por cuadro) están a 30 fps; `rate` = fps/30 los lleva a la tasa real."""
 
-    def __init__(self, rest_y: float = REST_Y, still_speed: float = 0.04, rest_frames: int = 6,
+    def __init__(self, rest_y: float | None = None, still_speed: float = 0.04, rest_frames: int = 6,
                  still_frames: int = 12, pause_frames: int = 45, min_len: int = 6, max_len: int = 75,
                  rate: float = 1.0):
-        self.rest_y, self.still_speed = rest_y, still_speed
+        self.rest_y = live_rest_y() if rest_y is None else rest_y
+        self.still_speed = still_speed
         self.rest_frames, self.still_frames, self.pause_frames = rest_frames, still_frames, pause_frames
         self.min_len, self.max_len = min_len, max_len
         self.rate = rate
