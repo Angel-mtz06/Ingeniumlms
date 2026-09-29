@@ -25,6 +25,27 @@
   gap: var(--space-4);
 }
 
+/* Cabecera compacta (Práctica con seña elegida): el título y la guía son chicos; manda la cámara. */
+.screen:has(> .screen__head--compact) {
+  gap: var(--space-4);
+}
+
+.screen__head--compact {
+  align-items: center;
+}
+
+.screen__head--compact .screen__head-text {
+  gap: 0;
+}
+
+.screen__head--compact .screen__title {
+  font-size: var(--text-xl);
+}
+
+.screen__head--compact .screen__lead {
+  font-size: var(--text-sm);
+}
+
 .screen__head-text {
   display: grid;
   gap: var(--space-2);
@@ -352,36 +373,209 @@
 }
 
 /* ---------- Práctica ---------- */
-/* Primera pantalla (sin bajar, también en 1366×768): ejemplo | cámara con el puntaje encima y el
-   primer consejo debajo. El detalle por parámetro y los dedos van en .practice-result, más abajo. */
+/* Primera pantalla (sin bajar, también en 1366×768): la cámara es lo más grande, con el puntaje
+   encima y el primer consejo debajo; al lado, los dedos en vivo y el ejemplo compacto y plegable.
+   El detalle por parámetro va en .practice-result, más abajo. */
 .practice-stage {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--space-5);
 }
 
-.practice-camera {
+.practice-camera,
+.practice-side {
   display: grid;
+  align-content: start;
   gap: var(--space-3);
+  min-width: 0;
+}
+
+.practice-side {
+  gap: var(--space-4);
 }
 
 /* Escritorio: el alto del video sale del alto de la ventana (lo que dejan la cabecera, arriba, y el
-   consejo, abajo; ≈ 25rem), entre 15rem y 24rem. Así en 1366×768 (≈ 668 px útiles) el puntaje y el
-   consejo quedan en la primera pantalla. El ejemplo toma el resto del ancho y el mismo alto. */
+   consejo, abajo; ≈ 17rem), entre 15rem y 36rem. La columna lateral toma el resto (mín. 19rem). */
 @media (min-width: 1024px) {
   .practice-stage {
-    --cam-h: clamp(15rem, 100vh - 25rem, 24rem);
-    --cam-h: clamp(15rem, 100dvh - 25rem, 24rem);
-    grid-template-columns: minmax(0, 1fr) calc(var(--cam-h) * 16 / 9);
+    --cam-h: clamp(15rem, 100vh - 17rem, 40rem);
+    --cam-h: clamp(15rem, 100dvh - 17rem, 40rem);
+    grid-template-columns: min(calc(var(--cam-h) * 16 / 9), calc(100% - 22rem - var(--space-5))) minmax(22rem, 1fr);
   }
 
-  /* La fila explícita hace que el lienzo (height: 100%) tome el alto fijo y no su alto intrínseco. */
-  .practice-ref .ref__stage {
-    aspect-ratio: auto;
-    block-size: var(--cam-h);
-    grid-template-rows: minmax(0, 1fr);
+  /* Práctica usa casi todo el ancho de la ventana (sin márgenes vacíos a los lados); el encabezado
+     se alinea con ella. Tope de 1760 px para monitores muy anchos. */
+  .app-main:has(.practice-stage),
+  body:has(.practice-stage) .app-header__inner {
+    max-width: 1760px;
+    padding-inline: var(--space-5);
   }
+}
+
+.practice-side .sheet {
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.practice-side .hands-panel__pair {
+  gap: var(--space-2);
+}
+
+.practice-side .hand__svg {
+  max-width: clamp(100px, 100dvh - 41rem, 170px);
+}
+
+.practice-side .hands-panel .sheet__title {
+  font-size: var(--text-md);
+}
+
+.practice-side .hand__caption {
+  font-size: var(--text-xs);
+}
+
+/* ---------- Ejemplo: casi todo es animación ----------
+   Abierto, la etiqueta "Ejemplo" y el ojo flotan sobre la animación (no ocupan fila propia).
+   Plegado, queda una línea con la etiqueta y el ojo. */
+.practice-ref {
+  position: relative;
+}
+
+.practice-side .practice-ref[data-open="true"] {
+  padding: var(--space-2);
+}
+
+.practice-ref[data-open="false"] {
+  gap: 0;
+}
+
+.practice-ref__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.practice-ref__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.practice-ref[data-open="true"] .practice-ref__head {
+  position: absolute;
+  z-index: 1;
+  inset: calc(var(--space-2) + 15px) calc(var(--space-2) + 15px) auto;
+  pointer-events: none;
+}
+
+.practice-ref[data-open="true"] .practice-ref__head > * {
+  pointer-events: auto;
+}
+
+.practice-ref[data-open="true"] .practice-ref__title {
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--glass-fill);
+  font-size: var(--text-xs);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* Botón de ojo: círculo de cristal, solo ícono (nombre accesible en aria-label). */
+.eye-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--glass-fill);
+  color: var(--color-text);
+  box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-border), 0 0 0 1.5px var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  touch-action: manipulation;
+  transition: background-color 200ms ease, transform 160ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.eye-toggle:hover {
+  background: var(--glass-fill-strong);
+}
+
+.eye-toggle:active {
+  transform: scale(0.92);
+}
+
+.btn--small {
+  min-height: 36px;
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--text-xs);
+}
+
+/* La fila explícita hace que el lienzo (height: 100%) tome el alto fijo y no su alto intrínseco.
+   El alto crece con la ventana: en 1366×768 todo el lado cabe en la primera pantalla. */
+.practice-ref .ref {
+  position: relative;
+}
+
+.practice-ref .ref__stage {
+  aspect-ratio: auto;
+  block-size: clamp(15rem, 100dvh - 29rem, 34rem);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* La etiqueta flotante ya dice "Ejemplo": el título de la referencia sobra. */
+.practice-ref .ref__title {
+  display: none;
+}
+
+/* Controles flotando sobre la parte baja de la animación, como en un reproductor. */
+.practice-ref .ref__bar {
+  position: absolute;
+  inset: auto var(--space-2) calc(var(--space-2) + 7px);
+  justify-content: center;
+}
+
+/* Controles mini en una fila: solo íconos y "1×"/"0.5×" (el nombre accesible no cambia:
+   el botón tiene aria-label y el texto oculto con font-size 0 sigue en el árbol de accesibilidad). */
+.practice-ref .ref__controls {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.practice-ref .ref__controls .btn {
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.practice-ref .ref__controls .btn .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.practice-ref .ref__controls .btn > span {
+  display: none;
+}
+
+.practice-ref .segmented {
+  padding: 2px;
+  gap: 0;
+}
+
+.practice-ref .segmented__item {
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  font-size: 0;
+}
+
+.practice-ref .segmented__item .tabular {
+  font-size: var(--text-xs);
 }
 
 /* Consejo de la última toma, pegado a la cámara. Estado suave (DESIGN.md regla 4): fondo tenue del
@@ -427,7 +621,7 @@
 
 .practice-result {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--space-5);
 }
@@ -955,7 +1149,6 @@
 
 /* ---------- Móvil y pantallas medianas: una columna ---------- */
 @media (max-width: 1023px) {
-  .practice-stage,
   .practice-result,
   .translate-grid,
   .record-grid,
@@ -964,10 +1157,15 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* En una columna, la cámara va primero en Calibración y en Práctica (cámara y puntaje juntos). */
-  .calib-side,
-  .practice-camera {
+  /* En una columna, la cámara va primero en Calibración. */
+  .calib-side {
     order: -1;
+  }
+
+  /* Práctica en tableta: dedos y ejemplo lado a lado bajo la cámara. */
+  .practice-side {
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    align-items: start;
   }
 }
 
