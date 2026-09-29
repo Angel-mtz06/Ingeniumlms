@@ -13,3 +13,4 @@ models/
 *.egg-info/
 web/.screens/
 web/public/mediapipe/
+logs/

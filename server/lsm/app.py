@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import csv
+import logging
 import os
 import re
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +28,26 @@ SIGNER_RE = re.compile(r"[A-Za-z0-9-]{1,32}")  # sin "_": separa persona_glosa_t
 LABEL_RE = re.compile(r"[A-ZÑ0-9_]{1,40}")
 MAX_REC_FRAMES = 1800  # 60 s a 30 fps
 TAKE_RE = re.compile(r"_(\d+)\.npz")
+
+
+LOG_MAX_BYTES = 5 * 1024 * 1024
+LOG_BACKUPS = 2
+
+
+def setup_logging(path: str | Path) -> RotatingFileHandler:
+    """Registro de diagnóstico de `lsm.*` (segmentos cerrados y resúmenes cada ~5 s) en un archivo rotativo.
+    Idempotente: si ya hay un manejador para ese archivo, lo devuelve sin duplicarlo."""
+    path = Path(path)
+    logger = logging.getLogger("lsm")
+    for h in logger.handlers:
+        if isinstance(h, RotatingFileHandler) and Path(h.baseFilename) == path.resolve():
+            return h
+    path.parent.mkdir(parents=True, exist_ok=True)
+    h = RotatingFileHandler(path, maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUPS, encoding="utf-8")
+    h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    logger.addHandler(h)
+    logger.setLevel(logging.INFO)
+    return h
 
 
 class RecordingIn(BaseModel):
@@ -153,6 +175,8 @@ def main() -> None:
 
     load_env_file(ROOT / ".env")  # OPENAI_API_KEY, SENTENCES_PROVIDER…; antes de crear SentenceBuilder
     torch.set_num_threads(2)  # inferencia en CPU: deja núcleos libres para el servidor y MediaPipe
+    log_path = setup_logging(ROOT / "logs" / "lsm.log").baseFilename
+    print(f"registro de diagnóstico: {log_path}", flush=True)
 
     name = active_model_name()
     clf_path = MODELS / f"{name}.pt"

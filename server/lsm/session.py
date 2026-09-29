@@ -1,6 +1,7 @@
 """Orquesta una conexión: cuadros → segmentos → evaluación/traducción. Sin red: probable en aislamiento."""
 from __future__ import annotations
 
+import logging
 import math
 import warnings
 from collections import deque
@@ -14,7 +15,7 @@ from lsm.glove.calibration import Calibrator
 from lsm.glove.protocol import GloveReading, parse_line
 from lsm.live import LiveNormalizer, frame_to_raw
 from lsm.normalize import NormSequence
-from lsm.segmenter import BASE_FPS, Segmenter, scale_frames, trim_descent
+from lsm.segmenter import BASE_FPS, SegEvent, Segmenter, scale_frames, trim_descent
 from lsm.sentences import SentenceBuilder
 from lsm.vocab import canonical
 from lsm.windows import NONE_GLOSS
@@ -27,6 +28,9 @@ NONE_MIN = 0.5  # Traducción descarta un segmento solo si NINGUNA es top-1 con 
 NO_HAND_WARN = 60  # cuadros a 30 fps (2 s); se escala con la tasa real
 GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
 SIDE_OF_SLOT = ("R", "L")
+SUMMARY_FRAMES = 150  # un resumen de diagnóstico cada ~5 s (cuadros a 30 fps)
+
+log = logging.getLogger("lsm.session")
 
 
 FPS_MIN, FPS_MAX = 5.0, 60.0
@@ -118,6 +122,30 @@ class Session:
         self.pending: list[dict] = []
         self.no_hand = 0
         self.warned = False
+        self._new_window()
+
+    def _new_window(self) -> None:
+        self.win_n = self.win_hands = self.win_active = 0
+        self.win_ys: list[float] = []
+
+    def _observe(self, hands: np.ndarray, present: np.ndarray) -> None:
+        """Acumula estadísticas del cuadro y cada ~5 s registra un resumen (sin datos sensibles)."""
+        self.win_n += 1
+        if present.any():
+            self.win_hands += 1
+            y = float(hands[:, 0, 1][present].min())
+            self.win_ys.append(y)
+            self.win_active += y < self.segmenter.rest_y
+        if self.win_n < scale_frames(SUMMARY_FRAMES, self.segmenter.rate, 2):
+            return
+        if log.isEnabledFor(logging.INFO):
+            ys = np.array(self.win_ys) if self.win_ys else np.array([np.nan])
+            log.info("resumen modo=%s fps=%.1f cuadros=%d manos=%.0f%% activos=%.0f%% top_y_med=%.2f "
+                     "top_y_p90=%.2f rest_y=%.2f estado=%s", self.mode, self.rate.fps, self.win_n,
+                     100 * self.win_hands / self.win_n, 100 * self.win_active / self.win_n,
+                     float(np.median(ys)), float(np.percentile(ys, 90)), self.segmenter.rest_y,
+                     self.segmenter.state)
+        self._new_window()
 
     def _ready(self) -> dict:
         return {"type": "ready", "mode": self.mode, "target": self.target,
@@ -197,9 +225,10 @@ class Session:
             self.warned = True
             out.append({"type": "warning", "code": "no_hand",
                         "message": "No veo tus manos: acércate a la cámara o mejora la luz"})
+        self._observe(hands, present)
         for ev in self.segmenter.update(self.idx, hands, present):
             if ev.kind == "end":
-                out += self._segment(ev.start, ev.end)
+                out += self._segment(ev)
             elif ev.kind == "pause" and self.mode == "translate":
                 out += await self._sentence()
         return out
@@ -220,14 +249,31 @@ class Session:
                 self.gloves[side] = None
         return fresh
 
-    def _segment(self, start: int, end: int) -> list[dict]:
-        a, b = max(start - self.base, 0), end - self.base
+    def _segment(self, ev: SegEvent) -> list[dict]:
+        a, b = max(ev.start - self.base, 0), ev.end - self.base
         if b < a:
             return []
+        out = self._evaluate_segment(a, b)
+        if log.isEnabledFor(logging.INFO):
+            ys = np.array([self._top_y(i) for i in range(a, b + 1)])
+            ev_out = next((m for m in out if m["type"] == "evaluation"), None)
+            fps = self.rate.fps
+            log.info("segmento modo=%s objetivo=%s cuadros=%d seg=%.2f motivo=%s fps=%.1f top3=%s total=%s "
+                     "top_y_min=%.2f top_y_fin=%.2f rest_y=%.2f", self.mode, self.target, b - a + 1,
+                     (b - a + 1) / fps, ev.reason, fps,
+                     ",".join(f"{g}:{p:.2f}" for g, p in self._last_top[:3]) or "-",
+                     f"{ev_out['total']:.2f}" if ev_out else "-",
+                     float(np.nanmin(ys)) if np.isfinite(ys).any() else float("nan"), float(ys[-1]),
+                     self.segmenter.rest_y)
+        return out
+
+    def _evaluate_segment(self, a: int, b: int) -> list[dict]:
+        self._last_top: list = []
         b = self._trim_descent(a, b)
         seq = NormSequence(np.stack(self.hands[a:b + 1]), np.stack(self.present[a:b + 1]))
         # k=4: NINGUNA nunca se muestra como alternativa; quitándola aún quedan 3
         top = [[g, round(float(p), 3)] for g, p in self.classifier.predict(seq, k=4)] if self.classifier else []
+        self._last_top = top  # para el registro (incluye NINGUNA si salió)
         none_top1 = bool(top) and top[0][0] == NONE_GLOSS
         top3 = [t for t in top if t[0] != NONE_GLOSS][:3]
         if self.mode == "practice":

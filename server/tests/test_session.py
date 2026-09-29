@@ -425,3 +425,41 @@ def test_no_hand_warning_after_same_time_at_15_fps():
     at = [i for i, f in enumerate(timed([frame(None)] * 70, 15))
           if any(m["type"] == "warning" for m in asyncio.run(s.handle(f)))]
     assert len(at) == 1 and 28 <= at[0] <= 31  # ~2 s, como 60 cuadros a 30 fps
+
+
+# --- registro de diagnóstico ---
+
+def test_segment_is_logged_with_reason_fps_and_top3(caplog):
+    caplog.set_level("INFO", logger="lsm.session")
+    s = Session(FakeClassifier(), {"HOLA": ref()}, SentenceBuilder(llm=None, provider="none"))
+    frames, _ = timed_sign(15)
+    asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}] + frames))
+    seg = [r.getMessage() for r in caplog.records if r.getMessage().startswith("segmento")]
+    assert len(seg) == 1
+    for part in ("modo=practice", "objetivo=HOLA", "motivo=reposo", "fps=15.0", "top3=HOLA:0.9",
+                 "total=", "top_y_min=", "top_y_fin=", "seg="):
+        assert part in seg[0], (part, seg[0])
+
+
+def test_logs_never_contain_sentence_text(caplog):
+    caplog.set_level("INFO", logger="lsm")
+
+    async def fake_llm(system, user):
+        return "Texto privado de la oración."
+
+    s = Session(FakeClassifier(), {}, SentenceBuilder(llm=fake_llm))
+    out = asyncio.run(run(s, [{"type": "hello", "mode": "translate", "target": None}] + sign_frames()))
+    assert any(m["type"] == "sentence" for m in out)
+    assert any("motivo=reposo" in r.getMessage() for r in caplog.records)
+    assert not any("privado" in r.getMessage() for r in caplog.records)
+
+
+def test_periodic_summary_every_5_seconds(caplog):
+    caplog.set_level("INFO", logger="lsm.session")
+    s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
+    frames = [frame((0.0, 1.0))] * 45 + [frame(None)] * 45  # 6 s a 15 fps: la mitad sin manos
+    asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}] + timed(frames, 15)))
+    summ = [r.getMessage() for r in caplog.records if r.getMessage().startswith("resumen")]
+    assert len(summ) == 1
+    for part in ("fps=15.0", "manos=", "activos=", "top_y_med=", "top_y_p90=", "rest_y=3.5", "estado="):
+        assert part in summ[0], (part, summ[0])

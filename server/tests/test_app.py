@@ -160,3 +160,23 @@ def test_index_html_is_not_cached_but_assets_are(tmp_path):
     r = c.get("/assets/app-abc123.js")
     assert r.status_code == 200 and "no-cache" not in r.headers.get("cache-control", "")
     assert c.get("/api/health").json()["classifier"] is True
+
+
+def test_setup_logging_writes_rotating_file(tmp_path):
+    import logging
+    from logging.handlers import RotatingFileHandler
+
+    from lsm.app import setup_logging
+
+    log = tmp_path / "logs" / "lsm.log"
+    h = setup_logging(log)
+    try:
+        assert isinstance(h, RotatingFileHandler)
+        assert h.maxBytes == 5 * 1024 * 1024 and h.backupCount == 2
+        assert setup_logging(log) is h  # idempotente: no duplica líneas
+        logging.getLogger("lsm.session").info("segmento prueba")
+        h.flush()
+        assert "segmento prueba" in log.read_text(encoding="utf-8")
+    finally:
+        logging.getLogger("lsm").removeHandler(h)
+        h.close()
