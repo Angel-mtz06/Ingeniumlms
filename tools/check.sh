@@ -47,13 +47,14 @@ if [ -n "$HEALTH" ]; then
   done
 fi
 
-FREE="$(python -c 'import shutil; print(round(shutil.disk_usage("D:/").free / 2**30, 1))' 2>/dev/null || echo "")"
+DRIVE="${LSM_ROOT:0:2}"  # p. ej. "D:" (la unidad de los datos y modelos)
+FREE="$(python -c "import shutil; print(round(shutil.disk_usage('$DRIVE/').free / 2**30, 1))" 2>/dev/null | tr -d '\r' || echo "")"
 if [ -z "$FREE" ]; then
-  bad "No pude medir el espacio libre en D:"
+  bad "No pude medir el espacio libre en $DRIVE"
 elif python -c "import sys; sys.exit(0 if $FREE >= $MIN_FREE_GB else 1)"; then
-  ok "Espacio libre en D: ${FREE} GB"
+  ok "Espacio libre en $DRIVE ${FREE} GB"
 else
-  bad "Poco espacio libre en D: ${FREE} GB (mínimo ${MIN_FREE_GB} GB)"
+  bad "Poco espacio libre en $DRIVE ${FREE} GB (mínimo ${MIN_FREE_GB} GB)"
 fi
 
 echo

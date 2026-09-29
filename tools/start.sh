@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Arranca la demo: compila la web si hace falta, revisa MediaPipe, levanta el servidor y abre Edge.
 # Uso: tools/start.sh   (o doble clic en start.cmd, en la raíz del repo). Ctrl+C detiene el servidor.
-# Variables: HOST (127.0.0.1), PORT (8000), NO_BROWSER=1 para no abrir el navegador.
+# Variables: HOST (127.0.0.1), PORT (8000), NO_BROWSER=1 para no abrir el navegador,
+#            FORCE_BUILD=1 para recompilar la web aunque parezca al día.
 set -euo pipefail
 shopt -s globstar nullglob
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
+ROOT_OVERRIDE="${LSM_ROOT:-}"
 # shellcheck disable=SC1091
 source "$HERE/env.sh"
+if [ -n "$ROOT_OVERRIDE" ]; then export LSM_ROOT="$ROOT_OVERRIDE"; fi  # env.sh fija D:/Ingenium
 export HOST="${HOST:-127.0.0.1}" PORT="${PORT:-8000}"
 URL="http://$HOST:$PORT"
 WEB="$REPO/web"
@@ -30,16 +33,31 @@ open_browser() {
   fi
 }
 
+port_busy() {
+  python -c "import socket, sys; s = socket.socket(); s.settimeout(1); sys.exit(0 if s.connect_ex(('$HOST', $PORT)) == 0 else 1)"
+}
+
+WANT="$(python -c 'from lsm.paths import active_model_name; print(active_model_name())' 2>/dev/null || echo classifier_v1)"
+
 # 0. ¿Ya está corriendo?
 if healthy; then
-  echo "Ya hay un servidor respondiendo en $URL."
+  RUNNING="$(curl -fsS --noproxy '*' --max-time 2 "$URL/api/health" 2>/dev/null \
+    | python -c 'import json, sys; print(json.load(sys.stdin).get("model") or "(sin clasificador)")' 2>/dev/null | tr -d '\r')"
+  echo "Ya hay un servidor respondiendo en $URL (modelo: ${RUNNING:-desconocido})."
+  if [ "$RUNNING" != "$WANT" ]; then
+    echo "AVISO: el modelo activo configurado es $WANT: reinicia el servidor para usar $WANT (Ctrl+C en su ventana y vuelve a abrir start.cmd)."
+  fi
   open_browser
   exit 0
+fi
+if port_busy; then
+  fail "El puerto $PORT ya está ocupado por otro programa (no es el servidor de la demo). Ciérralo o usa otro puerto: en Git Bash  PORT=8001 tools/start.sh  (en cmd:  set "PORT=8001"  y luego  start.cmd)."
 fi
 
 # 1. Web compilada y al día
 dist_stale() {
   local stamp="$WEB/dist/index.html"
+  [ "${FORCE_BUILD:-0}" = 1 ] && return 0
   [ -f "$stamp" ] || return 0
   local f
   for f in "$WEB"/src/** "$WEB"/public/** "$WEB/index.html" "$WEB/package.json" "$WEB/vite.config.ts"; do
@@ -49,9 +67,18 @@ dist_stale() {
 }
 if dist_stale; then
   echo "== Compilando la web (web/dist falta o es más vieja que web/src)…"
-  command -v npm >/dev/null 2>&1 || fail "No encuentro npm. Instala Node.js o compila en otra terminal: cd web && npm run build"
-  [ -d "$WEB/node_modules" ] || fail "Faltan las dependencias de la web: cd web && npm install"
-  (cd "$WEB" && npm run build) || fail "Falló npm run build (revisa los errores de arriba)."
+  why=""
+  if ! command -v npm >/dev/null 2>&1; then
+    why="no encuentro npm (instala Node.js)"
+  elif [ ! -d "$WEB/node_modules" ]; then
+    why="faltan las dependencias de la web (cd web && npm install)"
+  elif ! (cd "$WEB" && npm run build); then
+    why="falló npm run build (revisa los errores de arriba)"
+  fi
+  if [ -n "$why" ]; then
+    [ -f "$WEB/dist/index.html" ] || fail "No hay web compilada y no pude compilarla: $why."
+    echo "AVISO: $why; usando la web compilada anterior (web/dist)."
+  fi
 else
   echo "Web compilada y al día (web/dist)."
 fi
