@@ -123,3 +123,99 @@ def test_post_hold_sign_ending_in_descent_is_kept():
             ev = feed(Segmenter(max_len=120), _post_hold_sign_then_descent(n, low))
             ends = [e for e in ev if e.kind == "end"]
             assert len(ends) == 2 and ends[1].start == 5 + 8 + 10 + 15, (n, low, ends)
+
+
+# --- tasa de cuadros: los umbrales están en tiempo (calibrados a 30 fps) ---
+
+def sample(path, fps, duration):
+    """Muestrea `path(t) -> (x, y) | None` (t en s) a `fps` cuadros por segundo."""
+    n = int(round(duration * fps))
+    return [None if (p := path(k / fps)) is None else make_hand(wrist=p) for k in range(n)]
+
+
+def sign_path(t):
+    # reposo 0.3 s, seña que se mueve 1.0 s (3 u/s), vuelta inmediata al reposo
+    if 0.3 <= t < 1.3:
+        return (-1.0 + 3.0 * (t - 0.3), 1.0)
+    return (0.0, 5.0)
+
+
+def hold_path(t):
+    # seña 0.6 s, sostén quieto con deriva lenta (0.9 u/s ≈ 0.03 por cuadro a 30 fps), bajada 0.5 s
+    if 0.3 <= t < 0.9:
+        return (-1.0 + 3.0 * (t - 0.3), 1.0)
+    if 0.9 <= t < 2.4:
+        return (0.8 + 0.9 * (t - 0.9), 1.0)
+    if 2.4 <= t < 2.9:
+        return (2.15, 1.0 + 8.0 * (t - 2.4))
+    return (2.15, 5.0)
+
+
+def ends_in_seconds(path, fps, duration, **kw):
+    seg = Segmenter(rate=fps / 30, **kw)
+    ev = [e for e in feed(seg, sample(path, fps, duration)) if e.kind == "end"]
+    return [(e.start / fps, e.end / fps, e.reason) for e in ev]
+
+
+def test_default_rate_is_30_fps():
+    seg = Segmenter()
+    assert seg.rate == 1.0
+    assert (seg.frames("rest"), seg.frames("still"), seg.frames("pause")) == (6, 12, 45)
+    assert (seg.frames("min_len"), seg.frames("max_len"), seg.frames("post_still")) == (6, 75, 15)
+    assert seg.speed_limit() == 0.04
+
+
+def test_thresholds_scale_with_rate_and_have_minimums():
+    seg = Segmenter(max_len=150, rate=0.5)
+    assert (seg.frames("rest"), seg.frames("still"), seg.frames("pause")) == (3, 6, 22)
+    assert (seg.frames("min_len"), seg.frames("max_len"), seg.frames("post_still")) == (3, 75, 8)
+    assert seg.speed_limit() == 0.08
+    seg.set_rate(0.05)
+    assert min(seg.frames(k) for k in ("rest", "still", "pause", "min_len", "max_len", "post_still")) >= 1
+    assert seg.frames("rest") >= 2 and seg.frames("min_len") >= 2
+    seg.set_rate(2.0)
+    assert seg.frames("rest") == 12 and seg.speed_limit() == 0.02
+
+
+def test_same_motion_at_15_and_30_fps_gives_same_segment_in_seconds():
+    a = ends_in_seconds(sign_path, 30, 4.0)
+    b = ends_in_seconds(sign_path, 15, 4.0)
+    assert len(a) == len(b) == 1
+    assert a[0][2] == b[0][2] == "reposo"
+    assert abs(a[0][0] - b[0][0]) <= 1 / 15 and abs(a[0][1] - b[0][1]) <= 1 / 15
+
+
+def test_slow_drift_counts_as_stillness_at_15_fps_too():
+    a = ends_in_seconds(hold_path, 30, 5.0)
+    b = ends_in_seconds(hold_path, 15, 5.0)
+    assert [r for *_, r in a] == [r for *_, r in b] == ["quietud"]  # la bajada tras el sostén no es seña
+    assert abs(a[0][1] - b[0][1]) <= 2 / 15
+
+
+def test_practice_end_arrives_the_same_time_after_rest_at_15_fps():
+    for fps in (30, 15):
+        seg = Segmenter(still_frames=10**6, max_len=150, rate=fps / 30)
+        frames = sample(sign_path, fps, 4.0)
+        for i, h in enumerate(frames):
+            hands = np.zeros((2, 21, 3), np.float32)
+            present = np.zeros(2, bool)
+            hands[0], present[0] = h, True
+            if seg.update(i, hands, present):
+                latency = i / fps - 1.3  # 1.3 s: primer instante en reposo
+                break
+        assert latency <= 0.2 + 1e-6, (fps, latency)
+
+
+def test_long_sign_is_cut_by_max_len_in_seconds():
+    path = lambda t: (-1.0 + 3.0 * t, 1.0) if t < 8 else (0.0, 5.0)  # noqa: E731
+    a = ends_in_seconds(path, 30, 9.0, max_len=75)
+    b = ends_in_seconds(path, 15, 9.0, max_len=75)
+    assert a[0][2] == b[0][2] == "max_len"
+    assert abs((a[0][1] - a[0][0]) - (b[0][1] - b[0][0])) <= 1 / 15
+
+
+def test_trim_descent_threshold_is_per_second():
+    from lsm.segmenter import trim_descent
+    drift = [1.0 + 0.07 * k for k in range(20)]  # 1.05 u/s a 15 fps: no es una bajada al reposo
+    assert trim_descent(drift, rate=0.5) == 19
+    assert trim_descent(drift) < 19  # a 30 fps sería 2.1 u/s: sí es bajada
