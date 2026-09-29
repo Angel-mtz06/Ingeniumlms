@@ -110,7 +110,7 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
           </h2>
           <p className="screen__lead">Haz la seña frente a la cámara y baja las manos al terminar para ver tu puntaje.</p>
         </div>
-        <button type="button" className="btn btn--secondary btn--small" onClick={onChange}>
+        <button type="button" className="btn btn--change btn--small" onClick={onChange}>
           Elegir otra seña
         </button>
       </header>

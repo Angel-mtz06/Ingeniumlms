@@ -21,6 +21,7 @@
   --color-warn: #7a5b00;        /* entre Carbon yellow-60 y yellow-70 */
   --color-bad: #a2191f;         /* Carbon red-70 */
   --color-border: #7a8076;      /* >= 3:1 sobre bg, surface y surface-2 (WCAG 1.4.11) */
+  --color-purple: #6929c4;      /* Carbon purple-70: boton "Elegir otra seña" (accent-contrast encima: 7.5:1) */
 
   /* ---------- Tipografia (fuentes del sistema: la demo funciona sin internet) ---------- */
   /* SF Pro primero (macOS/iOS), luego Segoe UI Variable (Windows): ambas son fuentes del sistema. */
@@ -92,6 +93,7 @@
     --color-warn: #f1c21b;        /* Carbon yellow-30 */
     --color-bad: #ff8389;         /* Carbon red-40 */
     --color-border: #767d71;
+    --color-purple: #be95ff;      /* Carbon purple-40 (accent-contrast encima: 8.5:1) */
 
     --shadow-1: 0 0 0 1px rgb(238 241 234 / 0.06), 0 2px 6px rgb(0 0 0 / 0.30), 0 4px 8px rgb(0 0 0 / 0.30);
     --shadow-2: 0 0 0 1px rgb(238 241 234 / 0.08), 0 8px 16px rgb(0 0 0 / 0.40), 0 16px 32px rgb(0 0 0 / 0.45);
