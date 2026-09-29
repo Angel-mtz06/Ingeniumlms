@@ -46,7 +46,7 @@ function EvaluationCard({ tone, title, items, children }: { tone?: Tone; title: 
   return (
     <section className="score score--guide alfa-eval" data-tone={tone ?? "off"} aria-live="polite" aria-label="Evaluación">
       <div className="score__guide-head">
-        {tone === "ok" ? <ToneIcon tone="ok" size={28} /> : <IconWarning size={28} />}
+        {tone === "ok" ? <ToneIcon tone="ok" size={28} /> : tone ? <IconWarning size={28} /> : null}
         <h3 className="score__title">{title}</h3>
       </div>
       {items.length ? <ul className="score__tips score__tips--plain">{items.map((it, i) => <li key={i}>{it}</li>)}</ul> : null}

@@ -1264,8 +1264,11 @@
 }
 
 .alfa-ref__photo {
+  /* Proporción exacta del recorte: así no asoman las letras vecinas del cartel. */
   block-size: 100%;
-  inline-size: 100%;
+  inline-size: auto;
+  max-inline-size: 100%;
+  aspect-ratio: 186 / 260;
   border-radius: var(--radius-md);
 }
 
