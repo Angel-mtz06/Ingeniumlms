@@ -38,7 +38,12 @@ describe("puntajes", () => {
 
 describe("texto", () => {
   it("glosa legible y porcentaje", () => {
-    expect(glossLabel("BUENOS_DIAS")).toBe("BUENOS DIAS");
+    expect(glossLabel("BUENOS_DIAS")).toBe("BUENOS DÍAS");
+    expect(glossLabel("MAMA")).toBe("MAMÁ");
+    expect(glossLabel("PRESION_ARTERIAL")).toBe("PRESIÓN ARTERIAL");
+    expect(glossLabel("POR_QUE")).toBe("POR QUÉ");
+    expect(glossLabel("SI")).toBe("SÍ");
+    expect(glossLabel("CASA")).toBe("CASA"); // sin acento: igual
     expect(percent(0.824)).toBe("82 %");
     expect(percent(3)).toBe("100 %");
   });

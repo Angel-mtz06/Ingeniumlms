@@ -67,9 +67,22 @@ export function clampScore(v: unknown): number {
   return Math.min(100, Math.max(0, n));
 }
 
-/** Glosa legible: "BUENOS_DIAS" → "BUENOS DIAS". */
+// Las glosas se guardan sin acentos (lsm.vocab.canonical); aquí solo se acentúan para mostrarlas.
+const ACCENTED: Record<string, string> = Object.fromEntries(
+  `DÍA DÍAS MAMÁ PAPÁ BEBÉ CÓMO DÓNDE CUÁNTO QUÉ SÍ ÉL TÚ MÁS ADIÓS PERDÓN AHÍ PRÓXIMO TELÉFONO CORAZÓN
+   ESTÓMAGO INFECCIÓN PRESIÓN OPRESIÓN PALPITACIÓN VÓMITO CÁNCER DIFÍCIL POLICÍA EXPLOSIÓN QUÍMICOS OÍDO
+   CALIFICACIÓN LECCIÓN LÁPIZ AUTOBÚS CAMIÓN AVIÓN HELICÓPTERO MIÉRCOLES SÁBADO CAFETERÍA MÉXICO MICHOACÁN
+   LEÓN QUERÉTARO POTOSÍ YUCATÁN MECÁNICO PANTALÓN`
+    .split(/\s+/)
+    .map((w) => [w.normalize("NFD").replace(/\p{M}/gu, ""), w]),
+);
+
+/** Glosa legible y acentuada: "BUENOS_DIAS" → "BUENOS DÍAS", "MAMA" → "MAMÁ". */
 export function glossLabel(gloss: string): string {
-  return gloss.replace(/_/g, " ");
+  return gloss
+    .split("_")
+    .map((w) => ACCENTED[w] ?? w)
+    .join(" ");
 }
 
 export function percent(p: number): string {
