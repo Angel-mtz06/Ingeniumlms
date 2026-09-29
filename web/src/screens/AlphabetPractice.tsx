@@ -248,6 +248,14 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
               ) : null}
             </div>
           )}
+          {/* Secuencial: moverse entre letras sin tener que completarlas (siempre visible, bajo la cámara). */}
+          {mode === "sequential" ? (
+            <div className="alfa-nav-row" role="group" aria-label="Navegar el alfabeto">
+              <button type="button" className="btn btn--secondary btn--small" onClick={prevLetter} disabled={letterIdx === 0}>← Anterior</button>
+              <span className="alfa-nav-progress tabular">Letra <strong translate="no">{target}</strong> · {letterIdx + 1} de {LETTERS.length}</span>
+              <button type="button" className="btn btn--primary btn--small" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1}>Saltar letra →</button>
+            </div>
+          ) : null}
           {cameraOn ? <button type="button" className="btn btn--secondary alfa-camera-stop" onClick={() => setCameraOn(false)}>Detener cámara</button> : null}
           {complete && mode === "specific" ? <button type="button" className="btn btn--secondary" onClick={recognition.restart}>Repetir letra</button> : null}
           {complete && mode === "sequential" && letterIdx === LETTERS.length - 1 ? <p role="status" className="alfa-feedback__ok">✓ Llegaste al final del alfabeto.</p> : null}
@@ -263,21 +271,8 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
                 </button>
               </div>
               <div id="alfa-ejemplo-cuerpo" hidden={!showRef}>
-                {showRef ? <LetterReference letter={target} controls={mode === "sequential" ? (
-                  <>
-                    <button type="button" className="btn btn--secondary" onClick={prevLetter} disabled={letterIdx === 0} aria-label="Letra anterior">←</button>
-                    <span className="alfa-nav-progress tabular">{letterIdx + 1} / {LETTERS.length}</span>
-                    <button type="button" className="btn btn--secondary" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1} aria-label="Siguiente letra">→</button>
-                  </>
-                ) : null} /> : null}
+                {showRef ? <LetterReference letter={target} /> : null}
               </div>
-              {!showRef && mode === "sequential" ? (
-                <div className="alfa-nav-row">
-                  <button type="button" className="btn btn--secondary btn--small" onClick={prevLetter} disabled={letterIdx === 0} aria-label="Letra anterior">←</button>
-                  <span className="alfa-nav-progress tabular">{letterIdx + 1} / {LETTERS.length}</span>
-                  <button type="button" className="btn btn--secondary btn--small" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1} aria-label="Siguiente letra">→</button>
-                </div>
-              ) : null}
             </section>
           ) : (
             <section className="sheet" aria-label="Reconocimiento libre">
