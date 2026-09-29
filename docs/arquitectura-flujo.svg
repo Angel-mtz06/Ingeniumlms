@@ -20,7 +20,7 @@
 
   <rect width="1600" height="1090" fill="#f8fafc"/>
   <text x="800" y="44" text-anchor="middle" font-size="26" font-weight="800" fill="#0f172a">Arquitectura y flujo de datos — Intérprete y evaluador de LSM</text>
-  <text x="800" y="70" text-anchor="middle" class="s">INDIVISA INGENIUM 2026 · guantes por WiFi local · todo el procesamiento en la laptop</text>
+  <text x="800" y="70" text-anchor="middle" class="s">INDIVISA INGENIUM 2026 · 10 dedales con IMU · pulseras por WiFi local · todo el procesamiento en la laptop</text>
 
   <!-- ===== Bandas ===== -->
   <rect x="20" y="88"  width="1560" height="222" rx="14" fill="#ecfeff" stroke="#a5f3fc"/>
@@ -43,20 +43,20 @@
   <text class="x" x="240" y="215" text-anchor="middle">el video no sale de la laptop</text>
 
   <rect class="box" stroke="#0891b2" x="500" y="112" width="300" height="150" rx="12"/>
-  <text class="t" x="650" y="146" text-anchor="middle">🧤 Guante derecho · ESP32</text>
-  <text class="s" x="650" y="172" text-anchor="middle">6× MPU-6050 + TCA9548A (I²C)</text>
-  <text class="s" x="650" y="194" text-anchor="middle">sensores Hall SS49E (contactos)</text>
-  <rect x="560" y="210" width="180" height="32" rx="16" fill="#ede9fe"/>
-  <text class="lbl" x="650" y="231" text-anchor="middle" fill="#6d28d9">Punto de acceso WiFi</text>
+  <text class="t" x="650" y="146" text-anchor="middle">✋ Mano derecha: 5 dedales</text>
+  <text class="s" x="650" y="172" text-anchor="middle">1 MPU-6050 por dedal (cable I²C)</text>
+  <text class="s" x="650" y="194" text-anchor="middle">pulsera: ESP32 + TCA9548A</text>
+  <rect x="525" y="210" width="250" height="32" rx="16" fill="#ede9fe"/>
+  <text class="lbl" x="650" y="231" text-anchor="middle" fill="#6d28d9">Pulsera = punto de acceso WiFi</text>
 
   <rect class="box" stroke="#0891b2" x="850" y="112" width="300" height="150" rx="12"/>
-  <text class="t" x="1000" y="146" text-anchor="middle">🧤 Guante izquierdo · ESP32</text>
-  <text class="s" x="1000" y="172" text-anchor="middle">6× MPU-6050 + TCA9548A (I²C)</text>
-  <text class="s" x="1000" y="194" text-anchor="middle">sensores Hall SS49E (contactos)</text>
+  <text class="t" x="1000" y="146" text-anchor="middle">🤚 Mano izquierda: 5 dedales</text>
+  <text class="s" x="1000" y="172" text-anchor="middle">1 MPU-6050 por dedal (cable I²C)</text>
+  <text class="s" x="1000" y="194" text-anchor="middle">pulsera: ESP32 + TCA9548A</text>
   <text class="x" x="1000" y="228" text-anchor="middle">estación WiFi · 192.168.4.3</text>
 
   <rect class="box" stroke="#7c3aed" x="1230" y="128" width="330" height="112" rx="56"/>
-  <text class="t" x="1395" y="164" text-anchor="middle">📶 Red WiFi «LSM-Guantes»</text>
+  <text class="t" x="1395" y="164" text-anchor="middle">📶 Red WiFi «LSM-Dedales»</text>
   <text class="s" x="1395" y="189" text-anchor="middle">192.168.4.x · sin internet</text>
   <text class="x" x="1395" y="211" text-anchor="middle">WebSocket :81 · ~50 lecturas/s</text>
 
@@ -73,13 +73,13 @@
 
   <path class="wf" d="M1395 240 V 364" marker-end="url(#aw)"/>
   <rect class="box" stroke="#4f46e5" x="1230" y="366" width="330" height="112" rx="12"/>
-  <text class="t" x="1395" y="404" text-anchor="middle">Lectura de guantes</text>
-  <text class="s" x="1395" y="429" text-anchor="middle">WebSocket a cada ESP32</text>
+  <text class="t" x="1395" y="404" text-anchor="middle">Lectura de dedales</text>
+  <text class="s" x="1395" y="429" text-anchor="middle">WebSocket a cada pulsera</text>
   <text class="x" x="1395" y="451" text-anchor="middle">USB (Web Serial) como respaldo</text>
 
   <rect class="box" stroke="#4f46e5" x="640" y="366" width="360" height="112" rx="12"/>
   <text class="t" x="820" y="404" text-anchor="middle">Cuadro por instante</text>
-  <text class="s" x="820" y="429" text-anchor="middle">keypoints + lectura de cada guante</text>
+  <text class="s" x="820" y="429" text-anchor="middle">keypoints + ángulos de cada dedo</text>
   <text class="x" x="820" y="451" text-anchor="middle">+ marca de tiempo</text>
   <path class="ln" d="M420 422 H 636" marker-end="url(#a)"/>
   <path class="ln" d="M1230 422 H 1004" marker-end="url(#a)"/>
@@ -157,7 +157,7 @@
 
   <!-- ===== Leyenda ===== -->
   <line x1="90" y1="1060" x2="140" y2="1060" class="wf"/>
-  <text class="x" x="150" y="1065">WiFi local de los guantes (ESP32, sin internet)</text>
+  <text class="x" x="150" y="1065">WiFi local de las pulseras (ESP32, sin internet)</text>
   <line x1="520" y1="1060" x2="570" y2="1060" class="ln"/>
   <text class="x" x="580" y="1065">flujo dentro de la laptop</text>
   <text class="x" x="1560" y="1065" text-anchor="end">Todo funciona sin internet; solo la redacción con IA lo aprovecha.</text>

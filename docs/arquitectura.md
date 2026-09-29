@@ -3,7 +3,7 @@
 INDIVISA INGENIUM 2026 · Universidad La Salle Oaxaca
 
 Sistema que **evalúa y traduce Lengua de Señas Mexicana (LSM)** en tiempo real combinando **visión por computadora**,
-**guantes instrumentados inalámbricos** e **inteligencia artificial**. Da retroalimentación correctiva de cada seña
+**dedales instrumentados inalámbricos** (uno por dedo) e **inteligencia artificial**. Da retroalimentación correctiva de cada seña
 (Práctica), convierte secuencias de señas en oraciones en español (Interpretación) y enseña el alfabeto manual
 (Alfabeto).
 
@@ -20,16 +20,16 @@ flowchart TD
     %% ---------- Captura ----------
     subgraph CAP["① Captura"]
         CAM["📷 Cámara web<br/>960×540 · 7–30 fps"]
-        GR["🧤 Guante derecho · ESP32<br/>6 IMU MPU-6050 + TCA9548A<br/>sensores Hall SS49E"]
-        GL["🧤 Guante izquierdo · ESP32<br/>mismos sensores"]
+        GR["✋ Mano derecha: 5 dedales<br/>1 MPU-6050 por dedal<br/>→ pulsera ESP32 + TCA9548A"]
+        GL["🤚 Mano izquierda: 5 dedales<br/>1 MPU-6050 por dedal<br/>→ pulsera ESP32 + TCA9548A"]
     end
 
     %% ---------- Red local ----------
-    subgraph NET["② Red WiFi local (sin internet) · SSID «LSM-Guantes»"]
-        AP(["Punto de acceso<br/>ESP32 derecho · 192.168.4.1"])
+    subgraph NET["② Red WiFi local (sin internet) · SSID «LSM-Dedales»"]
+        AP(["Punto de acceso<br/>pulsera derecha · 192.168.4.1"])
     end
 
-    GR -- "WebSocket :81<br/>D,R,seq,t,ángulos,Hall · 50 Hz" --> AP
+    GR -- "WebSocket :81<br/>D,R,seq,t,ángulos de 5 dedos + dorso · 50 Hz" --> AP
     GL -- "WiFi (estación 192.168.4.3)<br/>WebSocket :81 · 50 Hz" --> AP
     AP -- "WiFi" --> LAP
 
@@ -38,13 +38,13 @@ flowchart TD
         direction TB
         subgraph NAV["Navegador · React + TypeScript"]
             MP["MediaPipe Tasks Vision (GPU)<br/>manos 2×21 · pose · cara"]
-            GW["Lectura de guantes<br/>WebSocket a cada ESP32"]
-            PAY["Cuadro = keypoints + lecturas<br/>de guantes + marca de tiempo"]
+            GW["Lectura de dedales<br/>WebSocket a cada pulsera"]
+            PAY["Cuadro = keypoints + lecturas<br/>de dedales + marca de tiempo"]
             ABC["Alfabeto<br/>k-NN de letras en el navegador"]
         end
         subgraph SRV["Servidor local · Python FastAPI · 127.0.0.1:8000"]
             NORM["1 · Normalización<br/>unidades de ancho de cabeza"]
-            CAL["Calibración de guantes<br/>abierta / puño → grados"]
+            CAL["Calibración de dedales<br/>mano abierta / puño → grados"]
             SEG{"2 · Segmentación<br/>¿terminó la seña?"}
             CLF["3 · Clasificador Transformer<br/>122 clases (121 señas + NINGUNA)"]
             MODE{"Modo"}
@@ -88,22 +88,22 @@ La misma figura como imagen para diapositivas: [`arquitectura-flujo.svg`](arquit
 
 ## 2. Topología de red (WiFi sin internet)
 
-Los guantes **no dependen de la red del evento**: el ESP32 del guante derecho crea su propia red.
+Los dedales **no dependen de la red del evento**: el ESP32 de la pulsera derecha crea su propia red.
 
 | Elemento | Rol | Dirección |
 |---|---|---|
-| ESP32 guante **derecho** | **Punto de acceso** (SoftAP, WPA2) · SSID `LSM-Guantes` · servidor WebSocket en el puerto 81 | `192.168.4.1` |
-| ESP32 guante **izquierdo** | Estación conectada a `LSM-Guantes` · servidor WebSocket en el puerto 81 | `192.168.4.3` (fija) |
-| Laptop | Se conecta a `LSM-Guantes` por WiFi | `192.168.4.x` (DHCP) |
+| ESP32 de la pulsera **derecha** | **Punto de acceso** (SoftAP, WPA2) · SSID `LSM-Dedales` · servidor WebSocket en el puerto 81 | `192.168.4.1` |
+| ESP32 de la pulsera **izquierda** | Estación conectada a `LSM-Dedales` · servidor WebSocket en el puerto 81 | `192.168.4.3` (fija) |
+| Laptop | Se conecta a `LSM-Dedales` por WiFi | `192.168.4.x` (DHCP) |
 | Navegador ↔ servidor | Comunicación **interna** de la laptop | `127.0.0.1:8000` |
 
-**Internet durante la demo.** Al unirse a `LSM-Guantes` la laptop no tiene salida a internet por WiFi. Opciones:
+**Internet durante la demo.** Al unirse a `LSM-Dedales` la laptop no tiene salida a internet por WiFi. Opciones:
 
 1. **Sin internet** (válido): todo funciona; las oraciones se redactan con **plantillas locales** (más simples).
 2. **Internet por otra vía**: celular por **USB (anclaje de red)** o **cable Ethernet**. Windows usa esa conexión para
-   internet y el WiFi solo para los guantes (si hiciera falta, dar menor prioridad —métrica— a la interfaz WiFi).
+   internet y el WiFi solo para los dedales (si hiciera falta, dar menor prioridad —métrica— a la interfaz WiFi).
 
-**Alternativa por cable:** los mismos guantes pueden conectarse por **USB (Web Serial)** con el mismo protocolo; es
+**Alternativa por cable:** las mismas pulseras pueden conectarse por **USB (Web Serial)** con el mismo protocolo; es
 el modo más robusto y sirve de plan B si hay interferencia WiFi en el evento.
 
 ---
@@ -112,19 +112,25 @@ el modo más robusto y sirve de plan B si hay interferencia WiFi en el evento.
 
 ### ① Captura
 - **Cámara web**: 960×540; el sistema se adapta a la tasa real de cuadros (probado de 7 a 30 fps).
-- **Guantes (×2)**, cada uno con: **ESP32**, **6 IMU MPU-6050** (pulgar, índice, medio, anular, meñique y dorso)
-  multiplexadas por I²C con **TCA9548A**, y **sensores Hall SS49E** con imanes de neodimio para detectar contacto
-  entre dedos. Frecuencia de envío: ~50 Hz.
+- **Dedales (×10, 5 por mano)**: cada dedal lleva una **IMU MPU-6050** sobre la falange distal y mide la
+  orientación (inclinación y giro) de ese dedo. Van por cable delgado (I²C) a una **pulsera** en cada muñeca.
+- **Pulseras (×2)**: cada una lleva un **ESP32**, un multiplexor I²C **TCA9548A** (la MPU-6050 solo admite dos
+  direcciones, así que el mux da un canal a cada dedal) y la batería. **Recomendado:** una **sexta MPU-6050 en la
+  pulsera** como referencia del dorso de la mano, para medir la flexión de cada dedo *relativa a la mano* y no al
+  piso (con las 12 MPU-6050 disponibles: 10 dedales + 2 pulseras). Frecuencia de envío: ~50 Hz.
+- Ventaja frente a un guante completo: la palma y los dedos quedan libres, la cámara ve la mano sin obstrucción
+  (MediaPipe detecta mejor) y se adapta a distintos tamaños de mano. Los **contactos entre dedos** los mide la
+  cámara (distancias entre puntas en MediaPipe), ya que los dedales no llevan sensor de contacto.
 
 ### ② Comunicación
 | Tramo | Medio | Formato |
 |---|---|---|
-| Guantes → navegador | WiFi local, WebSocket (puerto 81) — o USB como respaldo | Texto: `ID,<L\|R>,fw,imus,halls` y `D,<L\|R>,seq,t_ms,pitch/roll×6,giroscopio,Hall…,estado` |
-| Navegador → servidor | WebSocket local `/ws` | JSON por cuadro: keypoints (1 decimal) + última lectura de cada guante + marca de tiempo |
+| Pulseras → navegador | WiFi local, WebSocket (puerto 81) — o USB como respaldo | Texto: `ID,<L\|R>,fw,imus=6,halls=0` y `D,<L\|R>,seq,t_ms,pitch/roll×6 (5 dedales + dorso),giroscopio,estado` |
+| Navegador → servidor | WebSocket local `/ws` | JSON por cuadro: keypoints (1 decimal) + última lectura de cada pulsera + marca de tiempo |
 | Servidor → navegador | WebSocket local `/ws` | JSON: `evaluation`, `sign`, `sentence`, `live` (dedos en vivo), avisos |
 | Servidor → OpenAI | HTTPS (solo si hay internet) | Glosas + contexto → oración |
 
-Controles: identificación del guante (`ID?`), detección de lecturas congeladas (sin número de secuencia nuevo),
+Controles: identificación de cada pulsera (`ID?`), detección de lecturas congeladas (sin número de secuencia nuevo),
 reconexión automática y descarte de cuadros si la red se satura.
 
 ### ③ Procesamiento (laptop)
@@ -138,7 +144,7 @@ reconexión automática y descarte de cuadros si la red se satura.
 
 **Servidor (Python 3.12 + FastAPI + PyTorch en CPU)**, una sesión por conexión:
 1. **Normalización** — coordenadas en **unidades de ancho de cabeza** (ancla: nariz y mejillas; respaldo: orejas):
-   independiente de la distancia a la cámara y la resolución. Mano 0 = derecha de la persona = guante derecho.
+   independiente de la distancia a la cámara y la resolución. Mano 0 = derecha de la persona = pulsera derecha.
 2. **Segmentación** — detecta inicio y fin de cada seña (reposo, quietud o duración máxima); umbrales en segundos,
    ajustados a los fps reales.
 3. **Clasificador** — **Transformer** (128 dimensiones, 3 capas, 4 cabezas de atención). Entrada: la seña
@@ -148,7 +154,8 @@ reconexión automática y descarte de cuadros si la red se satura.
    **5 parámetros formacionales de la LSM**: configuración de la mano, ubicación, orientación de la palma,
    movimiento (alineación temporal DTW) y contactos. Las diferencias se miden en **puntuaciones z** respecto a la
    variación natural entre señantes → **calificación 0–100**, **consejos en español** y **estado de cada dedo**.
-   Con guantes calibrados, **fusiona** su flexión (más precisa) con la estimada por la cámara.
+   Con dedales calibrados (mano abierta y puño), **fusiona** su flexión por dedo (más precisa, sin oclusiones) con la
+   estimada por la cámara.
    **b) Generador de oraciones (Interpretación)** — un modelo de lenguaje (**OpenAI GPT-4o-mini**) recibe la
    secuencia de glosas con reglas gramaticales de la LSM (tiempo al inicio, tema-comentario, sin artículos, verbos
    sin conjugar) y devuelve español natural, manteniendo el contexto del párrafo. **Respaldo**: plantillas locales
@@ -179,7 +186,7 @@ Proceso fuera de línea: extracción de keypoints con MediaPipe → normalizaci�
 
 | Capa | Tecnologías |
 |---|---|
-| Hardware | ESP32 · MPU-6050 · TCA9548A · SS49E · imanes de neodimio · WiFi 2.4 GHz (SoftAP) |
+| Hardware | 10 dedales con MPU-6050 · 2 pulseras con ESP32 + TCA9548A (+ MPU-6050 de referencia) · WiFi 2.4 GHz (SoftAP) |
 | Firmware | Arduino/ESP-IDF (PlatformIO) · WebSocket en el ESP32 |
 | Cliente | React 18 · TypeScript · Vite · MediaPipe Tasks Vision · WebSocket · Web Serial (respaldo) · Vitest |
 | Servidor | Python 3.12 · FastAPI · Uvicorn · NumPy · PyTorch · Pytest |
@@ -193,9 +200,9 @@ Proceso fuera de línea: extracción de keypoints con MediaPipe → normalizaci�
 |---|---|
 | Visión, normalización, segmentación, clasificador, evaluador, oraciones | ✅ Implementado y probado (≈200 pruebas de servidor, ≈160 de interfaz) |
 | Interfaz (Práctica, Interpretación, Alfabeto, Calibración, Grabar, Diagnóstico) | ✅ Implementado |
-| Guantes por **USB** (Web Serial, protocolo, calibración, fusión) | ✅ Lado de la app implementado y probado con simulador |
-| Guantes por **WiFi** | 🔧 Diseñado (este documento). Falta: lectura por WebSocket en la app (mismo protocolo, solo cambia el transporte) y firmware del ESP32 |
-| Firmware del ESP32 | 🔧 Pendiente de definir el cableado final |
+| Sensores de mano por **USB** (Web Serial, protocolo, calibración, fusión) | ✅ Lado de la app implementado y probado con simulador; el protocolo de 6 IMU por mano sirve igual para 5 dedales + dorso |
+| Dedales por **WiFi** | 🔧 Diseñado (este documento). Falta: lectura por WebSocket en la app (mismo protocolo, solo cambia el transporte) y firmware de las pulseras |
+| Firmware de las pulseras (ESP32) | 🔧 Pendiente: lectura de 5–6 MPU-6050 por el TCA9548A, cálculo de inclinación/giro y envío |
 
 ---
 
