@@ -1486,6 +1486,19 @@
   border-radius: var(--radius-md);
 }
 
+.alfa-ref__video {
+  block-size: 100%;
+  inline-size: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+/* El título flotante empuja el botón Tutorial junto al ojo */
+.practice-ref__head .alfa-tutorial-btn {
+  margin-inline-start: auto;
+}
+
 /* Cámara apagada: mismo tamaño que la vista de video */
 .alfa-camera-off {
   display: grid;
