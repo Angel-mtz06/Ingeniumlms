@@ -138,13 +138,17 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
       setDetected(prediction.static);
       // Sin letra objetivo no se sabe qué quería hacer el usuario: solo retroalimentación de captura.
       setFeedback(capture ? messages.current.push(t, capture) : null);
-      setFingers([]);
       if (!hand) window.current.clear();
       else window.current.push(frame);
       if (hand && significantMotion(window.current.frames)) {
-        s.frames=[...window.current.frames]; stabilizer.current.reset(); setStable(null); setMotionResult(null);
+        s.frames=[...window.current.frames]; stabilizer.current.reset(); setStable(null); setMotionResult(null); setFingers([]);
         transition("capturing",now);
-      } else setStable(stabilizer.current.push(t,prediction.static,hand!==null));
+      } else {
+        const shown = stabilizer.current.push(t,prediction.static,hand!==null);
+        setStable(shown);
+        // Libre: sin objetivo, los dedos se comparan con la letra que la app YA reconoció (verde = coincide).
+        setFingers(hand && !capture && shown ? fingerStates(hand, shown[0]) : []);
+      }
       return;
     }
     if (s.completed || !target) return;

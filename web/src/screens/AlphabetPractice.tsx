@@ -290,11 +290,13 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
             <h3 id="alfa-dedos" className="sheet__title">Tus dedos en vivo</h3>
             {/* Igual que Práctica: el video va en espejo, la mano derecha se ve a la DERECHA. */}
             <div className="hands-panel__pair">
-              <HandDiagram side="izquierda" fingers={mode !== "free" && recognition.side === "izquierda" ? fingers : []} />
-              <HandDiagram side="derecha" fingers={mode !== "free" && recognition.side === "derecha" ? fingers : []} />
+              <HandDiagram side="izquierda" fingers={recognition.side === "izquierda" ? fingers : []} />
+              <HandDiagram side="derecha" fingers={recognition.side === "derecha" ? fingers : []} />
             </div>
             <p className="sheet__hint">
-              {mode === "free" ? "En modo libre no se marcan dedos: no se sabe qué letra querías hacer."
+              {mode === "free" ? (recognition.stable
+                  ? `Cada dedo se compara con la ${recognition.stable[0]}, la letra que se reconoció: liso = bien, rayas = casi, cuadrícula = distinto.`
+                  : "Cuando se reconozca una letra, sus dedos se pintan aquí comparados con ella.")
                 : `Cada dedo se compara con la ${motion && base ? `${base} (posición inicial de la ${target})` : target}: liso = bien, rayas = casi, cuadrícula = corrige.`}
             </p>
           </section>
