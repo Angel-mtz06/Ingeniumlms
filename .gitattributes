@@ -1,0 +1,3 @@
+# Scripts de shell con LF (Git Bash) y .cmd con CRLF (cmd.exe), sin importar core.autocrlf
+*.sh text eol=lf
+*.cmd text eol=crlf

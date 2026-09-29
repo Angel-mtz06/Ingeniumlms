@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import time
 
 import numpy as np
 import torch
@@ -33,14 +34,28 @@ class SignDataset(torch.utils.data.Dataset):
         return torch.from_numpy(x.astype(np.float32)), self.labels[i]
 
 
+def select(rows, split, label_idx):
+    return [r for r in rows if r["split"] == split and r["gloss"] in label_idx]
+
+
 def load_split(rows, split, label_idx):
-    sel = [r for r in rows if r["split"] == split and r["gloss"] in label_idx]
+    sel = select(rows, split, label_idx)
     return [NormSequence.load(r["norm_path"]) for r in sel], [label_idx[r["gloss"]] for r in sel]
+
+
+def own_accuracy(sel_rows, y_true, y_pred) -> float | None:
+    """Exactitud solo en las muestras de grabaciones propias (dataset "own"); None si no hay."""
+    m = np.array([r["dataset"] == "own" for r in sel_rows], bool)
+    if not m.any():
+        return None
+    return float((np.asarray(y_pred)[m] == np.asarray(y_true)[m]).mean())
 
 
 @torch.no_grad()
 def predict(model, ds, batch=256):
     model.eval()
+    if len(ds) == 0:
+        return np.zeros((0, model.head.out_features), np.float32)
     dl = torch.utils.data.DataLoader(ds, batch_size=batch)
     return torch.cat([torch.softmax(model(x), 1) for x, _ in dl]).numpy()
 
@@ -67,6 +82,7 @@ def main():
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=1e-3, total_steps=args.epochs * (len(train_ds) // 64 + 1))
     dl = torch.utils.data.DataLoader(train_ds, batch_size=64, shuffle=True)
     best, best_state = -1.0, None
+    t0 = time.perf_counter()
     for ep in range(args.epochs):
         model.train()
         for x, y in dl:
@@ -76,18 +92,26 @@ def main():
             opt.step()
             sched.step()
         if ep % 5 == 4 or ep == args.epochs - 1:
-            acc = float((predict(model, val_ds).argmax(1) == np.array(va_y)).mean())
-            print(f"época {ep + 1} loss {loss.item():.3f} val_acc {acc:.3f}", flush=True)
+            acc = float((predict(model, val_ds).argmax(1) == np.array(va_y)).mean()) if va_y else 0.0
+            per_ep = (time.perf_counter() - t0) / (ep + 1)
+            print(f"época {ep + 1} loss {loss.item():.3f} val_acc {acc:.3f} ({per_ep:.1f} s/época)", flush=True)
             if acc > best:
                 best, best_state = acc, {k: v.clone() for k, v in model.state_dict().items()}
+    sec_per_epoch = (time.perf_counter() - t0) / args.epochs
     model.load_state_dict(best_state)
+    va_rows = select(rows, "val", li)
+    own_val_acc = own_accuracy(va_rows, va_y, predict(model, val_ds).argmax(1)) if va_y else None
     p = predict(model, test_ds)
     y = np.array(te_y)
     top3 = float(np.mean([yi in np.argsort(-pi)[:3] for pi, yi in zip(p, y)]))
     report = {"val_acc": best, "test_acc": float((p.argmax(1) == y).mean()), "test_top3": top3,
               "test_macro_f1": float(f1_score(y, p.argmax(1), average="macro")),
               "n_classes": len(labels), "n_train": len(tr_x), "n_val": len(va_x), "n_test": len(te_x),
-              "facebox_to_head": FACEBOX_TO_HEAD}
+              "facebox_to_head": FACEBOX_TO_HEAD,
+              # grabaciones propias (datasets/own): val = tomas con número % 5 == 0
+              "own_val_acc": own_val_acc, "n_own_train": sum(r["dataset"] == "own" for r in select(rows, "train", li)),
+              "n_own_val": sum(r["dataset"] == "own" for r in va_rows), "epochs": args.epochs,
+              "sec_per_epoch": round(sec_per_epoch, 2)}
     MODELS.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "labels": labels, "feat_mean": mean, "feat_std": std,
                 "config": {"d": 128, "layers": 3, "heads": 4, "ff": 256}}, MODELS / f"{args.out}.pt")
