@@ -17,22 +17,29 @@ import numpy as np
 from lsm.anchor import AnchorError
 from lsm.evaluator.references import build_reference, load_references, save_references
 from lsm.normalize import mirror, normalize
-from lsm.paths import RAW_LANDMARKS
+from lsm.paths import RAW_LANDMARKS, active_model_name, active_references_path
 from lsm.schema import RawSequence
 from lsm.vocab import lookup
 from mendeley_anchors import hand_to_head_ratio, signer_anchor
 
 MIN_HAND_RATIO = 0.3
+# Proporción mano/cabeza medida en 1415 videos de LSM Glosses; se usa si no hay videos de Glosses extraídos
+# (lo normal fuera de la laptop donde se entrenó el modelo).
+DEFAULT_HAND_TO_HEAD = 0.6875
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gloss", required=True)
-    ap.add_argument("--out", type=Path, required=True, help="references_*.json a actualizar (se hace copia .bak)")
+    ap.add_argument("--out", type=Path, default=None,
+                    help="references_*.json a actualizar (se hace copia .bak); por defecto, el del modelo activo")
     ap.add_argument("--no-mirror", action="store_true",
                     help="no reflejar las muestras (por defecto sí: las fotos de Mendeley están en espejo "
                          "respecto a la cámara en vivo; COMER y YO aparecen con la mano contraria a Glosses)")
     args = ap.parse_args()
+    if args.out is None:
+        args.out = active_references_path(active_model_name())
+    print("referencias a actualizar:", args.out)
 
     glosses = []
     for p in sorted((RAW_LANDMARKS / "glosses").glob("*.npz")):
@@ -40,8 +47,12 @@ def main():
             glosses.append(RawSequence.load(p))
         except Exception:  # archivo a medias por una extracción interrumpida
             continue
-    ratio = hand_to_head_ratio(glosses)
-    print(f"proporción mano/cabeza: {ratio:.4f} (desde {len(glosses)} videos de Glosses)")
+    if glosses:
+        ratio = hand_to_head_ratio(glosses)
+        print(f"proporción mano/cabeza: {ratio:.4f} (desde {len(glosses)} videos de Glosses)")
+    else:
+        ratio = DEFAULT_HAND_TO_HEAD
+        print(f"proporción mano/cabeza: {ratio} (valor medido; no hay videos de Glosses extraídos)")
 
     rows = [r for r in csv.DictReader(open(RAW_LANDMARKS / "index_mendeley.csv", encoding="utf-8"))
             if lookup("mendeley", r["source_label"]) == args.gloss]

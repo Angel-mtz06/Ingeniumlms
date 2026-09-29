@@ -48,6 +48,14 @@ def _work(item):
             "path": str(dst), "n_frames": raw.T, "hand_ratio": round(hand_ratio, 3)}
 
 
+def merge_index(old: list[dict], new: list[dict]) -> list[dict]:
+    """Índice combinado por sample_id: las filas nuevas reemplazan a las viejas y el resto se conserva
+    (con --words no se pierden las demás palabras ya extraídas)."""
+    merged = {r["sample_id"]: r for r in old}
+    merged.update({r["sample_id"]: r for r in new})
+    return [merged[k] for k in sorted(merged)]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None,
@@ -74,12 +82,15 @@ def main():
             rows.append(row)
             if i % 100 == 0:
                 print(i, row["sample_id"], row["hand_ratio"], flush=True)
+    index = RAW_LANDMARKS / "index_mendeley.csv"
+    if args.words is not None and index.exists():  # extracción parcial: conservar las demás palabras
+        rows = merge_index(list(csv.DictReader(open(index, encoding="utf-8"))), rows)
     rows.sort(key=lambda r: r["sample_id"])
-    with open(RAW_LANDMARKS / "index_mendeley.csv", "w", newline="", encoding="utf-8") as f:
+    with open(index, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
-    print("listo:", len(rows), "hand_ratio medio:", np.mean([r["hand_ratio"] for r in rows]))
+    print("listo:", len(rows), "hand_ratio medio:", np.mean([float(r["hand_ratio"]) for r in rows]))
 
 
 if __name__ == "__main__":
