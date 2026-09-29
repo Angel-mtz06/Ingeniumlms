@@ -6,6 +6,8 @@ export interface HandDiagramProps {
   /** 5 valores (pulgar → meñique): −1 sin uso, 0 bien, 1 regular, 2 mal. */
   fingers: number[];
   side: "derecha" | "izquierda";
+  /** Título visible en lugar de "Mano derecha/izquierda" (p. ej. cuando no se sabe qué mano es). */
+  caption?: string;
 }
 
 /*
@@ -26,14 +28,14 @@ const FINGERS = [
  * rayas = casi, cuadrícula = mal, contorno punteado = no se usa) + etiqueta accesible
  * ("índice: mal"). Debajo, un resumen en texto visible.
  */
-export function HandDiagram({ fingers, side }: HandDiagramProps) {
+export function HandDiagram({ fingers, side, caption }: HandDiagramProps) {
   const uid = useId().replace(/:/g, "");
   const values = fiveFingers(fingers);
   const fill = (t: FingerTone) => (t === "warn" ? `url(#${uid}-warn)` : t === "bad" ? `url(#${uid}-bad)` : undefined);
   const mirror = side === "izquierda" ? "translate(110 0) scale(-1 1)" : undefined;
   return (
     <figure className="hand">
-      <svg className="hand__svg" viewBox="-12 0 134 150" role="group" aria-label={`Mano ${side}`}>
+      <svg className="hand__svg" viewBox="-12 0 134 150" role="group" aria-label={caption ?? `Mano ${side}`}>
         <defs>
           <pattern id={`${uid}-warn`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <rect className="hand__pat-bg hand__pat-bg--warn" width="6" height="6" />
@@ -70,7 +72,7 @@ export function HandDiagram({ fingers, side }: HandDiagramProps) {
         </g>
       </svg>
       <figcaption className="hand__caption">
-        <span className="hand__side">Mano {side}</span>
+        <span className="hand__side">{caption ?? `Mano ${side}`}</span>
         <span>{fingerSummary(values)}</span>
       </figcaption>
     </figure>

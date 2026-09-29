@@ -1034,132 +1034,347 @@
   }
 }
 
-/* ---------- Alfabeto LSM ---------- */
+/* ---------- Práctica: entrada al Alfabeto ---------- */
 
-/* Contenedor de dos columnas: cuadrícula | detalle */
-.alfa-layout {
+.practica-entrada-alfabeto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  border-left: 4px solid var(--color-accent);
+}
+
+.practica-alfa-info {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--space-2);
+  flex: 1 1 20rem;
+}
+
+.practica-alfa-btn {
+  flex: none;
+  min-height: 48px;
+  font-size: var(--text-lg);
+}
+
+/* ---------- Alfabeto LSM — pantalla de práctica ---------- */
+
+/* Selector de modo (Secuencial / Letra libre) */
+.alfa-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* Etapa principal: panel referencia | panel cámara */
+.alfa-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
   align-items: start;
   gap: var(--space-5);
 }
 
 @media (max-width: 1023px) {
-  .alfa-layout {
+  .alfa-stage {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* En móvil la cámara va primero */
+  .alfa-cam-panel { order: -1; }
 }
 
-/* Cuadrícula de letras */
-.alfa-grid {
+/* Panel de referencia visual */
+.alfa-ref-panel {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Tarjeta de una letra */
-.alfa-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-  width: 100%;
-  padding: var(--space-2) var(--space-1) var(--space-3);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-2);
-  color: var(--color-text);
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background-color 150ms ease, box-shadow 150ms ease;
-}
-
-.alfa-card:hover {
-  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-2));
-}
-
-.alfa-card[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface));
-  box-shadow: inset 0 0 0 2px var(--color-accent);
-}
-
-.alfa-card__letter {
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: 800;
-  line-height: 1;
-  color: var(--color-accent);
-}
-
-.alfa-card__missing {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-
-/* SVG del esquema de la mano */
-.alfa-sketch {
-  display: block;
-}
-
-.alfa-sketch__bone {
-  stroke: var(--color-text-muted);
-  stroke-linecap: round;
-  fill: none;
-}
-
-.alfa-sketch__joint {
-  fill: var(--color-text-muted);
-}
-
-.alfa-sketch__wrist {
-  fill: var(--color-accent);
-}
-
-/* Panel de detalle de una letra */
-.alfa-detail {
+  align-content: start;
   position: sticky;
   top: var(--space-5);
 }
 
-.alfa-detail__head {
+.alfa-ref-panel__letter-wrap {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
 }
 
-.alfa-detail__letter {
+.alfa-ref-panel__letter {
   font-family: var(--font-display);
-  font-size: 3.5rem;
+  font-size: 5rem;
   font-weight: 900;
   line-height: 1;
   color: var(--color-accent);
+  letter-spacing: -0.02em;
 }
 
-.alfa-detail__sketch {
+.alfa-ref-panel__hand {
   display: flex;
   justify-content: center;
   padding: var(--space-2) 0;
 }
 
-.alfa-detail__hint {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  line-height: 1.5;
+.alfa-stage--free { grid-template-columns: minmax(0, 1fr); max-width: 64rem; width: 100%; margin-inline: auto; }
+.alfa-motion { display: grid; gap: var(--space-3); }
+.alfa-countdown { font: 800 var(--text-3xl) var(--font-display); color: var(--color-accent); }
+
+.alfa-ref-panel figure { margin: 0; width: 100%; text-align: center; }
+.alfa-ref-panel a { color: var(--color-accent); }
+.alfa-photo { display: block; width: 100%; max-width: 260px; height: auto; margin: 0 auto var(--space-3); border-radius: var(--radius-md); overflow: hidden; }
+
+.alfa-ref-panel__caption {
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-align: center;
 }
 
-/* Placeholder cuando no hay letra seleccionada */
-.alfa-placeholder {
+.alfa-ref-panel__desc {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* SVG del esqueleto de mano */
+.alfa-hand-svg {
+  display: block;
+  overflow: visible;
+}
+
+.alfa-hand-svg--large {
+  filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--color-accent) 30%, transparent));
+}
+
+.alfa-hand-bone {
+  stroke: var(--color-text-muted);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  opacity: 0.6;
+}
+
+.alfa-hand-joint {
+  fill: var(--color-text-muted);
+  opacity: 0.55;
+}
+
+.alfa-hand-tip {
+  fill: var(--color-accent);
+  opacity: 0.9;
+}
+
+.alfa-hand-wrist {
+  fill: var(--color-accent);
+}
+
+/* Cuando no hay datos de referencia */
+.alfa-no-ref {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 12rem;
+  width: 200px;
+  height: 200px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
 }
 
-.alfa-placeholder__text {
+.alfa-no-ref__letter {
+  font-size: 5rem;
+  font-weight: 900;
   color: var(--color-text-muted);
-  text-align: center;
+}
+
+/* Panel de cámara */
+.alfa-cam-panel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Badge de retroalimentación en tiempo real */
+.alfa-feedback {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  min-height: 5.5rem;
+  transition: background-color 200ms ease;
+}
+
+.alfa-feedback--ok {
+  background: color-mix(in srgb, var(--color-ok) 12%, var(--color-surface));
+}
+
+.alfa-feedback--try {
+  background: color-mix(in srgb, var(--color-warn) 10%, var(--color-surface));
+}
+
+.alfa-feedback--wait {
+  background: var(--color-surface-2);
+}
+
+.alfa-feedback__msg {
   font-size: var(--text-md);
+  color: var(--color-text-muted);
+  align-self: center;
+  justify-self: center;
+  text-align: center;
+}
+
+.alfa-feedback__detected {
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.alfa-feedback__conf {
+  font-weight: 400;
+  font-size: var(--text-md);
+  color: var(--color-text-muted);
+}
+
+.alfa-feedback__ok {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-ok);
+}
+
+.alfa-feedback__hint {
+  font-size: var(--text-md);
+  color: var(--color-text-muted);
+}
+
+/* Sugerencia correctiva: una sola instrucción, la más importante */
+.alfa-feedback__tip {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.alfa-feedback__tip-label {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.alfa-feedback__tip--capture {
+  color: var(--color-warn);
+}
+
+/* Pasos de una letra con movimiento (seguimiento en vivo) */
+.alfa-steps {
+  display: grid;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-md);
+}
+
+.alfa-steps__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.alfa-steps__item[data-state="now"] {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.alfa-steps__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: 50%;
+  border: 2px solid var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.alfa-steps__item[data-state="now"] .alfa-steps__mark {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.alfa-steps__item[data-state="done"] .alfa-steps__mark {
+  border-color: var(--color-ok);
+  background: var(--color-ok);
+  color: var(--color-surface);
+}
+
+/* Top 3 del modo libre */
+.alfa-ranking__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Barra de progreso de "mantener posición" */
+.alfa-hold-bar {
+  height: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+
+.alfa-hold-bar__fill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--color-ok);
+  transition: width 80ms linear;
+}
+
+/* Selector de letra libre */
+.alfa-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.alfa-picker__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.alfa-picker__btn:hover {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface-2));
+}
+
+.alfa-picker__btn[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+/* Navegación anterior / siguiente */
+.alfa-nav-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-surface-2);
+}
+
+.alfa-nav-progress {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-weight: 600;
 }

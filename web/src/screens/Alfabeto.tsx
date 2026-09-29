@@ -9,7 +9,7 @@ import { useState } from "react";
 import alphabetData from "../data/alphabet_references.json";
 
 // Tipos
-type Lm = [number, number, number];
+type Lm = number[];
 const ALPHABET = alphabetData as Record<string, Lm[]>;
 
 const LETTERS: string[] = [

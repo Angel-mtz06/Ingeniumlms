@@ -1,0 +1,947 @@
+{
+  "note": "One SEP photo per letter, real MediaPipe CPU, not a signer-independent benchmark or a temporal test.",
+  "results": [
+    {
+      "letter": "A",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "A",
+        0.9104404552368145
+      ],
+      "after": {
+        "pose": [
+          "A",
+          1
+        ],
+        "static": [
+          "A",
+          1
+        ]
+      },
+      "inference_ms": 23.600000023841858
+    },
+    {
+      "letter": "A",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "J",
+        0.8333915416781995
+      ],
+      "after": {
+        "pose": [
+          "A",
+          1
+        ],
+        "static": [
+          "A",
+          1
+        ]
+      },
+      "inference_ms": 9.600000023841858
+    },
+    {
+      "letter": "B",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "B",
+        0.9089402384807723
+      ],
+      "after": {
+        "pose": [
+          "B",
+          1
+        ],
+        "static": [
+          "B",
+          1
+        ]
+      },
+      "inference_ms": 1.4000000357627869
+    },
+    {
+      "letter": "B",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "B",
+        0.8268873454606729
+      ],
+      "after": {
+        "pose": [
+          "B",
+          1
+        ],
+        "static": [
+          "B",
+          1
+        ]
+      },
+      "inference_ms": 1.7999999523162842
+    },
+    {
+      "letter": "C",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "O",
+        0.896310737849974
+      ],
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.300000011920929
+    },
+    {
+      "letter": "C",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "J",
+        0.9008664776473044
+      ],
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.199999988079071
+    },
+    {
+      "letter": "D",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": [
+          "Z",
+          1
+        ],
+        "static": [
+          "D",
+          1
+        ]
+      },
+      "inference_ms": 1.800000011920929
+    },
+    {
+      "letter": "D",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "J",
+        0.7920815353934373
+      ],
+      "after": {
+        "pose": [
+          "Z",
+          0.827384167922706
+        ],
+        "static": [
+          "D",
+          1
+        ]
+      },
+      "inference_ms": 1.800000011920929
+    },
+    {
+      "letter": "E",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "E",
+        0.8847455197976253
+      ],
+      "after": {
+        "pose": [
+          "E",
+          1
+        ],
+        "static": [
+          "E",
+          1
+        ]
+      },
+      "inference_ms": 2
+    },
+    {
+      "letter": "E",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "J",
+        0.9822355271422312
+      ],
+      "after": {
+        "pose": [
+          "E",
+          1
+        ],
+        "static": [
+          "E",
+          1
+        ]
+      },
+      "inference_ms": 2.600000023841858
+    },
+    {
+      "letter": "F",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "F",
+        0.9872821477018773
+      ],
+      "after": {
+        "pose": [
+          "F",
+          1
+        ],
+        "static": [
+          "F",
+          1
+        ]
+      },
+      "inference_ms": 1.600000023841858
+    },
+    {
+      "letter": "F",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "F",
+        0.8463420818572129
+      ],
+      "after": {
+        "pose": [
+          "F",
+          1
+        ],
+        "static": [
+          "F",
+          1
+        ]
+      },
+      "inference_ms": 1.899999976158142
+    },
+    {
+      "letter": "G",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "G",
+        0.9930509757825454
+      ],
+      "after": {
+        "pose": [
+          "G",
+          1
+        ],
+        "static": [
+          "G",
+          1
+        ]
+      },
+      "inference_ms": 1.5999999642372131
+    },
+    {
+      "letter": "G",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "Z",
+        0.9999949327448225
+      ],
+      "after": {
+        "pose": [
+          "G",
+          1
+        ],
+        "static": [
+          "G",
+          1
+        ]
+      },
+      "inference_ms": 1.5999999642372131
+    },
+    {
+      "letter": "H",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "H",
+        0.9863678615244315
+      ],
+      "after": {
+        "pose": [
+          "H",
+          1
+        ],
+        "static": [
+          "H",
+          1
+        ]
+      },
+      "inference_ms": 2.100000023841858
+    },
+    {
+      "letter": "H",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.699999988079071
+    },
+    {
+      "letter": "I",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.199999988079071
+    },
+    {
+      "letter": "I",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "J",
+        0.9776155563207107
+      ],
+      "after": {
+        "pose": [
+          "I",
+          1
+        ],
+        "static": [
+          "I",
+          1
+        ]
+      },
+      "inference_ms": 2.100000023841858
+    },
+    {
+      "letter": "J",
+      "dynamic": true,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "I",
+        0.8071182792377537
+      ],
+      "after": {
+        "pose": [
+          "I",
+          1
+        ],
+        "static": [
+          "I",
+          1
+        ]
+      },
+      "inference_ms": 2.5
+    },
+    {
+      "letter": "J",
+      "dynamic": true,
+      "mirrored": true,
+      "hands": 2,
+      "before": [
+        "J",
+        0.9911427810399813
+      ],
+      "after": {
+        "pose": [
+          "I",
+          1
+        ],
+        "static": [
+          "I",
+          1
+        ]
+      },
+      "inference_ms": 2.199999988079071
+    },
+    {
+      "letter": "K",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "P",
+        0.8203081246262129
+      ],
+      "after": {
+        "pose": [
+          "P",
+          1
+        ],
+        "static": [
+          "P",
+          1
+        ]
+      },
+      "inference_ms": 1.800000011920929
+    },
+    {
+      "letter": "K",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": [
+          "P",
+          1
+        ],
+        "static": [
+          "P",
+          1
+        ]
+      },
+      "inference_ms": 1.899999976158142
+    },
+    {
+      "letter": "L",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "L",
+        0.9824399568048141
+      ],
+      "after": {
+        "pose": [
+          "L",
+          1
+        ],
+        "static": [
+          "L",
+          1
+        ]
+      },
+      "inference_ms": 1.7999999523162842
+    },
+    {
+      "letter": "L",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "Z",
+        0.9696819350650805
+      ],
+      "after": {
+        "pose": [
+          "L",
+          1
+        ],
+        "static": [
+          "L",
+          1
+        ]
+      },
+      "inference_ms": 1.9000000357627869
+    },
+    {
+      "letter": "M",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.600000023841858
+    },
+    {
+      "letter": "M",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 1.800000011920929
+    },
+    {
+      "letter": "N",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 1.800000011920929
+    },
+    {
+      "letter": "N",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": [
+          "Ñ",
+          1
+        ],
+        "static": [
+          "N",
+          1
+        ]
+      },
+      "inference_ms": 1.9000000357627869
+    },
+    {
+      "letter": "Ñ",
+      "dynamic": true,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": [
+          "Ñ",
+          1
+        ],
+        "static": [
+          "N",
+          1
+        ]
+      },
+      "inference_ms": 1.899999976158142
+    },
+    {
+      "letter": "Ñ",
+      "dynamic": true,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.699999988079071
+    },
+    {
+      "letter": "O",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 2,
+      "before": [
+        "O",
+        0.7749239428959613
+      ],
+      "after": {
+        "pose": [
+          "O",
+          1
+        ],
+        "static": [
+          "O",
+          1
+        ]
+      },
+      "inference_ms": 2
+    },
+    {
+      "letter": "O",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "Z",
+        0.9404679092079773
+      ],
+      "after": {
+        "pose": [
+          "O",
+          1
+        ],
+        "static": [
+          "O",
+          1
+        ]
+      },
+      "inference_ms": 1.699999988079071
+    },
+    {
+      "letter": "P",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "Q",
+        0.9980517788685346
+      ],
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.300000011920929
+    },
+    {
+      "letter": "P",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": [
+          "P",
+          1
+        ],
+        "static": [
+          "P",
+          1
+        ]
+      },
+      "inference_ms": 2
+    },
+    {
+      "letter": "Q",
+      "dynamic": true,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.100000023841858
+    },
+    {
+      "letter": "Q",
+      "dynamic": true,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "Ñ",
+        1
+      ],
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.200000047683716
+    },
+    {
+      "letter": "R",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 6.600000023841858
+    },
+    {
+      "letter": "R",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 7.400000035762787
+    },
+    {
+      "letter": "S",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": [
+          "S",
+          1
+        ],
+        "static": [
+          "S",
+          1
+        ]
+      },
+      "inference_ms": 3
+    },
+    {
+      "letter": "S",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "J",
+        0.8030807739471765
+      ],
+      "after": {
+        "pose": [
+          "S",
+          1
+        ],
+        "static": [
+          "S",
+          1
+        ]
+      },
+      "inference_ms": 2.199999988079071
+    },
+    {
+      "letter": "T",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": [
+          "T",
+          1
+        ],
+        "static": [
+          "T",
+          1
+        ]
+      },
+      "inference_ms": 3.100000023841858
+    },
+    {
+      "letter": "T",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "J",
+        0.8901130808061287
+      ],
+      "after": {
+        "pose": [
+          "T",
+          1
+        ],
+        "static": [
+          "T",
+          1
+        ]
+      },
+      "inference_ms": 1.600000023841858
+    },
+    {
+      "letter": "U",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "V",
+        0.651141730972585
+      ],
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2
+    },
+    {
+      "letter": "U",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "V",
+        0.6689908514723328
+      ],
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.199999988079071
+    },
+    {
+      "letter": "V",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "V",
+        0.6628959459466556
+      ],
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.199999988079071
+    },
+    {
+      "letter": "V",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.100000023841858
+    },
+    {
+      "letter": "W",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "W",
+        0.7817627379012023
+      ],
+      "after": {
+        "pose": [
+          "W",
+          1
+        ],
+        "static": [
+          "W",
+          1
+        ]
+      },
+      "inference_ms": 2.199999988079071
+    },
+    {
+      "letter": "W",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": [
+          "W",
+          1
+        ],
+        "static": [
+          "W",
+          1
+        ]
+      },
+      "inference_ms": 2
+    },
+    {
+      "letter": "X",
+      "dynamic": true,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 1.7999999523162842
+    },
+    {
+      "letter": "X",
+      "dynamic": true,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2
+    },
+    {
+      "letter": "Y",
+      "dynamic": false,
+      "mirrored": false,
+      "hands": 1,
+      "before": [
+        "X",
+        0.9998132284151509
+      ],
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.099999964237213
+    },
+    {
+      "letter": "Y",
+      "dynamic": false,
+      "mirrored": true,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": null,
+        "static": null
+      },
+      "inference_ms": 2.100000023841858
+    },
+    {
+      "letter": "Z",
+      "dynamic": true,
+      "mirrored": false,
+      "hands": 1,
+      "before": null,
+      "after": {
+        "pose": [
+          "Z",
+          1
+        ],
+        "static": [
+          "D",
+          1
+        ]
+      },
+      "inference_ms": 2
+    },
+    {
+      "letter": "Z",
+      "dynamic": true,
+      "mirrored": true,
+      "hands": 1,
+      "before": [
+        "Z",
+        0.997638339274617
+      ],
+      "after": {
+        "pose": [
+          "Z",
+          0.8159935649163672
+        ],
+        "static": [
+          "D",
+          0.8159935649163672
+        ]
+      },
+      "inference_ms": 2
+    }
+  ]
+}
