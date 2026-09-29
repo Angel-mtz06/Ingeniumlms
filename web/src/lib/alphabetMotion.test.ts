@@ -140,6 +140,11 @@ describe("live tracking (no countdown, no fixed window)", () => {
   ] as [string, {t1:number; path?: number[][]; pause?: [number,number]; lost?: [number,number]}, string][])("%s", (_n, o, issue) => {
     expect(run("J",1200,o.t1,o).result?.issue).toBe(issue);
   });
+  it("reaching 100 % counts: moving the hand afterwards does not turn it into a wrong direction", () => {
+    const after=[...J,[-.55,.7],[-.2,1.6],[.2,2.2]]; // J completa y luego la mano baja y se va de lado
+    const r=run("J",1200,3200,{path:after});
+    expect(r.result?.issue).toBe("ok");
+  });
   it("never leaves 'pose' with a wrong hand shape", () => {
     expect(run("A",1200,2700,{end:3000}).phases).toEqual(["pose"]);
   });

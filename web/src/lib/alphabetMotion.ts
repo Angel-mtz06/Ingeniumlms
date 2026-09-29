@@ -39,7 +39,9 @@ export type MotionResult = {
 export const MIN_ACTIVE_FRAMES = 10;
 /** Seguimiento en vivo: pose inicial sostenida, inicio, fin por quietud y duración máxima. */
 export const READY_HOLD_MS = 500, ONSET_PALMS = .15, STILL_MS = 450, STILL_PALMS = .12, MAX_MOVE_MS = 4000, RESULT_MS = 2500, PREROLL_FRAMES = 4;
-const SHAPE_ERROR = .18;
+/** Tolerancia de forma (RMS tras normalizar). La misma para el avance en vivo y el juicio final:
+ * si el medidor llegó a 100 %, el resultado no puede decir lo contrario. */
+export const SHAPE_ERROR = .25;
 
 const dist = (a: number[], b: number[]) => Math.hypot(a[0]-b[0], a[1]-b[1]);
 const length = (points: number[][]) => points.slice(1).reduce((s,p,i) => s+dist(p,points[i]),0);
@@ -145,10 +147,10 @@ function ruleGates(letter: string, points: number[][], span: number, travelled: 
   if (letter === "Ñ" || letter === "Q") {
     const a=points[0], b=points.at(-1)!, chord=dist(a,b);
     const bend=Math.max(...points.map((p)=>chord ? Math.abs((b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]))/chord : 0));
-    if (chord < span*.7 || bend/span < .12) return false;
+    if (chord < span*.5 || bend/span < .08) return false;
   }
-  if (letter === "X" && (dist(points[0],points.at(-1)!) > span*.25 || travelled/span < 1.7)) return false;
-  if (letter === "Z" && travelled/span < 2.6) return false;
+  if (letter === "X" && (dist(points[0],points.at(-1)!) > span*.4 || travelled/span < 1.4)) return false;
+  if (letter === "Z" && travelled/span < 2.0) return false;
   return true;
 }
 
@@ -316,7 +318,7 @@ export function trajectoryProgress(frames: MotionFrame[], target: string): numbe
     const e = shapeError(points, prefix(rule.path, Math.min(f, 1)));
     if (e < best.error) best = {f: Math.min(f, 1), error: e};
   }
-  return best.error <= .25 ? best.f : 0;
+  return best.error <= SHAPE_ERROR ? best.f : 0;
 }
 
 export type LivePhase = "pose" | "ready" | "moving" | "result";
@@ -344,10 +346,12 @@ export class LiveMotion {
   private since = 0;
   private lastT: number | null = null;
   private progress = 0;
+  /** Cuadros acumulados cuando el avance llegó al recorrido completo (se juzga hasta ahí). */
+  private doneAt: number | null = null;
   private result: MotionResult | null = null;
   private target: string;
   constructor(target: string) { this.target = target; }
-  reset() { this.phase = "pose"; this.readySince = null; this.buffer = []; this.frames = []; this.progress = 0; this.result = null; }
+  reset() { this.phase = "pose"; this.readySince = null; this.buffer = []; this.frames = []; this.progress = 0; this.doneAt = null; this.result = null; }
   private state(t: number): LiveMotionState {
     return {phase: this.phase, progress: this.progress, elapsed: this.phase === "moving" ? t-this.since : 0, result: this.result};
   }
@@ -375,7 +379,7 @@ export class LiveMotion {
       if (this.buffer.length >= 3 && Math.max(extent(normalizedPath(this.buffer, rule.tip).points), extent(normalizedPath(this.buffer, 0).points)) > ONSET_PALMS) {
         this.frames = this.buffer.slice(-PREROLL_FRAMES-1);
         this.buffer = [];
-        this.phase = "moving"; this.since = this.frames[0].t; this.progress = 0;
+        this.phase = "moving"; this.since = this.frames[0].t; this.progress = 0; this.doneAt = null;
       }
       return this.state(t);
     }
@@ -384,9 +388,14 @@ export class LiveMotion {
     const gap = t-(this.frames.at(-2)?.t ?? t);
     const missing = !frame.hand || gap > 250;
     const timedOut = t-this.since > MAX_MOVE_MS;
-    if (!missing) this.progress = Math.max(this.progress, trajectoryProgress(this.frames, this.target));
+    if (!missing) {
+      this.progress = Math.max(this.progress, trajectoryProgress(this.frames, this.target));
+      if (this.progress >= .95 && this.doneAt === null) this.doneAt = this.frames.length;
+    }
     if (missing || timedOut || movementEnded(this.frames, rule.tip)) {
-      this.result = analyzeMotionFor(this.frames, this.target, {live: true, timedOut});
+      // Lo que la mano hace DESPUÉS de completar el recorrido (bajar, acomodarse) no cuenta.
+      const judged = this.doneAt !== null && !missing ? this.frames.slice(0, this.doneAt+3) : this.frames;
+      this.result = analyzeMotionFor(judged, this.target, {live: true, timedOut: timedOut && this.doneAt === null});
       this.phase = "result"; this.since = t;
     }
     return this.state(t);
