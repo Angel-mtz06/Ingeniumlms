@@ -108,16 +108,107 @@ el modo más robusto y sirve de plan B si hay interferencia WiFi en el evento.
 
 ---
 
-## 3. Capas del sistema
+## 3. Protocolo de comunicación pulsera ↔ laptop
+
+### 3.1 Pila de protocolos
+
+| Capa | Protocolo | Detalle |
+|---|---|---|
+| Física / enlace | **WiFi IEEE 802.11 b/g/n, 2.4 GHz** | La pulsera derecha es punto de acceso (**SoftAP, WPA2-PSK**), SSID `LSM-Dedales`, canal fijo |
+| Red | **IPv4** | Subred `192.168.4.0/24`; el ESP32 asigna la IP de la laptop por DHCP |
+| Transporte | **TCP** | Entrega ordenada y sin pérdidas dentro de la conexión |
+| Aplicación | **WebSocket (RFC 6455)** · puerto **81** · ruta `/` | Mensajes de **texto**: 1 mensaje = 1 línea del protocolo |
+| Respaldo por cable | **USB serie** (CDC) · 921 600 baudios · 8N1 | Mismas líneas, terminadas en `\n` (Web Serial en el navegador) |
+
+**¿Por qué WebSocket?** El navegador no puede abrir sockets TCP o UDP directos; WebSocket es el mecanismo estándar para
+recibir datos en tiempo real de otro dispositivo, es bidireccional, tiene baja latencia y el ESP32 lo soporta con
+bibliotecas ligeras. Como el contenido es **el mismo texto que por USB**, el servidor no cambia: solo cambia el
+transporte en el navegador.
+
+### 3.2 Mensajes
+
+**Laptop → pulsera**
+
+| Mensaje | Significado |
+|---|---|
+| `ID?` | Solicita la identificación de la pulsera. Se reenvía cada 500 ms hasta recibir respuesta (máximo 5 s). |
+
+**Pulsera → laptop**
+
+```
+ID,<L|R>,fw=<versión>,imus=6,halls=0
+D,<L|R>,<seq>,<t_ms>,p0,r0,p1,r1,p2,r2,p3,r3,p4,r4,p5,r5,gx,gy,gz,<status>
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `D` | texto | Tipo de mensaje: lectura de datos |
+| `L` / `R` | texto | Mano: izquierda o derecha (derecha = mano 0 de la visión) |
+| `seq` | entero | Contador que aumenta en cada lectura: detecta pérdidas y lecturas congeladas |
+| `t_ms` | entero | Milisegundos desde que encendió el ESP32 |
+| `p0, r0` | grados, 1 decimal | Inclinación (*pitch*) y giro (*roll*) de la **IMU 0 = dorso de la mano** (pulsera) |
+| `p1…p5, r1…r5` | grados, 1 decimal | Inclinación y giro de los **dedales**: 1 pulgar, 2 índice, 3 medio, 4 anular, 5 meñique |
+| `gx, gy, gz` | °/s, 1 decimal | Velocidad angular del dorso (giroscopio de la IMU 0) |
+| `status` | entero (bits) | Bit *i* = 1 si la IMU *i* responde (`63` = las 6 funcionan) |
+
+Ejemplo (mano derecha, lectura 1532):
+
+```
+D,R,1532,30640,12.5,-3.1,48.2,5.0,61.7,2.3,58.9,1.1,55.4,-0.4,50.2,-2.0,0.4,-1.2,0.8,63
+```
+
+- **Frecuencia:** 50 lecturas por segundo por pulsera (cada 20 ms), unos 110 bytes por lectura (~5.5 KB/s por mano).
+- **Cálculo en el servidor:** flexión de cada dedo = `p_dedo − p0` (normalizada a −180…180°); la calibración con mano
+  abierta y puño la convierte a la misma escala de ángulos que mide la cámara.
+
+### 3.3 Secuencia de conexión
+
+```mermaid
+sequenceDiagram
+    participant PD as Pulsera derecha (192.168.4.1)
+    participant PI as Pulsera izquierda (192.168.4.3)
+    participant N as Navegador (laptop)
+    participant S as Servidor local (127.0.0.1:8000)
+    PD->>PD: Crea la red WiFi «LSM-Dedales»
+    PI->>PD: Se une a la red (IP fija .3)
+    N->>PD: La laptop se une a la red (DHCP)
+    N->>PD: WebSocket ws://192.168.4.1:81/
+    N->>PI: WebSocket ws://192.168.4.3:81/
+    N->>PD: ID?
+    PD-->>N: ID,R,fw=1.0,imus=6,halls=0
+    N->>PI: ID?
+    PI-->>N: ID,L,fw=1.0,imus=6,halls=0
+    loop cada 20 ms
+        PD-->>N: D,R,seq,t_ms,…
+        PI-->>N: D,L,seq,t_ms,…
+    end
+    loop cada cuadro de la cámara
+        N->>S: frame (keypoints + última línea D de cada mano)
+        S-->>N: live / evaluation / sign
+    end
+```
+
+### 3.4 Robustez
+
+- **Lectura congelada:** si el `seq` de una mano no cambia durante más de 10 cuadros, el servidor la trata como
+  ausente y usa solo la cámara para esa mano.
+- **Desconexión:** el navegador reintenta la conexión WebSocket automáticamente; mientras tanto la app sigue
+  funcionando con la cámara.
+- **Sensor dañado:** los bits de `status` marcan qué IMU no responde; ese dedo se evalúa solo con la cámara.
+- **Sin WiFi:** las mismas pulseras se conectan por USB con idéntico formato.
+
+---
+
+## 4. Capas del sistema
 
 ### ① Captura
 - **Cámara web**: 960×540; el sistema se adapta a la tasa real de cuadros (probado de 7 a 30 fps).
 - **Dedales (×10, 5 por mano)**: cada dedal lleva una **IMU MPU-6050** sobre la falange distal y mide la
   orientación (inclinación y giro) de ese dedo. Van por cable delgado (I²C) a una **pulsera** en cada muñeca.
 - **Pulseras (×2)**: cada una lleva un **ESP32**, un multiplexor I²C **TCA9548A** (la MPU-6050 solo admite dos
-  direcciones, así que el mux da un canal a cada dedal) y la batería. **Recomendado:** una **sexta MPU-6050 en la
-  pulsera** como referencia del dorso de la mano, para medir la flexión de cada dedo *relativa a la mano* y no al
-  piso (con las 12 MPU-6050 disponibles: 10 dedales + 2 pulseras). Frecuencia de envío: ~50 Hz.
+  direcciones, así que el mux da un canal a cada dedal), la batería y una **sexta MPU-6050 sobre el dorso de la mano
+  (necesaria)**: la flexión de cada dedo se calcula como *ángulo del dedal − ángulo del dorso*, así no cambia al
+  girar la muñeca (12 MPU-6050 en total: 10 dedales + 2 pulseras). Frecuencia de envío: ~50 Hz.
 - Ventaja frente a un guante completo: la palma y los dedos quedan libres, la cámara ve la mano sin obstrucción
   (MediaPipe detecta mejor) y se adapta a distintos tamaños de mano. Los **contactos entre dedos** los mide la
   cámara (distancias entre puntas en MediaPipe), ya que los dedales no llevan sensor de contacto.
@@ -125,7 +216,7 @@ el modo más robusto y sirve de plan B si hay interferencia WiFi en el evento.
 ### ② Comunicación
 | Tramo | Medio | Formato |
 |---|---|---|
-| Pulseras → navegador | WiFi local, WebSocket (puerto 81) — o USB como respaldo | Texto: `ID,<L\|R>,fw,imus=6,halls=0` y `D,<L\|R>,seq,t_ms,pitch/roll×6 (5 dedales + dorso),giroscopio,estado` |
+| Pulseras → navegador | WiFi local, WebSocket (puerto 81) — o USB como respaldo | Texto por líneas (ver sección 3) |
 | Navegador → servidor | WebSocket local `/ws` | JSON por cuadro: keypoints (1 decimal) + última lectura de cada pulsera + marca de tiempo |
 | Servidor → navegador | WebSocket local `/ws` | JSON: `evaluation`, `sign`, `sentence`, `live` (dedos en vivo), avisos |
 | Servidor → OpenAI | HTTPS (solo si hay internet) | Glosas + contexto → oración |
@@ -169,7 +260,7 @@ reconexión automática y descarte de cuadros si la red se satura.
 
 ---
 
-## 4. Modelos y datos
+## 5. Modelos y datos
 
 | Modelo | Datos de entrenamiento | Resultado con personas nunca vistas |
 |---|---|---|
@@ -182,7 +273,7 @@ Proceso fuera de línea: extracción de keypoints con MediaPipe → normalizaci�
 
 ---
 
-## 5. Tecnologías
+## 6. Tecnologías
 
 | Capa | Tecnologías |
 |---|---|
@@ -194,7 +285,7 @@ Proceso fuera de línea: extracción de keypoints con MediaPipe → normalizaci�
 
 ---
 
-## 6. Estado de implementación
+## 7. Estado de implementación
 
 | Componente | Estado |
 |---|---|
@@ -206,7 +297,7 @@ Proceso fuera de línea: extracción de keypoints con MediaPipe → normalizaci�
 
 ---
 
-## 7. Conjuntos de datos y su uso
+## 8. Conjuntos de datos y su uso
 
 | Conjunto de datos | Contenido | Uso en el proyecto | Licencia |
 |---|---|---|---|
@@ -217,7 +308,7 @@ Proceso fuera de línea: extracción de keypoints con MediaPipe → normalizaci�
 | **Google – Isolated Sign Language Recognition** (Chow et al., 2023) | ~94 mil secuencias de 250 señas de ASL, 21 personas sordas, keypoints de MediaPipe | Descargado y convertido para **transferencia de aprendizaje** (preentrenar con ASL y ajustar con LSM): **trabajo futuro**, no forma parte del modelo actual | Reglas de la competencia de Kaggle |
 | **Abecedario de la lengua de señas mexicana** (SEP, 2024) | Cartel oficial con la forma de cada letra | Poses de referencia de M, N, Ñ, C y K en Alfabeto y foto de guía en la interfaz | Recurso público de la SEP (se cita la fuente; no se atribuye otra licencia) |
 
-## 8. Referencias (APA 7)
+## 9. Referencias (APA 7)
 
 Chow, A., Cameron, G., Georg, M., Sherwood, M., Culliton, P., Sepah, S., Dane, S., & Starner, T. (2023).
 *Google – Isolated Sign Language Recognition* [Conjunto de datos y competencia]. Kaggle.
