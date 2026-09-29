@@ -167,14 +167,15 @@ def test_default_rate_is_30_fps():
 
 def test_thresholds_scale_with_rate_and_have_minimums():
     seg = Segmenter(max_len=150, rate=0.5)
-    assert (seg.frames("rest"), seg.frames("still"), seg.frames("pause")) == (3, 6, 22)
+    # reposo: la racha debe abarcar el mismo tiempo que 6 cuadros a 30 fps (5 intervalos = 0.167 s) → 4
+    assert (seg.frames("rest"), seg.frames("still"), seg.frames("pause")) == (4, 6, 22)
     assert (seg.frames("min_len"), seg.frames("max_len"), seg.frames("post_still")) == (3, 75, 8)
     assert seg.speed_limit() == 0.08
     seg.set_rate(0.05)
     assert min(seg.frames(k) for k in ("rest", "still", "pause", "min_len", "max_len", "post_still")) >= 1
     assert seg.frames("rest") >= 2 and seg.frames("min_len") >= 2
     seg.set_rate(2.0)
-    assert seg.frames("rest") == 12 and seg.speed_limit() == 0.02
+    assert seg.frames("rest") == 11 and seg.speed_limit() == 0.02
 
 
 def test_same_motion_at_15_and_30_fps_gives_same_segment_in_seconds():
@@ -203,7 +204,18 @@ def test_practice_end_arrives_the_same_time_after_rest_at_15_fps():
             if seg.update(i, hands, present):
                 latency = i / fps - 1.3  # 1.3 s: primer instante en reposo
                 break
-        assert latency <= 0.2 + 1e-6, (fps, latency)
+        assert latency <= 4 / 15 + 1e-6, (fps, latency)  # 0.2 s a 30 fps, 0.27 s a 15 (antes 0.4 s)
+
+
+def test_brief_dip_mid_sign_does_not_cut_at_15_fps():
+    # una bajada/pérdida de 0.13 s a media seña (5 cuadros a 30 fps, 3 a 15) no cierra el segmento
+    def dip(t):
+        if 0.3 <= t < 1.8:
+            return (0.0, 5.0) if 1.0 <= t < 1.14 else (-1.0 + 2.0 * (t - 0.3), 1.0)
+        return (0.0, 5.0)
+    for fps in (30, 15):
+        ends = ends_in_seconds(dip, fps, 4.0)
+        assert len(ends) == 1 and ends[0][1] >= 1.7, (fps, ends)
 
 
 def test_long_sign_is_cut_by_max_len_in_seconds():
@@ -219,3 +231,8 @@ def test_trim_descent_threshold_is_per_second():
     drift = [1.0 + 0.07 * k for k in range(20)]  # 1.05 u/s a 15 fps: no es una bajada al reposo
     assert trim_descent(drift, rate=0.5) == 19
     assert trim_descent(drift) < 19  # a 30 fps sería 2.1 u/s: sí es bajada
+
+
+def test_rest_run_is_stable_around_30_fps():
+    for fps in (29.0, 29.5, 30.0, 30.6):
+        assert Segmenter(rate=fps / 30).frames("rest") == 6, fps

@@ -416,7 +416,7 @@ def test_practice_evaluation_arrives_as_fast_at_15_fps():
             if any(m["type"] == "evaluation" for m in asyncio.run(s.handle(f))):
                 break
         latency = (i - first_rest + 1) / fps  # desde que la mano deja de verse arriba
-        assert latency <= 0.2 + 1e-6, (fps, latency)
+        assert latency <= 4 / 15 + 1e-6, (fps, latency)  # 0.2 s a 30 fps, 0.27 s a 15 (antes 0.4 s)
 
 
 def test_no_hand_warning_after_same_time_at_15_fps():

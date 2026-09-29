@@ -1,6 +1,7 @@
 """Detecta inicio/fin de señas y pausas de oración en el flujo en vivo."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -32,6 +33,13 @@ MIN_FRAMES = {"rest": 2, "still": 2, "pause": 2, "min_len": 2, "max_len": 2, "po
 def scale_frames(base: int, rate: float, lo: int = 1) -> int:
     """Umbral en cuadros calibrado a 30 fps → cuadros a la tasa actual (rate = fps/30), mínimo `lo`."""
     return max(lo, round(base * rate))
+
+
+def scale_run(base: int, rate: float, lo: int = 2) -> int:
+    """Racha de `base` cuadros consecutivos a 30 fps → cuadros a la tasa actual que abarcan al menos el mismo
+    tiempo entre el primero y el último ((base−1) intervalos). A 15 fps, 6 → 4 (no 3): con 3 bastaría una
+    pérdida de 0.13 s a media seña para cerrarla antes de tiempo."""
+    return max(lo, math.ceil((base - 1) * rate - 0.1) + 1)  # 0.1: tolera el jitter de ~30 fps (30.3 → 6)
 
 
 def trim_descent(ys, rate: float = 1.0) -> int:
@@ -81,6 +89,8 @@ class Segmenter:
 
     def frames(self, name: str) -> int:
         """Umbral `name` (rest, still, pause, min_len, max_len, post_still) en cuadros a la tasa actual."""
+        if name == "rest":
+            return scale_run(self.rest_frames, self.rate, MIN_FRAMES[name])
         base = POST_STILL_MIN if name == "post_still" else getattr(
             self, name if name in ("min_len", "max_len") else f"{name}_frames")
         return scale_frames(base, self.rate, MIN_FRAMES[name])
