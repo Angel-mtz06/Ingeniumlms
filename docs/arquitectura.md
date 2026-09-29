@@ -285,19 +285,7 @@ Proceso fuera de línea: extracción de keypoints con MediaPipe → normalizaci�
 
 ---
 
-## 7. Estado de implementación
-
-| Componente | Estado |
-|---|---|
-| Visión, normalización, segmentación, clasificador, evaluador, oraciones | ✅ Implementado y probado (≈200 pruebas de servidor, ≈160 de interfaz) |
-| Interfaz (Práctica, Interpretación, Alfabeto, Calibración, Grabar, Diagnóstico) | ✅ Implementado |
-| Sensores de mano por **USB** (Web Serial, protocolo, calibración, fusión) | ✅ Lado de la app implementado y probado con simulador; el protocolo de 6 IMU por mano sirve igual para 5 dedales + dorso |
-| Dedales por **WiFi** | 🔧 Diseñado (este documento). Falta: lectura por WebSocket en la app (mismo protocolo, solo cambia el transporte) y firmware de las pulseras |
-| Firmware de las pulseras (ESP32) | 🔧 Pendiente: lectura de 5–6 MPU-6050 por el TCA9548A, cálculo de inclinación/giro y envío |
-
----
-
-## 8. Conjuntos de datos y su uso
+## 7. Conjuntos de datos y su uso
 
 | Conjunto de datos | Contenido | Uso en el proyecto | Licencia |
 |---|---|---|---|
@@ -305,10 +293,10 @@ Proceso fuera de línea: extracción de keypoints con MediaPipe → normalizaci�
 | **Mexican Sign Language Alphabet — static signs** (Morfín, 2023) | 21 letras estáticas, 20 personas, ~280 mil imágenes | Entrenamiento del **clasificador de letras** (Alfabeto) | CC BY 4.0 |
 | **Mexican Sign Language Alphabet — dynamic signs** (Navarrete-López & Lopez-Nava, 2025) | J, K, Ñ, Q, X, Z; 20 personas, video frontal y de perfil | Letras con movimiento del **clasificador de letras** | CC BY 4.0 |
 | **Mexican sign language dataset** (Espejel et al., 2023) | 249 palabras en secuencias de imágenes | Solo la referencia de **MAMÁ** en Práctica (el resto se descartó: en esas imágenes MediaPipe casi no detecta la mano activa) | CC BY 4.0 |
-| **Google – Isolated Sign Language Recognition** (Chow et al., 2023) | ~94 mil secuencias de 250 señas de ASL, 21 personas sordas, keypoints de MediaPipe | Descargado y convertido para **transferencia de aprendizaje** (preentrenar con ASL y ajustar con LSM): **trabajo futuro**, no forma parte del modelo actual | Reglas de la competencia de Kaggle |
+| **Google – Isolated Sign Language Recognition** (Chow et al., 2023) | ~94 mil secuencias de 250 señas de ASL, 21 personas sordas, keypoints de MediaPipe | Preparado para **transferencia de aprendizaje** (preentrenamiento con ASL); el modelo actual se entrenó solo con datos de LSM | Reglas de la competencia de Kaggle |
 | **Abecedario de la lengua de señas mexicana** (SEP, 2024) | Cartel oficial con la forma de cada letra | Poses de referencia de M, N, Ñ, C y K en Alfabeto y foto de guía en la interfaz | Recurso público de la SEP (se cita la fuente; no se atribuye otra licencia) |
 
-## 9. Referencias (APA 7)
+## 8. Referencias (APA 7)
 
 Chow, A., Cameron, G., Georg, M., Sherwood, M., Culliton, P., Sepah, S., Dane, S., & Starner, T. (2023).
 *Google – Isolated Sign Language Recognition* [Conjunto de datos y competencia]. Kaggle.
