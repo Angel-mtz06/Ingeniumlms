@@ -20,7 +20,7 @@ import type { VocabItem } from "../lib/ui";
 import "./screens.css";
 
 export type FrameSink = (f: FramePayload) => void;
-export type TabId = "inicio" | "practica" | "traduccion" | "calibracion" | "grabar" | "diagnostico";
+export type TabId = "inicio" | "alfabeto" | "practica" | "traduccion" | "calibracion" | "grabar" | "diagnostico";
 
 export interface SavedTake extends SavedRecording {
   label: string;

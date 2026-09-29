@@ -7,6 +7,7 @@ import { useVision } from "./hooks/useVision";
 import { CALIBRATION_INITIAL, calibrationReducer } from "./lib/calibration";
 import type { FramePayload, Mode, ServerMsg } from "./lib/protocol";
 import { newEvents, TRANSLATE_INITIAL, translateReducer } from "./lib/translate";
+import { Alfabeto } from "./screens/Alfabeto";
 import { Calibration } from "./screens/Calibration";
 import { Diagnostics } from "./screens/Diagnostics";
 import { Home } from "./screens/Home";
@@ -17,6 +18,7 @@ import { Translate } from "./screens/Translate";
 
 const TABS: readonly { id: TabId; label: string; camera: boolean }[] = [
   { id: "inicio", label: "Inicio", camera: false },
+  { id: "alfabeto", label: "Alfabeto", camera: false },
   { id: "practica", label: "Práctica", camera: true },
   { id: "traduccion", label: "Traducción", camera: true },
   { id: "calibracion", label: "Calibración", camera: true },
@@ -26,6 +28,7 @@ const TABS: readonly { id: TabId; label: string; camera: boolean }[] = [
 
 const SCREENS: Record<TabId, () => JSX.Element> = {
   inicio: Home,
+  alfabeto: Alfabeto,
   practica: Practice,
   traduccion: Translate,
   calibracion: Calibration,
