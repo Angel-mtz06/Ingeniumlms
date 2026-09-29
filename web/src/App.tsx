@@ -49,7 +49,7 @@ export default function App() {
   const gloves = useGloves();
   const sinkRef = useRef<FrameSink | null>(null);
   const onFrame = useCallback((f: FramePayload) => sinkRef.current?.(f), []);
-  // En Inicio y Diagnóstico nadie usa los cuadros: MediaPipe se pausa (la cámara sigue abierta).
+  // MediaPipe se conserva; la cámara se libera cuando no hay una vista de video.
   const usesCamera = TABS.find((t) => t.id === active)?.camera ?? false;
   const vision = useVision(camera.videoRef, camera.ready, onFrame, gloves.latest, undefined, !usesCamera);
   const [sessionMode, setSessionModeState] = useState<{ mode: Mode; target: string | null }>({ mode: "translate", target: null });
@@ -98,7 +98,7 @@ export default function App() {
   }, []);
   const addTake = useCallback((t: SavedTake) => setTakes((prev) => [t, ...prev]), []);
 
-  const cameraStatus: CameraStatus = camera.error || vision.error ? "error" : camera.ready && !vision.loading ? "ready" : "loading";
+  const cameraStatus: CameraStatus = !camera.active ? "off" : camera.error || vision.error ? "error" : camera.ready && !vision.loading ? "ready" : "loading";
 
   const select = useCallback((id: TabId, focus = false) => {
     setActive(id);
@@ -160,7 +160,6 @@ export default function App() {
     select(TABS[next].id, true);
   };
 
-  const activeTab = TABS.find((t) => t.id === active)!;
   const Screen = SCREENS[active];
 
   return (
@@ -215,8 +214,6 @@ export default function App() {
             {t.id === active ? <Screen /> : null}
           </section>
         ))}
-        {/* Sin CameraView en pantalla, un <video> oculto mantiene la cámara reproduciendo (estado veraz en la barra). */}
-        {activeTab.camera ? null : <video ref={camera.videoRef} hidden muted playsInline aria-hidden="true" />}
       </main>
     </AppContext.Provider>
   );

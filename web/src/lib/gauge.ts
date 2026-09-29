@@ -16,7 +16,9 @@ export type GaugeView =
   | { kind: "idle"; label: string; detail: string }
   /** La toma no se pudo calificar (falta una mano, sin referencia…). */
   | { kind: "guide"; label: string; detail: string }
-  | { kind: "score"; value: number; tone: Tone; word: string; label: string; detail: string };
+  | { kind: "score"; value: number; tone: Tone; word: string; label: string; detail: string;
+      /** Texto bajo la palabra (por omisión "Tu puntaje"); p. ej. "Confianza" en el alfabeto. */
+      caption?: string };
 
 /**
  * Qué muestra el medidor. `canScore` es false si la seña no tiene referencia: entonces nunca

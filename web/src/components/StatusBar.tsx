@@ -3,7 +3,7 @@ import { type GloveState, statusAnnouncement } from "../lib/ui";
 import { IconCamera, IconConnection, IconGlove, ToneIcon } from "./icons";
 import "./components.css";
 
-export type CameraStatus = "ready" | "loading" | "error";
+export type CameraStatus = "ready" | "loading" | "error" | "off";
 type ItemTone = "ok" | "warn" | "bad" | "off";
 
 export interface StatusBarProps {
@@ -16,6 +16,7 @@ export interface StatusBarProps {
 }
 
 const CAMERA_TEXT: Record<CameraStatus, [string, ItemTone]> = {
+  off: ["apagada", "off"],
   ready: ["lista", "ok"],
   loading: ["abriendo", "warn"],
   error: ["sin acceso", "bad"],

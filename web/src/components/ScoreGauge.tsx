@@ -46,7 +46,7 @@ export function ScoreGauge({ view }: { view: GaugeView }) {
           {score ? <ToneIcon tone={score.tone} size={20} /> : null}
           <span>{score ? score.word : view.label}</span>
         </span>
-        <span className="gauge__detail">{score ? "Tu puntaje" : view.detail}</span>
+        <span className="gauge__detail">{score ? score.caption ?? "Tu puntaje" : view.detail}</span>
       </span>
     </div>
   );

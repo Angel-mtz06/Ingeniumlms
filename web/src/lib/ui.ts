@@ -200,11 +200,11 @@ export function focusAfterRemove(removed: number, newLength: number): number | n
  * está conectada o no: el parpadeo de "sin datos" de los guantes no cambia el anuncio.
  */
 export function statusAnnouncement(s: {
-  camera: "ready" | "loading" | "error";
+  camera: "ready" | "loading" | "error" | "off";
   gloves: { L: GloveState; R: GloveState };
   connected: boolean;
 }): string {
-  const cam = s.camera === "ready" ? "Cámara lista" : s.camera === "error" ? "Cámara sin acceso" : "Abriendo la cámara";
+  const cam = s.camera === "off" ? "Cámara apagada" : s.camera === "ready" ? "Cámara lista" : s.camera === "error" ? "Cámara sin acceso" : "Abriendo la cámara";
   const g = (x: GloveState) => (x.connected ? "conectado" : "sin conectar");
   return `${cam}. Guante izquierdo ${g(s.gloves.L)}. Guante derecho ${g(s.gloves.R)}. Servidor ${s.connected ? "conectado" : "sin conexión"}.`; // mismo orden que la pantalla (espejo)
 }

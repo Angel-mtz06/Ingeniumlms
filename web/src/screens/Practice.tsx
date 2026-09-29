@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useState } from "react";
 import { Catalog } from "../components/Catalog";
 import { HandDiagram } from "../components/HandDiagram";
 import { IconEye, IconEyeOff, IconWarning, ToneIcon } from "../components/icons";
@@ -42,10 +42,14 @@ function useShowReference(): [boolean, () => void] {
  * Práctica: se elige una seña del catálogo. La cámara es lo principal, con el puntaje de la última
  * toma en una esquina y el primer consejo debajo; a su lado, los dedos en vivo y el ejemplo animado
  * (compacto y plegable). Más abajo, el detalle por parámetro.
+ *
+ * Incluye la opción "Practicar Alfabeto" que abre AlphabetPractice.
  */
 export function Practice() {
   const { session, vocab, vocabError, go } = useApp();
   const [target, setTarget] = useState<string | null>(null);
+  /** "catalog" = vista normal | "alphabet" = practica del alfabeto */
+  const [view, setView] = useState<"catalog" | "alphabet">("catalog");
 
   // En el catálogo no se cambia el modo: así no se pierden las señas pendientes de Traducción.
   useSessionMode("practice", target, target !== null);
@@ -56,6 +60,11 @@ export function Practice() {
     window.scrollTo({ top: 0 });
   }, []);
 
+  // Si el usuario entra al alfabeto, mostramos AlphabetPractice
+  if (view === "alphabet") {
+    return <Suspense fallback={<p role="status">Cargando práctica del alfabeto...</p>}><AlphabetPractice onBack={() => { setView("catalog"); setTarget(null); }} /></Suspense>;
+  }
+
   if (!target) {
     return (
       <div className="screen">
@@ -65,6 +74,26 @@ export function Practice() {
         </header>
         <ServerNotice />
         <CalibrationLostNotice onCalibrate={() => go("calibracion")} />
+
+        {/* ── Entrada rápida al Alfabeto ── */}
+        <section className="sheet practica-entrada-alfabeto" aria-label="Practica el alfabeto">
+          <div className="practica-alfa-info">
+            <h3 className="sheet__title">Alfabeto LSM</h3>
+            <p className="sheet__hint">
+              Practica el alfabeto de la Lengua de Señas Mexicana con cámara en tiempo real,
+              referencias fotográficas y reconocimiento experimental de poses.
+            </p>
+          </div>
+          <button
+            type="button"
+            id="btn-practicar-alfabeto"
+            className="btn btn--primary practica-alfa-btn"
+            onClick={() => { setTarget(null); setView("alphabet"); window.scrollTo({ top: 0 }); }}
+          >
+            Practicar Alfabeto →
+          </button>
+        </section>
+
         <section className="sheet" aria-label="Catálogo de señas">
           <MemoCatalog vocab={vocab} onPick={pick} error={vocabError} />
         </section>
@@ -74,6 +103,7 @@ export function Practice() {
 
   return <PracticeSession target={target} hasReference={vocab?.find((v) => v.gloss === target)?.has_reference ?? true} onChange={() => setTarget(null)} />;
 }
+
 
 function PracticeSession({ target, hasReference, onChange }: { target: string; hasReference: boolean; onChange(): void }) {
   const { session, go } = useApp();
@@ -232,3 +262,4 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
     </div>
   );
 }
+const AlphabetPractice = lazy(() => import("./AlphabetPractice").then((m) => ({ default: m.AlphabetPractice })));

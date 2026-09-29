@@ -1,0 +1,872 @@
+{
+  "source_sha256": "70952f8b25a77d584b6512d3f1c3dc6e23ebb1bf25b19e48f0369e4690f01c75",
+  "source_shapes": {
+    "X": [
+      8100,
+      71
+    ],
+    "y": [
+      8100
+    ],
+    "mean": [
+      71
+    ],
+    "std": [
+      71
+    ],
+    "k": []
+  },
+  "feature_audit_max_errors": {
+    "flexion": 2.980232238769531e-07,
+    "normal": 6.407499313354492e-07,
+    "scale": 1.1920928955078125e-07,
+    "mapping_centroids": 5.0067901611328125e-06
+  },
+  "split": "per class rows 0:180 train, 180:240 validation, 240:300 test; no signer metadata; baseline had access to all source rows",
+  "threshold": 0.65,
+  "k": 5,
+  "static_pose_aliases": {
+    "J": "I",
+    "Ñ": "N",
+    "Z": "D"
+  },
+  "extra_features": "10 PIP/DIP joint angles and 5 wrist-to-tip lengths, computed from existing hand_local landmarks",
+  "joint_weight_validation": [
+    [
+      1.0,
+      0.7984848484848485
+    ],
+    [
+      2.0,
+      0.8166666666666667
+    ],
+    [
+      4.0,
+      0.8166666666666667
+    ]
+  ],
+  "selected_joint_weight": 2.0,
+  "test_before": {
+    "A": {
+      "n": 60,
+      "top1": 0.6167,
+      "accepted_correct": 0.45,
+      "accepted_wrong": 0.1667,
+      "confusions": {
+        "K": 5,
+        "O": 2,
+        "Q": 1,
+        "S": 3,
+        "T": 8,
+        "Z": 4
+      }
+    },
+    "B": {
+      "n": 60,
+      "top1": 0.6167,
+      "accepted_correct": 0.4667,
+      "accepted_wrong": 0.25,
+      "confusions": {
+        "C": 3,
+        "E": 2,
+        "F": 2,
+        "O": 3,
+        "Q": 1,
+        "W": 8,
+        "Z": 4
+      }
+    },
+    "C": {
+      "n": 60,
+      "top1": 0.85,
+      "accepted_correct": 0.6667,
+      "accepted_wrong": 0.1167,
+      "confusions": {
+        "H": 5,
+        "M": 2,
+        "O": 2
+      }
+    },
+    "D": {
+      "n": 60,
+      "top1": 0.2833,
+      "accepted_correct": 0.05,
+      "accepted_wrong": 0.4333,
+      "confusions": {
+        "B": 4,
+        "C": 3,
+        "K": 1,
+        "L": 10,
+        "O": 7,
+        "P": 4,
+        "Q": 2,
+        "R": 1,
+        "X": 2,
+        "Y": 1,
+        "Z": 7,
+        "Ñ": 1
+      }
+    },
+    "E": {
+      "n": 60,
+      "top1": 0.3833,
+      "accepted_correct": 0.2,
+      "accepted_wrong": 0.4167,
+      "confusions": {
+        "A": 2,
+        "B": 1,
+        "C": 3,
+        "F": 7,
+        "I": 2,
+        "K": 1,
+        "O": 8,
+        "Q": 2,
+        "Y": 1,
+        "Z": 10
+      }
+    },
+    "F": {
+      "n": 60,
+      "top1": 0.6833,
+      "accepted_correct": 0.5833,
+      "accepted_wrong": 0.2167,
+      "confusions": {
+        "B": 3,
+        "C": 4,
+        "E": 2,
+        "J": 1,
+        "O": 5,
+        "Q": 1,
+        "X": 1,
+        "Z": 2
+      }
+    },
+    "G": {
+      "n": 60,
+      "top1": 0.7833,
+      "accepted_correct": 0.7,
+      "accepted_wrong": 0.15,
+      "confusions": {
+        "C": 2,
+        "H": 8,
+        "X": 1,
+        "Y": 2
+      }
+    },
+    "H": {
+      "n": 60,
+      "top1": 0.7833,
+      "accepted_correct": 0.7667,
+      "accepted_wrong": 0.1,
+      "confusions": {
+        "C": 1,
+        "G": 6,
+        "Y": 6
+      }
+    },
+    "I": {
+      "n": 60,
+      "top1": 0.5667,
+      "accepted_correct": 0.5,
+      "accepted_wrong": 0.3833,
+      "confusions": {
+        "A": 1,
+        "C": 1,
+        "E": 2,
+        "K": 1,
+        "O": 12,
+        "Q": 1,
+        "X": 2,
+        "Y": 1,
+        "Z": 5
+      }
+    },
+    "J": {
+      "n": 60,
+      "top1": 0.8333,
+      "accepted_correct": 0.7833,
+      "accepted_wrong": 0.0333,
+      "confusions": {
+        "I": 5,
+        "O": 4,
+        "Z": 1
+      }
+    },
+    "K": {
+      "n": 60,
+      "top1": 0.2333,
+      "accepted_correct": 0.2333,
+      "accepted_wrong": 0.5833,
+      "confusions": {
+        "P": 8,
+        "Q": 4,
+        "X": 18,
+        "Z": 13,
+        "Ñ": 3
+      }
+    },
+    "L": {
+      "n": 60,
+      "top1": 0.6,
+      "accepted_correct": 0.55,
+      "accepted_wrong": 0.2333,
+      "confusions": {
+        "E": 3,
+        "K": 2,
+        "O": 6,
+        "P": 4,
+        "T": 1,
+        "Z": 8
+      }
+    },
+    "M": {
+      "n": 60,
+      "top1": 0.6167,
+      "accepted_correct": 0.5,
+      "accepted_wrong": 0.25,
+      "confusions": {
+        "N": 13,
+        "Ñ": 10
+      }
+    },
+    "N": {
+      "n": 60,
+      "top1": 0.7167,
+      "accepted_correct": 0.5,
+      "accepted_wrong": 0.2167,
+      "confusions": {
+        "M": 13,
+        "Ñ": 4
+      }
+    },
+    "O": {
+      "n": 60,
+      "top1": 0.45,
+      "accepted_correct": 0.4,
+      "accepted_wrong": 0.3,
+      "confusions": {
+        "A": 2,
+        "C": 5,
+        "D": 3,
+        "E": 4,
+        "F": 3,
+        "G": 1,
+        "J": 7,
+        "P": 1,
+        "Q": 3,
+        "X": 1,
+        "Y": 1,
+        "Z": 2
+      }
+    },
+    "P": {
+      "n": 60,
+      "top1": 0.5667,
+      "accepted_correct": 0.45,
+      "accepted_wrong": 0.2833,
+      "confusions": {
+        "C": 1,
+        "J": 1,
+        "K": 2,
+        "L": 2,
+        "O": 3,
+        "Q": 1,
+        "R": 6,
+        "U": 1,
+        "X": 1,
+        "Z": 8
+      }
+    },
+    "Q": {
+      "n": 60,
+      "top1": 0.65,
+      "accepted_correct": 0.65,
+      "accepted_wrong": 0.3167,
+      "confusions": {
+        "X": 21
+      }
+    },
+    "R": {
+      "n": 60,
+      "top1": 0.2167,
+      "accepted_correct": 0.05,
+      "accepted_wrong": 0.3667,
+      "confusions": {
+        "B": 2,
+        "D": 1,
+        "J": 1,
+        "L": 1,
+        "O": 11,
+        "P": 2,
+        "Q": 3,
+        "U": 4,
+        "V": 13,
+        "Y": 1,
+        "Z": 8
+      }
+    },
+    "S": {
+      "n": 60,
+      "top1": 0.4167,
+      "accepted_correct": 0.2167,
+      "accepted_wrong": 0.25,
+      "confusions": {
+        "A": 8,
+        "J": 1,
+        "K": 2,
+        "O": 2,
+        "P": 1,
+        "T": 11,
+        "Z": 10
+      }
+    },
+    "T": {
+      "n": 60,
+      "top1": 0.2667,
+      "accepted_correct": 0.0167,
+      "accepted_wrong": 0.4833,
+      "confusions": {
+        "A": 7,
+        "C": 2,
+        "G": 1,
+        "J": 3,
+        "K": 2,
+        "O": 6,
+        "P": 4,
+        "Q": 3,
+        "S": 8,
+        "Z": 8
+      }
+    },
+    "U": {
+      "n": 60,
+      "top1": 0.1,
+      "accepted_correct": 0.0,
+      "accepted_wrong": 0.3667,
+      "confusions": {
+        "B": 3,
+        "C": 3,
+        "K": 3,
+        "L": 2,
+        "O": 6,
+        "P": 4,
+        "Q": 1,
+        "R": 10,
+        "V": 17,
+        "Z": 5
+      }
+    },
+    "V": {
+      "n": 60,
+      "top1": 0.3833,
+      "accepted_correct": 0.0333,
+      "accepted_wrong": 0.3167,
+      "confusions": {
+        "B": 1,
+        "H": 1,
+        "J": 2,
+        "K": 3,
+        "L": 3,
+        "O": 6,
+        "R": 7,
+        "U": 2,
+        "Z": 12
+      }
+    },
+    "W": {
+      "n": 60,
+      "top1": 0.7167,
+      "accepted_correct": 0.6167,
+      "accepted_wrong": 0.25,
+      "confusions": {
+        "B": 5,
+        "C": 7,
+        "O": 2,
+        "Q": 1,
+        "Z": 2
+      }
+    },
+    "X": {
+      "n": 60,
+      "top1": 0.7333,
+      "accepted_correct": 0.5333,
+      "accepted_wrong": 0.2167,
+      "confusions": {
+        "H": 2,
+        "Q": 14
+      }
+    },
+    "Y": {
+      "n": 60,
+      "top1": 0.8667,
+      "accepted_correct": 0.7167,
+      "accepted_wrong": 0.1,
+      "confusions": {
+        "C": 1,
+        "G": 5,
+        "J": 1,
+        "N": 1
+      }
+    },
+    "Z": {
+      "n": 60,
+      "top1": 0.8,
+      "accepted_correct": 0.7833,
+      "accepted_wrong": 0.05,
+      "confusions": {
+        "D": 3,
+        "K": 3,
+        "L": 3,
+        "P": 1,
+        "Q": 1,
+        "T": 1
+      }
+    },
+    "Ñ": {
+      "n": 60,
+      "top1": 0.9,
+      "accepted_correct": 0.8333,
+      "accepted_wrong": 0.0167,
+      "confusions": {
+        "M": 2,
+        "Q": 1,
+        "X": 3
+      }
+    }
+  },
+  "test_after": {
+    "A": {
+      "n": 60,
+      "top1": 0.9333,
+      "accepted_correct": 0.6167,
+      "accepted_wrong": 0.0333,
+      "confusions": {
+        "S": 1,
+        "T": 3
+      }
+    },
+    "B": {
+      "n": 60,
+      "top1": 0.85,
+      "accepted_correct": 0.7667,
+      "accepted_wrong": 0.05,
+      "confusions": {
+        "C": 2,
+        "E": 1,
+        "F": 2,
+        "W": 4
+      }
+    },
+    "C": {
+      "n": 60,
+      "top1": 0.9833,
+      "accepted_correct": 0.7833,
+      "accepted_wrong": 0.0,
+      "confusions": {
+        "Ñ": 1
+      }
+    },
+    "D": {
+      "n": 60,
+      "top1": 0.8333,
+      "accepted_correct": 0.6667,
+      "accepted_wrong": 0.0167,
+      "confusions": {
+        "C": 3,
+        "K": 1,
+        "O": 1,
+        "P": 2,
+        "Z": 2,
+        "Ñ": 1
+      }
+    },
+    "E": {
+      "n": 60,
+      "top1": 0.6667,
+      "accepted_correct": 0.4833,
+      "accepted_wrong": 0.0667,
+      "confusions": {
+        "C": 1,
+        "O": 12,
+        "S": 4,
+        "T": 3
+      }
+    },
+    "F": {
+      "n": 60,
+      "top1": 0.85,
+      "accepted_correct": 0.7,
+      "accepted_wrong": 0.0667,
+      "confusions": {
+        "B": 2,
+        "C": 2,
+        "J": 1,
+        "O": 2,
+        "R": 1,
+        "Ñ": 1
+      }
+    },
+    "G": {
+      "n": 60,
+      "top1": 0.9167,
+      "accepted_correct": 0.9,
+      "accepted_wrong": 0.05,
+      "confusions": {
+        "H": 1,
+        "L": 1,
+        "X": 3
+      }
+    },
+    "H": {
+      "n": 60,
+      "top1": 0.95,
+      "accepted_correct": 0.8333,
+      "accepted_wrong": 0.0,
+      "confusions": {
+        "D": 1,
+        "G": 2
+      }
+    },
+    "I": {
+      "n": 60,
+      "top1": 0.7,
+      "accepted_correct": 0.6167,
+      "accepted_wrong": 0.0667,
+      "confusions": {
+        "E": 2,
+        "J": 12,
+        "K": 1,
+        "O": 1,
+        "S": 1,
+        "Y": 1
+      }
+    },
+    "J": {
+      "n": 60,
+      "top1": 0.8667,
+      "accepted_correct": 0.8333,
+      "accepted_wrong": 0.1167,
+      "confusions": {
+        "I": 7,
+        "S": 1
+      }
+    },
+    "K": {
+      "n": 60,
+      "top1": 0.5167,
+      "accepted_correct": 0.35,
+      "accepted_wrong": 0.1333,
+      "confusions": {
+        "G": 1,
+        "H": 5,
+        "P": 5,
+        "Q": 1,
+        "X": 1,
+        "Z": 2,
+        "Ñ": 14
+      }
+    },
+    "L": {
+      "n": 60,
+      "top1": 0.9167,
+      "accepted_correct": 0.8167,
+      "accepted_wrong": 0.0167,
+      "confusions": {
+        "D": 2,
+        "K": 1,
+        "O": 1,
+        "P": 1
+      }
+    },
+    "M": {
+      "n": 60,
+      "top1": 0.7667,
+      "accepted_correct": 0.6,
+      "accepted_wrong": 0.1,
+      "confusions": {
+        "K": 1,
+        "N": 8,
+        "Ñ": 5
+      }
+    },
+    "N": {
+      "n": 60,
+      "top1": 0.8167,
+      "accepted_correct": 0.7167,
+      "accepted_wrong": 0.1333,
+      "confusions": {
+        "M": 4,
+        "Ñ": 7
+      }
+    },
+    "O": {
+      "n": 60,
+      "top1": 0.9167,
+      "accepted_correct": 0.7167,
+      "accepted_wrong": 0.0,
+      "confusions": {
+        "C": 2,
+        "J": 1,
+        "K": 1,
+        "S": 1
+      }
+    },
+    "P": {
+      "n": 60,
+      "top1": 0.7667,
+      "accepted_correct": 0.6833,
+      "accepted_wrong": 0.1,
+      "confusions": {
+        "K": 11,
+        "U": 1,
+        "Z": 1,
+        "Ñ": 1
+      }
+    },
+    "Q": {
+      "n": 60,
+      "top1": 0.5833,
+      "accepted_correct": 0.25,
+      "accepted_wrong": 0.0667,
+      "confusions": {
+        "E": 1,
+        "K": 1,
+        "X": 23
+      }
+    },
+    "R": {
+      "n": 60,
+      "top1": 0.4833,
+      "accepted_correct": 0.1,
+      "accepted_wrong": 0.0667,
+      "confusions": {
+        "D": 1,
+        "J": 2,
+        "U": 15,
+        "V": 13
+      }
+    },
+    "S": {
+      "n": 60,
+      "top1": 0.8333,
+      "accepted_correct": 0.7,
+      "accepted_wrong": 0.0333,
+      "confusions": {
+        "A": 4,
+        "T": 5,
+        "Z": 1
+      }
+    },
+    "T": {
+      "n": 60,
+      "top1": 0.6667,
+      "accepted_correct": 0.4,
+      "accepted_wrong": 0.0333,
+      "confusions": {
+        "A": 10,
+        "E": 1,
+        "J": 1,
+        "S": 5,
+        "Z": 3
+      }
+    },
+    "U": {
+      "n": 60,
+      "top1": 0.4833,
+      "accepted_correct": 0.1667,
+      "accepted_wrong": 0.1167,
+      "confusions": {
+        "C": 1,
+        "K": 2,
+        "P": 1,
+        "R": 11,
+        "V": 15,
+        "Z": 1
+      }
+    },
+    "V": {
+      "n": 60,
+      "top1": 0.5833,
+      "accepted_correct": 0.25,
+      "accepted_wrong": 0.0833,
+      "confusions": {
+        "P": 1,
+        "R": 7,
+        "U": 15,
+        "W": 1,
+        "Z": 1
+      }
+    },
+    "W": {
+      "n": 60,
+      "top1": 0.9,
+      "accepted_correct": 0.8167,
+      "accepted_wrong": 0.0,
+      "confusions": {
+        "B": 1,
+        "C": 2,
+        "D": 1,
+        "R": 1,
+        "Ñ": 1
+      }
+    },
+    "X": {
+      "n": 60,
+      "top1": 0.65,
+      "accepted_correct": 0.1333,
+      "accepted_wrong": 0.2,
+      "confusions": {
+        "Q": 21
+      }
+    },
+    "Y": {
+      "n": 60,
+      "top1": 0.9333,
+      "accepted_correct": 0.8,
+      "accepted_wrong": 0.0333,
+      "confusions": {
+        "G": 2,
+        "I": 1,
+        "Z": 1
+      }
+    },
+    "Z": {
+      "n": 60,
+      "top1": 0.6833,
+      "accepted_correct": 0.1167,
+      "accepted_wrong": 0.0167,
+      "confusions": {
+        "A": 1,
+        "D": 3,
+        "P": 1,
+        "S": 3,
+        "T": 11
+      }
+    },
+    "Ñ": {
+      "n": 60,
+      "top1": 0.9333,
+      "accepted_correct": 0.75,
+      "accepted_wrong": 0.0,
+      "confusions": {
+        "C": 3,
+        "K": 1
+      }
+    }
+  },
+  "test_static_after": {
+    "A": {
+      "top1": 0.9333,
+      "accepted_correct": 0.6167,
+      "accepted_wrong": 0.0333
+    },
+    "B": {
+      "top1": 0.85,
+      "accepted_correct": 0.7667,
+      "accepted_wrong": 0.05
+    },
+    "C": {
+      "top1": 0.9833,
+      "accepted_correct": 0.7833,
+      "accepted_wrong": 0.0
+    },
+    "D": {
+      "top1": 0.8667,
+      "accepted_correct": 0.75,
+      "accepted_wrong": 0.0167
+    },
+    "E": {
+      "top1": 0.6667,
+      "accepted_correct": 0.4833,
+      "accepted_wrong": 0.0667
+    },
+    "F": {
+      "top1": 0.85,
+      "accepted_correct": 0.7,
+      "accepted_wrong": 0.0667
+    },
+    "G": {
+      "top1": 0.9167,
+      "accepted_correct": 0.9,
+      "accepted_wrong": 0.0333
+    },
+    "H": {
+      "top1": 0.95,
+      "accepted_correct": 0.8333,
+      "accepted_wrong": 0.0
+    },
+    "I": {
+      "top1": 0.9,
+      "accepted_correct": 0.7667,
+      "accepted_wrong": 0.0
+    },
+    "K": {
+      "top1": 0.5167,
+      "accepted_correct": 0.35,
+      "accepted_wrong": 0.15
+    },
+    "L": {
+      "top1": 0.9167,
+      "accepted_correct": 0.8167,
+      "accepted_wrong": 0.0167
+    },
+    "M": {
+      "top1": 0.7667,
+      "accepted_correct": 0.6,
+      "accepted_wrong": 0.1
+    },
+    "N": {
+      "top1": 0.9333,
+      "accepted_correct": 0.8167,
+      "accepted_wrong": 0.0333
+    },
+    "O": {
+      "top1": 0.9167,
+      "accepted_correct": 0.7167,
+      "accepted_wrong": 0.0
+    },
+    "P": {
+      "top1": 0.7667,
+      "accepted_correct": 0.6833,
+      "accepted_wrong": 0.1
+    },
+    "R": {
+      "top1": 0.4833,
+      "accepted_correct": 0.1,
+      "accepted_wrong": 0.0667
+    },
+    "S": {
+      "top1": 0.8333,
+      "accepted_correct": 0.7,
+      "accepted_wrong": 0.0333
+    },
+    "T": {
+      "top1": 0.6667,
+      "accepted_correct": 0.4,
+      "accepted_wrong": 0.0333
+    },
+    "U": {
+      "top1": 0.4833,
+      "accepted_correct": 0.1667,
+      "accepted_wrong": 0.1167
+    },
+    "V": {
+      "top1": 0.5833,
+      "accepted_correct": 0.25,
+      "accepted_wrong": 0.1
+    },
+    "W": {
+      "top1": 0.9,
+      "accepted_correct": 0.8167,
+      "accepted_wrong": 0.0
+    },
+    "Y": {
+      "top1": 0.9333,
+      "accepted_correct": 0.8,
+      "accepted_wrong": 0.0333
+    }
+  },
+  "test_top1_before": 0.5790123456790124,
+  "test_top1_after": 0.7771604938271605,
+  "limitations": "Static rows only, no temporal trajectories or provenance/signer metadata. Scores are not calibrated probabilities. Dynamic labels are pose evidence only."
+}
