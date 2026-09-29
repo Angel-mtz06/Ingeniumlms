@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import samples from "../data/alphabet_samples.json";
+import sep from "../data/alphabet_sep.json";
 import { predictAlphabet } from "./alphabet";
 import {
   analyzePose, BLOCK_SEVERITY, CaptureMonitor, captureFeedback, describeIssue, FeedbackStabilizer, fingerStates, GENERIC_MESSAGE, poseFeedback, targetMatches,
@@ -142,6 +143,21 @@ describe("verification against the target letter", () => {
     for (const t of ["V", "U"]) {
       const r = byLetter("R").map((h) => first(h, t)?.issue);
       expect(r.filter((i) => i === "should_uncross").length / r.length).toBeGreaterThan(0.5);
+    }
+  });
+});
+
+describe("official SEP poster poses", () => {
+  it("an M/N/Ñ made like the poster (fingers bent over the thumb) is accepted, with natural variation", () => {
+    let seed = 5; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    for (const [l, t] of [["M", "M"], ["N", "N"], ["Ñ", "N"]]) {
+      const h0 = (sep.hands as Record<string, number[][]>)[l], palm = Math.hypot(h0[9][0] - h0[0][0], h0[9][1] - h0[0][1]);
+      let ok = 0;
+      for (let i = 0; i < 40; i++) {
+        const h = h0.map((p) => p.map((v) => v + (rnd() - 0.5) * 0.07 * palm));
+        if (poseFeedback(h, t, targetMatches(predictAlphabet(h), h, t)).correct) ok++;
+      }
+      expect(ok / 40).toBeGreaterThan(0.9);
     }
   });
 });

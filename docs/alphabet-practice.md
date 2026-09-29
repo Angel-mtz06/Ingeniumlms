@@ -64,3 +64,9 @@ Sin cuenta regresiva ni ventana fija (`LiveMotion`): pose inicial sostenida 0.5 
 ## Pantalla
 
 Mismo lenguaje que Práctica de señas: medidor en la esquina de la cámara (`ScoreGauge`), una sugerencia debajo (`practice-note`), dedos en vivo marcados en `HandDiagram` (derivados de las mismas medidas) y pasos del movimiento.
+
+## Pose oficial del cartel SEP (M, N, Ñ, C, K)
+
+`letters.npz` hace M y N con los dedos casi rectos (índice ≈ 24°, medio ≈ 10°); el cartel SEP los dobla sobre el pulgar (≈ 60°). Una M hecha como en la referencia se rechazaba (N 55 % / M 45 %) y la sugerencia pedía estirar el índice. `web/src/data/alphabet_sep.json` guarda la pose de cada foto del cartel medida con el mismo MediaPipe (J no se detectó). Se agrega como muestra del clasificador (más dos giros de ±12°) y los rangos de cada letra se amplían para incluirla.
+
+Foto del cartel con variaciones (giro ±20°, ruido 4 % de la palma), aceptada como su letra: M 27 → 100 %, N 99 → 100 %, Ñ 100 %, C 2 → 64 %, K 6 → 17 %, R 62 %, U 53 → 59 %, V 74 → 76 %. Filas de prueba de letters.npz sin cambio (promedio 77 %; acepta otra letra 0.8 → 0.7 %). Es una sola persona y un solo ángulo: no sustituye grabaciones de signantes reales.
