@@ -158,3 +158,15 @@ La mayor parte de la interfaz es plana: la elevación la da el cambio de superfi
 - En móvil la barra de pestañas se desplaza horizontalmente; el resto se apila en una columna.
 - Pantallas con cámara: el video es el elemento más grande, dentro de un marco `--radius-lg` sobre `--color-surface-2`; la retroalimentación va junto al video, en `--text-3xl` con ícono.
 - Sin tarjetas dentro de tarjetas, sin gradientes, sin brillos de neón.
+
+## 9. Capa Liquid Glass (`src/styles/glass.css`)
+
+Capa visual estilo Apple que se carga al final (`main.tsx`) y reemplaza lo anterior solo en apariencia (mismas clases y atributos).
+Sustituye a propósito dos reglas de arriba: hay orbes de gradiente desenfocados en el fondo (`body::before/::after`) y las tarjetas
+son de cristal translúcido (`backdrop-filter: blur(20px) saturate(180%)`, borde de reflejo y sombra difusa).
+
+- Tokens nuevos en `tokens.css`: `--glass-*`, `--orb-1…4`, `--bezel`, `--radius-xl` (28 px) y `--radius-pill`.
+- Los rellenos de cristal salen de `--color-surface` (58–80 % de opacidad), así el contraste de texto de la sección 2 se mantiene.
+- Botones, pestañas, chips e insignias son cápsulas con `scale(0.95)` al presionar; la cámara lleva un marco de dispositivo.
+- Sin soporte de `backdrop-filter`, los rellenos pasan a casi opacos. Con movimiento reducido no hay deriva de orbes ni rebotes.
+- Para volver al diseño anterior basta con quitar el import de `glass.css`.
