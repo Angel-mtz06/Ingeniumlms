@@ -85,6 +85,12 @@ export function Diagnostics() {
               <dt>Clasificador</dt>
               <dd>{health.classifier ? "cargado" : "no cargado"}</dd>
             </div>
+            {health.model ? (
+              <div>
+                <dt>Modelo</dt>
+                <dd>{health.model}</dd>
+              </div>
+            ) : null}
             <div>
               <dt>Señas de referencia</dt>
               <dd className="tabular">{health.references}</dd>

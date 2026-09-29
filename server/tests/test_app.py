@@ -16,10 +16,17 @@ def client(tmp_path):
 
 def test_health_and_reference(tmp_path):
     c = client(tmp_path)
-    assert c.get("/api/health").json() == {"ok": True, "classifier": True, "references": 1, "llm": False}
+    assert c.get("/api/health").json() == {"ok": True, "classifier": True, "references": 1, "llm": False,
+                                           "model": None}
     r = c.get("/api/reference/HOLA").json()
     assert r["gloss"] == "HOLA" and len(r["example_hands"]) == 16 and r["slots_used"] == [True, False]
     assert c.get("/api/reference/NADA").status_code == 404
+
+
+def test_health_reports_model_name(tmp_path):
+    app = create_app(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"), own_dir=tmp_path / "own",
+                     model_name="classifier_v2")
+    assert TestClient(app).get("/api/health").json()["model"] == "classifier_v2"
 
 
 def test_vocab_falls_back_to_references(tmp_path, monkeypatch):

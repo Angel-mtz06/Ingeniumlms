@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from lsm.evaluator.references import _to_json, load_references
 from lsm.live import frames_to_raw
-from lsm.paths import DATASETS, MODELS, PROCESSED, ROOT
+from lsm.paths import DATASETS, MODELS, PROCESSED, ROOT, active_model_path
 from lsm.sentences import SentenceBuilder
 from lsm.session import Session, valid_dim
 from lsm.vocab import canonical
@@ -43,7 +43,8 @@ class WebFiles(StaticFiles):
 
 
 def create_app(classifier=None, references: dict | None = None, sentences: SentenceBuilder | None = None,
-               static_dir: str | Path | None = None, own_dir: str | Path | None = None) -> FastAPI:
+               static_dir: str | Path | None = None, own_dir: str | Path | None = None,
+               model_name: str | None = None) -> FastAPI:
     references = references or {}
     sentences = sentences or SentenceBuilder()
     own = Path(own_dir) if own_dir else DATASETS / "own"
@@ -52,7 +53,7 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
     @app.get("/api/health")
     def health():
         return {"ok": True, "classifier": classifier is not None, "references": len(references),
-                "llm": sentences.llm is not None}
+                "llm": sentences.llm is not None, "model": model_name}
 
     @app.get("/api/vocab")
     def vocab():
@@ -150,10 +151,12 @@ def main() -> None:
     load_env_file(ROOT / ".env")  # OPENAI_API_KEY, SENTENCES_PROVIDER…; antes de crear SentenceBuilder
     torch.set_num_threads(2)  # inferencia en CPU: deja núcleos libres para el servidor y MediaPipe
 
-    clf_path, ref_path = MODELS / "classifier_v1.pt", MODELS / "references.json"
+    clf_path, ref_path = active_model_path(), MODELS / "references.json"
     classifier = Classifier.load(clf_path) if clf_path.exists() else None
     references = load_references(ref_path) if ref_path.exists() else {}
-    app = create_app(classifier, references, SentenceBuilder(), static_dir=ROOT / "web" / "dist")
+    print(f"modelo activo: {clf_path.stem}" + ("" if classifier else " (no encontrado)"), flush=True)
+    app = create_app(classifier, references, SentenceBuilder(), static_dir=ROOT / "web" / "dist",
+                     model_name=clf_path.stem if classifier else None)
     uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8000")))
 
 
