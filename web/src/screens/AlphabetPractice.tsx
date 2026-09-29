@@ -69,11 +69,28 @@ function EvaluationCard({ tone, title, items, children }: { tone?: Tone; title: 
   );
 }
 
-function LetterPicker({ selected, onPick }: { selected: string; onPick(l: string): void }) {
+/** Letras ya hechas correctamente, recordadas en este navegador (si el almacenamiento falla, solo esta sesión). */
+const DONE_KEY = "lsm.alphabet.done";
+function useDoneLetters(): [Set<string>, (l: string) => void, () => void] {
+  const [done, setDone] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(window.localStorage.getItem(DONE_KEY) ?? "[]") as string[]); } catch { return new Set(); }
+  });
+  const save = (next: Set<string>) => { try { window.localStorage.setItem(DONE_KEY, JSON.stringify([...next])); } catch { /* sin almacenamiento */ } };
+  const mark = useCallback((l: string) => setDone((d) => {
+    if (d.has(l)) return d;
+    const next = new Set(d); next.add(l); save(next); return next;
+  }), []);
+  const clear = useCallback(() => { const next = new Set<string>(); save(next); setDone(next); }, []);
+  return [done, mark, clear];
+}
+
+function LetterPicker({ selected, onPick, done }: { selected: string; onPick(l: string): void; done: Set<string> }) {
   return (
     <div className="alfa-picker" role="group" aria-label="Selector de letras">
       {LETTERS.map((l) => (
-        <button key={l} type="button" className="alfa-picker__btn" aria-pressed={l === selected} onClick={() => onPick(l)}>
+        <button key={l} type="button" className="alfa-picker__btn" aria-pressed={l === selected} data-done={done.has(l)}
+          aria-label={done.has(l) ? `${l}, hecha correctamente` : l} onClick={() => onPick(l)}>
+          {done.has(l) ? <span className="alfa-picker__check" aria-hidden="true">✓</span> : null}
           {l}
         </button>
       ))}
@@ -135,12 +152,15 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
   const [cameraOn, setCameraOn] = useState(false);
   const [showRef, toggleRef] = useShowReference();
   const [tutorial, setTutorial] = useState(false);
+  const [done, markDone, clearDone] = useDoneLetters();
   const motion = target !== null && MOTION_LETTERS.has(target);
   const recognition = useAlphabetRecognition(target, mode, cameraOn && camera.ready && !vision.loading && !vision.error);
   const { detected, progress: holdProgress, complete, feedback, fingers, live } = recognition;
   const base = target !== null ? motionBaseLetter(target) : null;
   useSessionMode("practice", target);
   useFrameSink(cameraOn ? (f) => { session.send(f); recognition.onFrame(f); } : null);
+
+  useEffect(() => { if (complete && target) markDone(target); }, [complete, target, markDone]);
 
   useEffect(() => {
     if (!complete || mode !== "sequential" || letterIdx === LETTERS.length - 1) return;
@@ -217,10 +237,14 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
         ))}
       </div>
 
-      {mode === "specific" && (
-        <section className="sheet" aria-label="Elige una letra">
-          <h3 className="sheet__title">Elige la letra a practicar</h3>
-          <LetterPicker selected={freeLetter} onPick={setFreeLetter} />
+      {mode !== "free" && (
+        <section className="sheet" aria-label="Letras del alfabeto">
+          <div className="alfa-picker__head">
+            <h3 className="sheet__title">{mode === "specific" ? "Elige la letra a practicar" : "Tu avance"}</h3>
+            <span className="sheet__hint tabular">{done.size} de {LETTERS.length} hechas{done.size ? <> · <button type="button" className="alfa-picker__reset" onClick={clearDone}>Reiniciar</button></> : null}</span>
+          </div>
+          <LetterPicker done={done} selected={target ?? ""}
+            onPick={(l) => mode === "specific" ? setFreeLetter(l) : setLetterIdx(LETTERS.indexOf(l))} />
         </section>
       )}
 
