@@ -18,6 +18,14 @@ Escribe la glosa **exactamente así** en el campo "Glosa" de la pantalla Grabar 
 | Preguntas | `QUE` · `QUIEN` · `POR_QUE` |
 | Estados | `BIEN` · `FELIZ` · `TRISTE` · `CANSADO` · `AGUA` |
 
+### También grabar las palabras del guion que ya existen
+
+Aunque el modelo ya conoce estas 10 señas, aprendió de otras personas y otra cámara. Grabarlas con **la misma laptop, cámara y luz de la demo** adapta el modelo al equipo y es lo que más mejora el acierto en vivo:
+
+`HOLA` · `YO` · `DOLOR` · `CABEZA` · `IR` · `DOCTOR` · `TENER` · `FIEBRE` · `TOS` · `MAÑANA` (esta última es nueva)
+
+**Estas van primero**, antes que las 40 nuevas.
+
 Si no alcanza el tiempo, prioricen en este orden: `BUENOS_DIAS`, `NOMBRE`, `TU`, `ESTUDIANTE`, `UNIVERSIDAD`, `ESTUDIAR`, `QUERER`, `COMER`, `AGUA`, `HOY`, `MAÑANA`, `BIEN`, `MAMA`, `FAMILIA`, `QUE`.
 
 ## Protocolo
