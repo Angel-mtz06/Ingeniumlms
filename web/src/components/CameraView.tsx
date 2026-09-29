@@ -17,6 +17,8 @@ export interface CameraViewProps {
   children?: ReactNode;
   /** Cuadros por segundo de MediaPipe: si se pasa (aunque sea null), se muestra en la esquina superior izquierda. */
   fps?: number | null;
+  /** Detalle opcional junto a los FPS (p. ej. "cámara 15 · 38 ms"). */
+  fpsDetail?: string | null;
   /** Contenido de la esquina superior derecha (p. ej. el medidor de puntaje de Práctica). */
   corner?: ReactNode;
 }
@@ -72,7 +74,7 @@ function drawHands(canvas: HTMLCanvasElement, video: HTMLVideoElement, hands: Ha
  * Video de la cámara con un lienzo superpuesto que dibuja las manos. Video y lienzo comparten
  * `object-fit: contain` y el tamaño intrínseco del video, así que los puntos coinciden sin cálculos.
  */
-export function CameraView({ videoRef, hands, mirrored = true, loading = false, error = null, children, fps, corner }: CameraViewProps) {
+export function CameraView({ videoRef, hands, mirrored = true, loading = false, error = null, children, fps, fpsDetail, corner }: CameraViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const handsRef = useRef(hands);
   handsRef.current = hands;
@@ -133,6 +135,7 @@ export function CameraView({ videoRef, hands, mirrored = true, loading = false, 
         // Metadato discreto: cambia una vez por segundo y no se anuncia (no es región viva).
         <p className="camera__fps">
           <abbr title="cuadros por segundo">FPS</abbr> <span className="tabular">{fps ?? "…"}</span>
+          {fpsDetail ? <span className="camera__fps-detail tabular"> · {fpsDetail}</span> : null}
         </p>
       ) : null}
       {!error && !loading && corner ? <div className="camera__corner">{corner}</div> : null}

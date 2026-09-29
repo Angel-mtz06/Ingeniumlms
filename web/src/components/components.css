@@ -257,6 +257,11 @@
   color: var(--color-text);
 }
 
+.camera__fps .camera__fps-detail {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
 .camera__corner {
   inset-inline-end: var(--space-3);
   max-width: calc(100% - 7rem);

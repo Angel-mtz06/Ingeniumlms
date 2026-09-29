@@ -15,6 +15,11 @@ export function LiveCamera({ corner, children }: { corner?: ReactNode; children?
       loading={!camera.error && !vision.error && (!camera.ready || vision.loading)}
       error={camera.error ?? vision.error}
       fps={vision.fps}
+      fpsDetail={
+        vision.stats
+          ? `cámara ${vision.stats.cameraFps ?? "?"} · ${vision.stats.detectMs} ms · ${vision.stats.width}×${vision.stats.height}`
+          : null
+      }
       corner={corner}
     >
       {children}

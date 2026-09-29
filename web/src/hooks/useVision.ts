@@ -13,10 +13,21 @@ export interface VisionHandle {
   delegate: Delegate | null;
   /** Últimas manos detectadas (normalizadas 0..1, sin espejo). Función estable: no provoca renders. */
   lastHands: () => HandPoints;
+  /** Mediciones de rendimiento (una vez por segundo): qué limita los FPS, la cámara o MediaPipe. */
+  stats: VisionStats | null;
+}
+
+export interface VisionStats {
+  /** Cuadros por segundo que entrega la cámara (null si el navegador no lo informa). */
+  cameraFps: number | null;
+  /** Milisegundos promedio que tarda MediaPipe en procesar un cuadro. */
+  detectMs: number;
+  width: number;
+  height: number;
 }
 
 type VideoWithRvfc = HTMLVideoElement & {
-  requestVideoFrameCallback?: (cb: (now: number) => void) => number;
+  requestVideoFrameCallback?: (cb: (now: number, meta?: { presentedFrames?: number }) => void) => number;
   cancelVideoFrameCallback?: (h: number) => void;
 };
 
@@ -42,6 +53,7 @@ export function useVision(
   const [error, setError] = useState<string | null>(null);
   const [fps, setFps] = useState<number | null>(null);
   const [delegate, setDelegate] = useState<Delegate | null>(null);
+  const [stats, setStats] = useState<VisionStats | null>(null);
 
   const onFrameRef = useRef(onFrame);
   const glovesRef = useRef(gloves);
@@ -104,6 +116,11 @@ export function useVision(
     let lastMediaTime = -1;
     let failures = 0;
     const meter = new FpsMeter();
+    // Rendimiento: cuadros que presenta la cámara (presentedFrames de rVFC) y tiempo de MediaPipe.
+    let camStart: { t: number; frames: number } | null = null;
+    let camLast: { t: number; frames: number } | null = null;
+    let detectSum = 0;
+    let detectN = 0;
 
     const schedule = () => {
       const v = videoRef.current as VideoWithRvfc | null;
@@ -112,8 +129,12 @@ export function useVision(
       handle = usedRvfc ? v!.requestVideoFrameCallback!(step) : requestAnimationFrame(step);
     };
 
-    function step() {
+    function step(_now?: number, meta?: { presentedFrames?: number }) {
       if (stopped) return;
+      if (meta?.presentedFrames !== undefined) {
+        camLast = { t: performance.now(), frames: meta.presentedFrames };
+        if (!camStart) camStart = camLast;
+      }
       const video = videoRef.current;
       if (video !== lastVideo) {
         lastVideo = video;
@@ -126,11 +147,26 @@ export function useVision(
         const now = performance.now();
         lastTs = monotonic(lastTs, now);
         try {
+          const t0 = performance.now();
           const frame = vision!.detect(video, lastTs, glovesRef.current());
+          detectSum += performance.now() - t0;
+          detectN++;
           failures = 0;
           onFrameRef.current(frame);
           const f = meter.tick(now);
-          if (f !== null) setFps(f);
+          if (f !== null) {
+            setFps(f);
+            const dt = camStart && camLast ? camLast.t - camStart.t : 0;
+            setStats({
+              cameraFps: camStart && camLast && dt > 0 ? Math.round(((camLast.frames - camStart.frames) * 1000) / dt) : null,
+              detectMs: detectN ? Math.round(detectSum / detectN) : 0,
+              width: video.videoWidth,
+              height: video.videoHeight,
+            });
+            camStart = camLast;
+            detectSum = 0;
+            detectN = 0;
+          }
         } catch (err) {
           failures++;
           if (failures === 1) console.error("MediaPipe: error al procesar un cuadro.", err);
@@ -149,10 +185,11 @@ export function useVision(
       if (usedRvfc) scheduledOn?.cancelVideoFrameCallback?.(handle);
       else cancelAnimationFrame(handle);
       setFps(null);
+      setStats(null);
     };
   }, [ready, vision, videoRef, paused]);
 
   const lastHands = useCallback((): HandPoints => visionRef.current?.lastHands() ?? [], []);
 
-  return { loading, error, fps, delegate, lastHands };
+  return { loading, error, fps, delegate, lastHands, stats };
 }
