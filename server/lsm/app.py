@@ -30,6 +30,7 @@ MAX_REC_FRAMES = 1800  # 60 s a 30 fps
 TAKE_RE = re.compile(r"_(\d+)\.npz")
 
 
+LOG_PATH = ROOT / "logs" / "lsm.log"
 LOG_MAX_BYTES = 5 * 1024 * 1024
 LOG_BACKUPS = 2
 
@@ -175,7 +176,7 @@ def main() -> None:
 
     load_env_file(ROOT / ".env")  # OPENAI_API_KEY, SENTENCES_PROVIDER…; antes de crear SentenceBuilder
     torch.set_num_threads(2)  # inferencia en CPU: deja núcleos libres para el servidor y MediaPipe
-    log_path = setup_logging(ROOT / "logs" / "lsm.log").baseFilename
+    log_path = setup_logging(LOG_PATH).baseFilename
     print(f"registro de diagnóstico: {log_path}", flush=True)
 
     name = active_model_name()

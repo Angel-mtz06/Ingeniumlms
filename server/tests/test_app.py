@@ -131,8 +131,17 @@ def test_main_limits_torch_threads(tmp_path, monkeypatch):
     monkeypatch.setattr(torch, "set_num_threads", lambda n: calls.append(n))
     monkeypatch.setattr(uvicorn, "run", lambda *a, **k: calls.append("run"))
     monkeypatch.setattr(app_mod, "MODELS", tmp_path)  # sin modelo: no carga nada
-    app_mod.main()
-    assert calls == [2, "run"]
+    monkeypatch.setattr(app_mod, "LOG_PATH", tmp_path / "logs" / "lsm.log")  # no ensuciar D:/Ingenium/logs
+    try:
+        app_mod.main()
+        assert calls == [2, "run"]
+        assert (tmp_path / "logs" / "lsm.log").exists()
+    finally:
+        import logging
+        lg = logging.getLogger("lsm")
+        for h in [h for h in lg.handlers if str(tmp_path) in getattr(h, "baseFilename", "")]:
+            lg.removeHandler(h)
+            h.close()
 
 
 def test_recording_rejects_bad_frame_size(tmp_path):
