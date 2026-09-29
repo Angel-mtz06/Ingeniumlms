@@ -5,6 +5,8 @@ import csv
 import unicodedata
 from pathlib import Path
 
+from lsm.themes import theme_of
+
 _M = """BUENOS_DIAS BUENAS_TARDES BUENAS_NOCHES GRACIAS POR_FAVOR NOS_VEMOS ADIOS
 DIA HORA SEMANA MINUTO SEGUNDO
 LUNES MARTES MIERCOLES JUEVES VIERNES SABADO DOMINGO
@@ -62,7 +64,7 @@ def build_vocab(glosses_names: list[str]) -> list[dict]:
         if g in rows:
             rows[g]["sources"] += f";glosses:{name}"
         else:
-            rows[g] = {"gloss": g, "category": GLOSSES_CATEGORY, "sources": f"glosses:{name}"}
+            rows[g] = {"gloss": g, "category": theme_of(g, GLOSSES_CATEGORY), "sources": f"glosses:{name}"}
     return list(rows.values())
 
 

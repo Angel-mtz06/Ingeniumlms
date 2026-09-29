@@ -50,7 +50,19 @@ def test_vocab_csv_of_active_model(tmp_path):
 
 def test_vocab_falls_back_to_references(tmp_path, monkeypatch):
     monkeypatch.setattr("lsm.app.VOCAB_CSV", tmp_path / "no.csv")
-    assert client(tmp_path).get("/api/vocab").json() == [{"gloss": "HOLA", "category": "", "has_reference": True}]
+    # sin vocab.csv el tema sale de lsm.themes
+    assert client(tmp_path).get("/api/vocab").json() == [{"gloss": "HOLA", "category": "Saludos y cortesía",
+                                                          "has_reference": True}]
+
+
+def test_vocab_uses_themes_over_csv_category(tmp_path):
+    v = tmp_path / "vocab.csv"
+    v.write_text("gloss,category,sources\nHOLA,salud_y_frecuentes,x\nMAÑANA,propias,own\nZZZ,propias,own\n",
+                 encoding="utf-8")
+    app = create_app(FakeClassifier(), {"HOLA": ref()}, SentenceBuilder(llm=None, provider="none"),
+                     own_dir=tmp_path / "own", vocab_csv=v)
+    cats = {x["gloss"]: x["category"] for x in TestClient(app).get("/api/vocab").json()}
+    assert cats == {"HOLA": "Saludos y cortesía", "MAÑANA": "Tiempo", "ZZZ": "propias"}
 
 
 def test_recording_saved_and_indexed(tmp_path):

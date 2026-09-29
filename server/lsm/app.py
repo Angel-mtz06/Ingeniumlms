@@ -19,6 +19,7 @@ from lsm.paths import (DATASETS, MODELS, PROCESSED, ROOT, active_model_name, act
                        active_vocab_path)
 from lsm.sentences import SentenceBuilder
 from lsm.session import Session, valid_dim
+from lsm.themes import theme_of
 from lsm.vocab import canonical
 from lsm.windows import NONE_GLOSS
 
@@ -85,9 +86,11 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
         path = Path(vocab_csv or VOCAB_CSV)  # el catálogo del modelo activo
         if path.exists():
             rows = csv.DictReader(open(path, encoding="utf-8"))
-            return [{"gloss": r["gloss"], "category": r["category"], "has_reference": r["gloss"] in references}
+            return [{"gloss": r["gloss"], "category": theme_of(r["gloss"], r["category"]),
+                     "has_reference": r["gloss"] in references}
                     for r in rows if r["gloss"] != NONE_GLOSS]  # NINGUNA no es una seña del catálogo
-        return [{"gloss": g, "category": "", "has_reference": True} for g in sorted(references) if g != NONE_GLOSS]
+        return [{"gloss": g, "category": theme_of(g), "has_reference": True}
+                for g in sorted(references) if g != NONE_GLOSS]
 
     @app.get("/api/reference/{gloss}")
     def reference(gloss: str):
