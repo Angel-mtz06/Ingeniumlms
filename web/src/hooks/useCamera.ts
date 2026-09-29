@@ -8,7 +8,8 @@ export interface CameraHandle {
 }
 
 const CONSTRAINTS: MediaStreamConstraints = {
-  video: { width: 1280, height: 720, facingMode: "user" },
+  // 960×540 a 30 fps: muchas webcams de laptop bajan a 15 fps en 720p, y MediaPipe reduce la imagen de todos modos.
+  video: { width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { ideal: 30 }, facingMode: "user" },
   audio: false,
 };
 
