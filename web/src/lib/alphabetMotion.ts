@@ -36,12 +36,12 @@ export type MotionResult = {
  * gancho de la J o los tres trazos de la Z quedan con 1–2 cuadros por tramo, y la forma sería
  * interpolación, no medición.
  */
-export const MIN_ACTIVE_FRAMES = 10;
+export const MIN_ACTIVE_FRAMES = 7;
 /** Seguimiento en vivo: pose inicial sostenida, inicio, fin por quietud y duración máxima. */
 export const READY_HOLD_MS = 500, ONSET_PALMS = .15, STILL_MS = 450, STILL_PALMS = .12, MAX_MOVE_MS = 4000, RESULT_MS = 2500, PREROLL_FRAMES = 4;
 /** Tolerancia de forma (RMS tras normalizar). La misma para el avance en vivo y el juicio final:
  * si el medidor llegó a 100 %, el resultado no puede decir lo contrario. */
-export const SHAPE_ERROR = .25;
+export const SHAPE_ERROR = .32;
 
 const dist = (a: number[], b: number[]) => Math.hypot(a[0]-b[0], a[1]-b[1]);
 const length = (points: number[][]) => points.slice(1).reduce((s,p,i) => s+dist(p,points[i]),0);
@@ -143,14 +143,14 @@ function activeSpan(points: number[][], t: number[]): {frames: number; ms: numbe
 
 /** Rule-specific evidence beyond the overall shape (kept from the original analyzer). */
 function ruleGates(letter: string, points: number[][], span: number, travelled: number): boolean {
-  if (span < .55 || span > 4 || travelled/span > 5) return false;
+  if (span < .4 || span > 5 || travelled/span > 6) return false;
   if (letter === "Ñ" || letter === "Q") {
     const a=points[0], b=points.at(-1)!, chord=dist(a,b);
     const bend=Math.max(...points.map((p)=>chord ? Math.abs((b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]))/chord : 0));
-    if (chord < span*.5 || bend/span < .08) return false;
+    if (chord < span*.4 || bend/span < .05) return false;
   }
-  if (letter === "X" && (dist(points[0],points.at(-1)!) > span*.4 || travelled/span < 1.4)) return false;
-  if (letter === "Z" && travelled/span < 2.0) return false;
+  if (letter === "X" && (dist(points[0],points.at(-1)!) > span*.5 || travelled/span < 1.3)) return false;
+  if (letter === "Z" && travelled/span < 1.8) return false;
   return true;
 }
 
@@ -213,7 +213,7 @@ export function analyzeMotionFor(frames: MotionFrame[], target: string, options:
   const problem = sequenceProblem(frames, r, options);
   if (problem) return problem;
   const supporting = frames.filter((f)=>frameStartOk(f, target));
-  if (supporting.length/frames.length < .6) {
+  if (supporting.length/frames.length < .45) {
     // Qué dedo se desvió: la corrección más frecuente en los cuadros que perdieron la pose.
     const counts = new Map<string, number>();
     for (const f of frames) if (!frameStartOk(f, target)) {
@@ -229,7 +229,7 @@ export function analyzeMotionFor(frames: MotionFrame[], target: string, options:
   const active = activeSpan(points, t);
   const out = {...r, travel: travelled, activeFrames: active.frames, activeMs: active.ms};
   if (span < .25) return withIssue(out, "no_motion");
-  if (span < .55) return withIssue(out, "too_small");
+  if (span < .4) return withIssue(out, "too_small");
   if (active.frames < MIN_ACTIVE_FRAMES) return withIssue(out, "too_fast");
   const error = shapeError(points, rule.path);
   if (ruleGates(target, points, span, travelled) && error <= SHAPE_ERROR) {
@@ -269,7 +269,7 @@ export function analyzeMotion(frames: MotionFrame[]): MotionResult {
   let tooFast = false;
   for (const rule of RULES) {
     const supporting = frames.filter((f)=>f.pose && rule.poses.includes(f.pose[0]) && f.pose[1]>=CONF_THRESHOLD);
-    if (supporting.length/frames.length < .6) continue;
+    if (supporting.length/frames.length < .45) continue;
     const {points, t} = normalizedPath(frames,rule.tip);
     const span = extent(points), travelled = length(points);
     result.travel = Math.max(result.travel, travelled);

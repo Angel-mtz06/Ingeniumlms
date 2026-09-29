@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { LETTERS, MOTION_LETTERS } from "../lib/alphabet";
 import { useAlphabetRecognition, type AlphabetMode } from "../hooks/useAlphabetRecognition";
 import { HandDiagram } from "../components/HandDiagram";
@@ -160,7 +160,15 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
   useSessionMode("practice", target);
   useFrameSink(cameraOn ? (f) => { session.send(f); recognition.onFrame(f); } : null);
 
-  useEffect(() => { if (complete && target) markDone(target); }, [complete, target, markDone]);
+  // Solo en el instante en que la letra pasa a "completa". Al avanzar, el objetivo cambia un render
+  // antes de que se reinicie `complete`; depender de `target` marcaba también la siguiente letra.
+  const wasComplete = useRef(false);
+  const completedTarget = useRef<string | null>(null);
+  if (!complete) completedTarget.current = target;
+  useEffect(() => {
+    if (complete && !wasComplete.current && completedTarget.current) markDone(completedTarget.current);
+    wasComplete.current = complete;
+  }, [complete, markDone]);
 
   useEffect(() => {
     if (!complete || mode !== "sequential" || letterIdx === LETTERS.length - 1) return;
