@@ -9,9 +9,14 @@ shopt -s globstar nullglob
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 ROOT_OVERRIDE="${LSM_ROOT:-}"
-# shellcheck disable=SC1091
-source "$HERE/env.sh"
-if [ -n "$ROOT_OVERRIDE" ]; then export LSM_ROOT="$ROOT_OVERRIDE"; fi  # env.sh fija D:/Ingenium
+# env.sh es del equipo original (D:/Ingenium): solo se carga si esa carpeta existe; si no, su mkdir
+# en una unidad D: inexistente detenía el script. Siempre se sirve ESTA copia del repo.
+if [ -d "/d/Ingenium" ]; then
+  # shellcheck disable=SC1091
+  source "$HERE/env.sh"
+fi
+export LSM_ROOT="${ROOT_OVERRIDE:-$REPO}" PYTHONIOENCODING=utf-8
+if [ -d "$REPO/.venv/Scripts" ]; then export PATH="$REPO/.venv/Scripts:$PATH"; fi
 export HOST="${HOST:-127.0.0.1}" PORT="${PORT:-8000}"
 URL="http://$HOST:$PORT"
 WEB="$REPO/web"
@@ -39,21 +44,6 @@ port_busy() {
 
 WANT="$(python -c 'from lsm.paths import active_model_name; print(active_model_name())' 2>/dev/null || echo classifier_v1)"
 
-# 0. ¿Ya está corriendo?
-if healthy; then
-  RUNNING="$(curl -fsS --noproxy '*' --max-time 2 "$URL/api/health" 2>/dev/null \
-    | python -c 'import json, sys; print(json.load(sys.stdin).get("model") or "(sin clasificador)")' 2>/dev/null | tr -d '\r')"
-  echo "Ya hay un servidor respondiendo en $URL (modelo: ${RUNNING:-desconocido})."
-  if [ "$RUNNING" != "$WANT" ]; then
-    echo "AVISO: el modelo activo configurado es $WANT: reinicia el servidor para usar $WANT (Ctrl+C en su ventana y vuelve a abrir start.cmd)."
-  fi
-  open_browser
-  exit 0
-fi
-if port_busy; then
-  fail "El puerto $PORT ya está ocupado por otro programa (no es el servidor de la demo). Ciérralo o usa otro puerto: en Git Bash  PORT=8001 tools/start.sh  (en cmd:  set "PORT=8001"  y luego  start.cmd)."
-fi
-
 # 1. Web compilada y al día
 dist_stale() {
   local stamp="$WEB/dist/index.html"
@@ -65,6 +55,7 @@ dist_stale() {
   done
   return 1
 }
+build_web() {
 if dist_stale; then
   echo "== Compilando la web (web/dist falta o es más vieja que web/src)…"
   why=""
@@ -82,6 +73,26 @@ if dist_stale; then
 else
   echo "Web compilada y al día (web/dist)."
 fi
+}
+
+# 0. ¿Ya está corriendo? Aun así se recompila la web si cambió: el servidor sirve web/dist desde
+#    el disco, así que basta con recargar la página (antes aquí se salía sin compilar).
+if healthy; then
+  RUNNING="$(curl -fsS --noproxy '*' --max-time 2 "$URL/api/health" 2>/dev/null \
+    | python -c 'import json, sys; print(json.load(sys.stdin).get("model") or "(sin clasificador)")' 2>/dev/null | tr -d '\r')"
+  echo "Ya hay un servidor respondiendo en $URL (modelo: ${RUNNING:-desconocido})."
+  if [ "$RUNNING" != "$WANT" ]; then
+    echo "AVISO: el modelo activo configurado es $WANT: reinicia el servidor para usar $WANT (Ctrl+C en su ventana y vuelve a abrir start.cmd)."
+  fi
+  build_web
+  echo "Si la página ya estaba abierta, recárgala (Ctrl+F5) para ver la versión nueva."
+  open_browser
+  exit 0
+fi
+if port_busy; then
+  fail "El puerto $PORT ya está ocupado por otro programa (no es el servidor de la demo). Ciérralo o usa otro puerto: en Git Bash  PORT=8001 tools/start.sh  (en cmd:  set "PORT=8001"  y luego  start.cmd)."
+fi
+build_web
 
 # 2. MediaPipe (modelos .task y wasm) — la cámara no funciona sin ellos
 missing=()

@@ -1,4 +1,5 @@
 import model from "../data/alphabet_samples.json";
+import sep from "../data/alphabet_sep.json";
 
 export const LETTERS = [..."ABCDEFGHIJKLMNÑOPQRSTUVWXYZ"].filter((l) => model.letters.includes(l));
 // Dynamic policy requested by the project. K is evaluated as a pose only.
@@ -47,8 +48,26 @@ export function alphabetMetricFeatures(hand: number[][]): number[] | null {
   return [...f,...joints,...[4,8,12,16,20].map(tip=>norm(h[tip]))];
 }
 
+/** In-image rotation around the wrist (degrees): the poster shows one person at one angle. */
+const rotate = (hand: number[][], deg: number) => {
+  const r = deg*Math.PI/180, c = Math.cos(r), s = Math.sin(r), [x0, y0] = hand[0];
+  return hand.map(([x, y, z]) => [x0+(x-x0)*c-(y-y0)*s, y0+(x-x0)*s+(y-y0)*c, z]);
+};
+export const SEP_ROTATIONS = [0, -12, 12];
+/**
+ * La pose de la fotografía oficial (cartel SEP) de cada letra, medida con el mismo MediaPipe, más
+ * dos giros leves. letters.npz hace M y N con los dedos casi rectos y el cartel los dobla sobre el
+ * pulgar; sin estas muestras una M hecha como en la referencia se rechazaba.
+ */
+export const SEP_HANDS: {letter: string; hand: number[][]}[] = Object.entries(sep.hands as Record<string, number[][]>)
+  .filter(([l]) => model.letters.includes(l))
+  .flatMap(([letter, hand]) => SEP_ROTATIONS.map((deg) => ({letter, hand: rotate(hand, deg)})));
+
 // Compile once, not per frame. See training/audit_alphabet.py for split and radii.
-const samples = model.samples.map((s) => Float32Array.from(s, (v, i) => v / model.std[i]));
+const sepFeatures = SEP_HANDS.map(({letter, hand}) => ({label: model.letters.indexOf(letter), f: alphabetMetricFeatures(hand)}))
+  .filter((e): e is {label: number; f: number[]} => e.f !== null);
+const samples = [...model.samples, ...sepFeatures.map((e) => e.f)].map((s) => Float32Array.from(s, (v, i) => v / model.std[i]));
+const labels = [...model.labels, ...sepFeatures.map((e) => e.label)];
 const aliases: Record<string, string> = { J: "I", "Ñ": "N", Z: "D" };
 export interface AlphabetPrediction {
   pose: Prediction | null;
@@ -78,7 +97,7 @@ export function predictAlphabet(hand: number[][]): AlphabetPrediction {
     samples.forEach((s, index) => {
       let d = 0;
       for (let i = 0; i < features.length; i++) d += (query[i]-s[i])**2;
-      const label = model.labels[index];
+      const label = labels[index];
       if (d < perLetter[label]) perLetter[label] = d;
       if (best.length === model.k && d > best[best.length-1].distance) return;
       best.push({distance:d, label});

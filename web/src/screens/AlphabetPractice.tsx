@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { LETTERS, MOTION_LETTERS } from "../lib/alphabet";
 import { useAlphabetRecognition, type AlphabetMode } from "../hooks/useAlphabetRecognition";
 import { HandDiagram } from "../components/HandDiagram";
-import { IconWarning, ToneIcon } from "../components/icons";
+import { IconEye, IconEyeOff, IconWarning, ToneIcon } from "../components/icons";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { motionBaseLetter, READY_HOLD_MS } from "../lib/alphabetMotion";
 import { freeGauge, motionGauge, staticGauge } from "../lib/alphabetView";
@@ -15,19 +15,44 @@ import {
   useSessionMode,
 } from "./shared";
 
-// Fotografía de la letra dentro del cartel original de SEP, sin alterar la imagen.
+// Fotografía de la letra dentro del cartel original de SEP, sin alterar la imagen. Se muestra en el
+// mismo marco que la referencia animada de Práctica (.ref / .ref__stage / .ref__bar).
 const SOURCE = "https://nuevaescuelamexicana.sep.gob.mx/contenido/recurso/34697/";
-function LetterReference({ letter }: { letter: string }) {
+function LetterReference({ letter, controls }: { letter: string; controls?: ReactNode }) {
   const i = [..."ABCDEFGHIJKLMNÑOPQRSTUVWXYZ"].indexOf(letter);
   const row = Math.floor(i / 6), col = i % 6;
   const x = row === 4 ? [342, 546, 748][col] : [44, 246, 447, 647, 848, 1050][col];
   const y = [315, 608, 892, 1181, 1472][row];
-  return <figure>
-    <svg className="alfa-photo" viewBox={`${x} ${y} 186 260`} role="img" aria-label={`Fotografía LSM: letra ${letter}${MOTION_LETTERS.has(letter) ? ", sigue las flechas de movimiento" : ""}`}>
-      <image href="/alphabet/lsm-sep.jpg" width="1280" height="1920" />
-    </svg>
-    <figcaption className="sheet__hint"><a href={SOURCE} target="_blank" rel="noreferrer">Referencia LSM: SEP / @prende.mx</a> · <a href="/alphabet/lsm-sep.jpg" target="_blank" rel="noreferrer">Ver cartel completo</a></figcaption>
-  </figure>;
+  return (
+    <figure className="ref">
+      <div className="ref__stage alfa-ref__stage">
+        <svg className="alfa-ref__photo" viewBox={`${x} ${y} 186 260`} preserveAspectRatio="xMidYMid meet" role="img"
+          aria-label={`Fotografía LSM: letra ${letter}${MOTION_LETTERS.has(letter) ? ", sigue las flechas de movimiento" : ""}`}>
+          <image href="/alphabet/lsm-sep.jpg" width="1280" height="1920" />
+        </svg>
+      </div>
+      <figcaption className="ref__bar">
+        <span className="ref__title">Referencia: <strong translate="no">{letter}</strong></span>
+        {controls ? <div className="ref__controls">{controls}</div> : null}
+      </figcaption>
+      <p className="sheet__hint"><a href={SOURCE} target="_blank" rel="noreferrer">Fotografía: SEP / @prende.mx</a> · <a href="/alphabet/lsm-sep.jpg" target="_blank" rel="noreferrer">Ver cartel completo</a></p>
+    </figure>
+  );
+}
+
+type Tone = "ok" | "warn" | "bad";
+/** Tarjeta de evaluación bajo la referencia, con el estilo de ScoreCard (encabezado con ícono + puntos). */
+function EvaluationCard({ tone, title, items, children }: { tone?: Tone; title: string; items: ReactNode[]; children?: ReactNode }) {
+  return (
+    <section className="score score--guide alfa-eval" data-tone={tone ?? "off"} aria-live="polite" aria-label="Evaluación">
+      <div className="score__guide-head">
+        {tone === "ok" ? <ToneIcon tone="ok" size={28} /> : tone ? <IconWarning size={28} /> : null}
+        <h3 className="score__title">{title}</h3>
+      </div>
+      {items.length ? <ul className="score__tips score__tips--plain">{items.map((it, i) => <li key={i}>{it}</li>)}</ul> : null}
+      {children}
+    </section>
+  );
 }
 
 function LetterPicker({ selected, onPick }: { selected: string; onPick(l: string): void }) {
@@ -60,6 +85,21 @@ function MotionSteps({ phase, progress, base, target }: { phase: string; progres
   );
 }
 
+/** Mostrar u ocultar la foto de referencia (como el ejemplo de Práctica), recordado en este navegador. */
+const SHOW_REF_KEY = "lsm.alphabet.showReference";
+function useShowReference(): [boolean, () => void] {
+  const [show, setShow] = useState(() => {
+    try { return window.localStorage.getItem(SHOW_REF_KEY) !== "0"; } catch { return true; }
+  });
+  const toggle = useCallback(() => {
+    setShow((v) => {
+      try { window.localStorage.setItem(SHOW_REF_KEY, v ? "0" : "1"); } catch { /* solo esta sesión */ }
+      return !v;
+    });
+  }, []);
+  return [show, toggle];
+}
+
 interface AlphabetPracticeProps {
   onBack(): void;
 }
@@ -79,6 +119,7 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
   const target = mode === "free" ? null : mode === "sequential" ? LETTERS[letterIdx] : freeLetter;
 
   const [cameraOn, setCameraOn] = useState(false);
+  const [showRef, toggleRef] = useShowReference();
   const motion = target !== null && MOTION_LETTERS.has(target);
   const recognition = useAlphabetRecognition(target, mode, cameraOn && camera.ready && !vision.loading && !vision.error);
   const { detected, progress: holdProgress, complete, feedback, fingers, live } = recognition;
@@ -126,14 +167,27 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
     return { tone: feedback.type === "capture" ? "warn" : "bad", lead: feedback.type === "capture" ? undefined : "Para mejorar: ", text: feedback.message };
   })();
 
+  const reco = detected && !motion ? <>La app reconoce: <strong translate="no">{detected[0]}</strong> <span className="tabular">({Math.round(detected[1] * 100)} %)</span></> : null;
+  const staticCard: { tone?: Tone; title: string; items: ReactNode[] } = !cameraOn || !feedback || feedback.issue === "no_hand"
+    ? { title: `Haz la letra ${target ?? ""}`, items: ["Mira la fotografía de la letra.", "Hazla frente a la cámara con una sola mano.", "Sigue la sugerencia; los dedos marcados son los que debes corregir."] }
+    : correct ? { tone: "ok", title: holdProgress >= 1 || complete ? "¡Correcto!" : "¡Bien! Mantén la posición", items: [reco].filter(Boolean) as ReactNode[] }
+      : feedback.type === "capture" ? { tone: "warn", title: "Ajusta la captura", items: [feedback.message] }
+        : { tone: "bad", title: "Para mejorar", items: [feedback.message, reco].filter(Boolean) as ReactNode[] };
+  const motionCard: { tone?: Tone; title: string; items: ReactNode[] } = live?.phase === "result" && motionResult
+    ? motionResult.issue === "ok" ? { tone: "ok", title: "¡Correcto!", items: ["Trayectoria y pose compatibles."] } : { tone: "warn", title: "Para mejorar", items: [motionResult.reason] }
+    : live?.phase === "moving" ? { title: "Siguiendo tu movimiento…", items: ["Deja la mano quieta al terminar."] }
+      : live?.phase === "ready" ? { tone: "ok", title: "¡Listo!", items: ["Haz el movimiento cuando quieras."] }
+        : feedback && !feedback.correct && feedback.issue !== "no_hand" ? { tone: "warn", title: "Posición inicial", items: [feedback.message] }
+          : { title: "Esta letra requiere movimiento", items: [] };
+
   return (
     <div className="screen">
-      <header className="screen__head screen__head--row">
+      <header className="screen__head screen__head--row screen__head--compact">
         <div className="screen__head-text">
           <h2 className="screen__title">Practica el Alfabeto LSM</h2>
           <p className="screen__lead">Mira la referencia, haz la letra frente a la cámara y sigue la sugerencia hasta que quede correcta.</p>
         </div>
-        <button type="button" className="btn btn--secondary" onClick={onBack}>Volver a Práctica</button>
+        <button type="button" className="btn btn--change btn--small" onClick={onBack}>Volver a Práctica</button>
       </header>
 
       <ServerNotice />
@@ -155,37 +209,10 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
         </section>
       )}
 
-      {/* Primera pantalla, como Práctica de señas: referencia | cámara con medidor en la esquina y la sugerencia debajo. */}
+      {/* Como Práctica: la cámara con el medidor en la esquina y la sugerencia debajo; al lado, el
+          ejemplo plegable y los dedos en vivo. */}
       <div className="practice-stage">
-        <div className="practice-ref">
-          {target !== null ? (
-            <section className="sheet alfa-ref-panel" aria-label={`Letra objetivo ${target}`}>
-              <h3 className="sheet__title">Letra objetivo: <span translate="no">{target}</span></h3>
-              <LetterReference letter={target} />
-              <p className="sheet__hint">
-                {motion
-                  ? "Sigue las flechas de la fotografía. No hay cuenta regresiva: la app te sigue en vivo desde la posición inicial hasta que dejas la mano quieta."
-                  : "Observa la palma, el pulgar y la orientación de los dedos. Usa una sola mano y mantén la posición 0.8 segundos."}
-              </p>
-              {mode === "sequential" && (
-                <div className="alfa-nav-row">
-                  <button type="button" className="btn btn--secondary" onClick={prevLetter} disabled={letterIdx === 0} aria-label="Letra anterior">← Anterior</button>
-                  <span className="alfa-nav-progress">Letra {letterIdx + 1} de {LETTERS.length}</span>
-                  <button type="button" className="btn btn--secondary" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1} aria-label="Siguiente letra">Siguiente →</button>
-                </div>
-              )}
-            </section>
-          ) : (
-            <section className="sheet" aria-label="Reconocimiento libre">
-              <h3 className="sheet__title">Reconocimiento libre</h3>
-              <p>Haz cualquier letra y mantén la pose. La app muestra la letra más probable y las más parecidas; no te dice cómo corregirla porque no sabe cuál querías hacer.</p>
-              <p className="sheet__hint">Si mueves la mano, la app sigue el movimiento hasta que la dejas quieta e intenta reconocer J, Ñ, Q, X o Z.</p>
-            </section>
-          )}
-        </div>
-
         <div className="practice-camera">
-          <button type="button" className="btn btn--secondary" onClick={() => setCameraOn((v) => !v)}>{cameraOn ? "Detener cámara" : "Abrir cámara"}</button>
           {cameraOn ? (
             <LiveCamera corner={<ScoreGauge view={gauge} />}>
               {feedback?.type === "capture" && feedback.issue !== "no_hand" ? (
@@ -197,7 +224,10 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
               ) : null}
             </LiveCamera>
           ) : (
-            <p className="sheet__hint">{target ? `Abre la cámara para practicar la letra ${target}.` : "Abre la cámara y haz cualquier letra."}</p>
+            <div className="alfa-camera-off">
+              <p>{target ? `Abre la cámara para practicar la letra ${target}.` : "Abre la cámara y haz cualquier letra."}</p>
+              <button type="button" className="btn btn--primary" onClick={() => setCameraOn(true)}>Abrir cámara</button>
+            </div>
           )}
 
           {note && (
@@ -218,47 +248,78 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
               ) : null}
             </div>
           )}
+          {cameraOn ? <button type="button" className="btn btn--secondary alfa-camera-stop" onClick={() => setCameraOn(false)}>Detener cámara</button> : null}
           {complete && mode === "specific" ? <button type="button" className="btn btn--secondary" onClick={recognition.restart}>Repetir letra</button> : null}
           {complete && mode === "sequential" && letterIdx === LETTERS.length - 1 ? <p role="status" className="alfa-feedback__ok">✓ Llegaste al final del alfabeto.</p> : null}
+        </div>
+        <div className="practice-side">
+          {target !== null ? (
+            <section className="sheet practice-ref" aria-labelledby="alfa-ejemplo" data-open={showRef}>
+              <div className="practice-ref__head">
+                <h3 id="alfa-ejemplo" className="practice-ref__title">Ejemplo: <span translate="no">{target}</span></h3>
+                <button type="button" className="eye-toggle" onClick={toggleRef} aria-expanded={showRef} aria-controls="alfa-ejemplo-cuerpo"
+                  aria-label={showRef ? "Ocultar ejemplo" : "Mostrar ejemplo"} title={showRef ? "Ocultar ejemplo" : "Mostrar ejemplo"}>
+                  {showRef ? <IconEye /> : <IconEyeOff />}
+                </button>
+              </div>
+              <div id="alfa-ejemplo-cuerpo" hidden={!showRef}>
+                {showRef ? <LetterReference letter={target} controls={mode === "sequential" ? (
+                  <>
+                    <button type="button" className="btn btn--secondary" onClick={prevLetter} disabled={letterIdx === 0} aria-label="Letra anterior">←</button>
+                    <span className="alfa-nav-progress tabular">{letterIdx + 1} / {LETTERS.length}</span>
+                    <button type="button" className="btn btn--secondary" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1} aria-label="Siguiente letra">→</button>
+                  </>
+                ) : null} /> : null}
+              </div>
+              {!showRef && mode === "sequential" ? (
+                <div className="alfa-nav-row">
+                  <button type="button" className="btn btn--secondary btn--small" onClick={prevLetter} disabled={letterIdx === 0} aria-label="Letra anterior">←</button>
+                  <span className="alfa-nav-progress tabular">{letterIdx + 1} / {LETTERS.length}</span>
+                  <button type="button" className="btn btn--secondary btn--small" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1} aria-label="Siguiente letra">→</button>
+                </div>
+              ) : null}
+            </section>
+          ) : (
+            <section className="sheet" aria-label="Reconocimiento libre">
+              <h3 className="sheet__title">Reconocimiento libre</h3>
+              <p>Haz cualquier letra y mantén la pose. La app muestra la letra más probable y las más parecidas; no te dice cómo corregirla porque no sabe cuál querías hacer.</p>
+              <p className="sheet__hint">Si mueves la mano, la app sigue el movimiento hasta que la dejas quieta e intenta reconocer J, Ñ, Q, X o Z.</p>
+            </section>
+          )}
+          <section className="sheet hands-panel" aria-labelledby="alfa-dedos">
+            <h3 id="alfa-dedos" className="sheet__title">Tus dedos en vivo</h3>
+            {/* Igual que Práctica: el video va en espejo, la mano derecha se ve a la DERECHA. */}
+            <div className="hands-panel__pair">
+              <HandDiagram side="izquierda" fingers={recognition.side === "izquierda" ? fingers : []} />
+              <HandDiagram side="derecha" fingers={recognition.side === "derecha" ? fingers : []} />
+            </div>
+            <p className="sheet__hint">
+              {mode === "free" ? (recognition.stable
+                  ? `Cada dedo se compara con la ${recognition.stable[0]}, la letra que se reconoció: liso = bien, rayas = casi, cuadrícula = distinto.`
+                  : "Cuando se reconozca una letra, sus dedos se pintan aquí comparados con ella.")
+                : `Cada dedo se compara con la ${motion && base ? `${base} (posición inicial de la ${target})` : target}: liso = bien, rayas = casi, cuadrícula = corrige.`}
+            </p>
+          </section>
         </div>
       </div>
 
       <div className="practice-result">
         {mode === "free" ? (
-          <section className="sheet" aria-label="Letras más parecidas">
-            <h3 className="sheet__title">Letras más parecidas</h3>
-            {recognition.ranking.length && feedback?.type !== "capture" ? (
-              <ol className="alfa-ranking__list">
-                {recognition.ranking.map(([l, share]) => <li key={l}><strong translate="no">{l}</strong> <span className="tabular">{Math.round(share * 100)} %</span></li>)}
-              </ol>
-            ) : <p className="sheet__hint">Haz una letra frente a la cámara.</p>}
+          <EvaluationCard tone={recognition.stable ? "ok" : undefined} title={recognition.stable ? `Letra detectada: ${recognition.stable[0]}` : "Letras más parecidas"}
+            items={recognition.ranking.length && feedback?.type !== "capture"
+              ? recognition.ranking.map(([l, share]) => <><strong translate="no">{l}</strong> <span className="tabular">{Math.round(share * 100)} %</span></>)
+              : [feedback?.type === "capture" ? feedback.message : "Haz una letra frente a la cámara."]}>
             <p className="sheet__hint">Confianza relativa entre letras, no probabilidad de acierto.</p>
-          </section>
+          </EvaluationCard>
         ) : motion && target ? (
-          <section className="sheet" aria-label="Cómo va el movimiento">
-            <h3 className="sheet__title">Esta letra requiere movimiento</h3>
+          <EvaluationCard {...motionCard}>
             <MotionSteps phase={live?.phase ?? "pose"} progress={live?.phase === "result" && live.result?.issue === "ok" ? 1 : live?.progress ?? 0} base={base} target={target} />
             {live?.result ? <p className="sheet__hint tabular">{live.result.frames} cuadros · {(live.result.duration / 1000).toFixed(1)} s · {live.result.activeFrames} con desplazamiento</p> : null}
             <p className="sheet__hint">Evaluación experimental de pose y trayectoria; aún no hay un modelo temporal entrenado con señas completas.</p>
-          </section>
+          </EvaluationCard>
         ) : (
-          <section className="sheet sheet--empty" aria-label="Cómo practicar">
-            <h3 className="sheet__title">Cómo practicar</h3>
-            <ol className="howto">
-              <li>Mira la fotografía de la letra.</li>
-              <li>Hazla frente a la cámara con una sola mano.</li>
-              <li>Sigue la sugerencia; los dedos marcados son los que debes corregir.</li>
-              <li>Mantén la posición hasta que el medidor diga «¡Correcto!».</li>
-            </ol>
-          </section>
+          <EvaluationCard {...staticCard} />
         )}
-
-        <section className="sheet hands-panel" aria-labelledby="alfa-dedos">
-          <h3 id="alfa-dedos" className="sheet__title">Tus dedos en vivo</h3>
-          {mode === "free"
-            ? <p className="sheet__hint">En modo libre no se marcan dedos: no se sabe qué letra querías hacer.</p>
-            : <HandDiagram side="derecha" caption={motion && base ? `Comparada con la ${base} (posición inicial)` : `Comparada con la ${target}`} fingers={fingers} />}
-        </section>
       </div>
 
       {target === "K" && <p className="sheet__hint">En K se evalúa únicamente la pose; el giro que muestra la referencia no se califica.</p>}

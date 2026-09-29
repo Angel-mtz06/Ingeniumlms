@@ -1,5 +1,5 @@
 import model from "../data/alphabet_samples.json";
-import { alphabetFeatures } from "./alphabet";
+import { alphabetFeatures, SEP_HANDS } from "./alphabet";
 
 /**
  * Medidas geométricas de UNA mano, independientes de posición y escala (muñeca como origen,
@@ -98,6 +98,8 @@ function buildStats(): Record<string, LetterStats> {
     const s = shapeFromNormalized(Array.from({ length: 21 }, (_, j) => sample.slice(j * 3, j * 3 + 3)));
     if (s) shapes.push({ letter: model.letters[model.labels[i]], s });
   });
+  const sepShapes = SEP_HANDS.map(({letter, hand}) => ({letter, s: handShape(hand)}))
+    .filter((x): x is {letter: string; s: HandShape} => x.s !== null);
   const out: Record<string, LetterStats> = {};
   for (const letter of model.letters) {
     const mine = shapes.filter((x) => x.letter === letter).map((x) => x.s);
@@ -109,7 +111,13 @@ function buildStats(): Record<string, LetterStats> {
       if (def.pair && rows.length < mine.length * 0.6) continue;
       const values = rows.map((s) => s[def.key]).sort((a, b) => a - b);
       if (values.length < 20) continue;
-      stats[def.key] = { lo: quantile(values, LOW_Q), median: quantile(values, 0.5), hi: quantile(values, HIGH_Q), n: values.length };
+      // La foto oficial siempre es válida: el rango se amplía para incluirla (no se mueve la mediana).
+      const official = sepShapes.filter((x) => x.letter === letter).map((x) => x.s[def.key])
+        .filter((_, i) => !def.pair || def.pair.every((f) => sepShapes.filter((x) => x.letter === letter)[i].s[`flex${f}`] < EXTENDED_DEG + 15));
+      stats[def.key] = {
+        lo: Math.min(quantile(values, LOW_Q), ...official), median: quantile(values, 0.5),
+        hi: Math.max(quantile(values, HIGH_Q), ...official), n: values.length,
+      };
     }
     out[letter] = stats;
   }

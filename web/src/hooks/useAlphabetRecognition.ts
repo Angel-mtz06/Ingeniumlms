@@ -14,6 +14,18 @@ export type AlphabetMode = "sequential" | "specific" | "free";
 export type MotionPhase = "idle" | "capturing" | "result";
 
 const START_READY: Feedback = { correct: true, type: "ok", issue: "start_ready", message: "Posición correcta." };
+/**
+ * Qué mano es, con la misma convención que el servidor en Práctica (normalize.assign_slots):
+ * en la imagen sin espejo, a la izquierda de la cara = mano DERECHA del signante. Sin cara, el
+ * centro de la imagen. Es una aproximación: cruzar la mano al otro lado de la cara la invierte.
+ */
+export function handSide(f: FramePayload): "derecha" | "izquierda" | null {
+  const hand = f.hands.length === 1 ? f.hands[0] : null;
+  if (!hand) return null;
+  const cx = f.face?.[0]?.[0] ?? f.w / 2;
+  return hand[0][0] < cx ? "derecha" : "izquierda";
+}
+
 const EMPTY = { pose: null, static: null, ranking: [] as Prediction[], shares: [] as number[], letterDistance: [] as number[] };
 
 /**
@@ -27,6 +39,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
   const [ranking, setRanking] = useState<Prediction[]>([]);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [fingers, setFingers] = useState<number[]>([]);
+  const [side, setSide] = useState<"derecha" | "izquierda" | null>(null);
   const [targetShare, setTargetShare] = useState(0);
   const [stable, setStable] = useState<Prediction | null>(null);
   const [progress, setProgress] = useState(0);
@@ -51,7 +64,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
     hold.current.reset(); stabilizer.current.reset(); window.current.clear(); monitor.current.reset(); messages.current.reset();
     tracker.current = dynamic && mode !== "free" ? new LiveMotion(target!) : null;
     state.current.frames=[]; state.current.completed=false; state.current.lastFrame=0;
-    setDetected(null); setRanking([]); setFeedback(null); setFingers([]); setTargetShare(0); setStable(null);
+    setDetected(null); setRanking([]); setFeedback(null); setFingers([]); setSide(null); setTargetShare(0); setStable(null);
     setProgress(0); setComplete(false); setLive(null); setMotionResult(null);
     transition("idle", performance.now());
   }, [enabled,dynamic,target,mode,transition]);
@@ -90,6 +103,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
     const hand=f.hands.length===1 && alphabetFeatures(f.hands[0]) ? f.hands[0] : null;
     const prediction=hand ? predictAlphabet(hand) : EMPTY;
     setRanking(prediction.ranking);
+    setSide(handSide(f));
     const frame: MotionFrame={t,hand,pose:prediction.pose,out:hand ? outOfFrame(hand,f.w,f.h).out : false};
 
     if (tracker.current && target) {
@@ -124,13 +138,17 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
       setDetected(prediction.static);
       // Sin letra objetivo no se sabe qué quería hacer el usuario: solo retroalimentación de captura.
       setFeedback(capture ? messages.current.push(t, capture) : null);
-      setFingers([]);
       if (!hand) window.current.clear();
       else window.current.push(frame);
       if (hand && significantMotion(window.current.frames)) {
-        s.frames=[...window.current.frames]; stabilizer.current.reset(); setStable(null); setMotionResult(null);
+        s.frames=[...window.current.frames]; stabilizer.current.reset(); setStable(null); setMotionResult(null); setFingers([]);
         transition("capturing",now);
-      } else setStable(stabilizer.current.push(t,prediction.static,hand!==null));
+      } else {
+        const shown = stabilizer.current.push(t,prediction.static,hand!==null);
+        setStable(shown);
+        // Libre: sin objetivo, los dedos se comparan con la letra que la app YA reconoció (verde = coincide).
+        setFingers(hand && !capture && shown ? fingerStates(hand, shown[0]) : []);
+      }
       return;
     }
     if (s.completed || !target) return;
@@ -149,5 +167,5 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
     setProgress(p);
     if (p>=1) { s.completed=true; setComplete(true); }
   };
-  return {onFrame,detected,ranking,feedback,fingers,targetShare,stable,progress,complete,live,phase,motionResult,restart};
+  return {onFrame,detected,ranking,feedback,fingers,side,targetShare,stable,progress,complete,live,phase,motionResult,restart};
 }

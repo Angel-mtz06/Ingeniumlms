@@ -1471,6 +1471,47 @@
   color: var(--color-warn);
 }
 
+/* Referencia del alfabeto en el mismo marco que la referencia animada de Práctica */
+.alfa-ref__stage {
+  place-items: center;
+  padding: var(--space-3);
+}
+
+.alfa-ref__photo {
+  /* Proporción exacta del recorte: así no asoman las letras vecinas del cartel. */
+  block-size: 100%;
+  inline-size: auto;
+  max-inline-size: 100%;
+  aspect-ratio: 186 / 260;
+  border-radius: var(--radius-md);
+}
+
+/* Cámara apagada: mismo tamaño que la vista de video */
+.alfa-camera-off {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  aspect-ratio: 16 / 9;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+  text-align: center;
+}
+
+.alfa-camera-stop {
+  justify-self: end;
+}
+
+/* Tarjeta de evaluación (estilo ScoreCard): el fondo sigue el tono */
+.alfa-eval[data-tone] {
+  background: color-mix(in srgb, var(--tone) 12%, var(--color-surface));
+}
+
+.alfa-eval .score__guide-head .icon {
+  color: var(--tone);
+}
+
 /* Pasos de una letra con movimiento (seguimiento en vivo) */
 .alfa-steps {
   display: grid;
