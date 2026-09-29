@@ -85,10 +85,13 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
     def vocab():
         path = Path(vocab_csv or VOCAB_CSV)  # el catálogo del modelo activo
         if path.exists():
-            rows = csv.DictReader(open(path, encoding="utf-8"))
-            return [{"gloss": r["gloss"], "category": theme_of(r["gloss"], r["category"]),
-                     "has_reference": r["gloss"] in references}
-                    for r in rows if r["gloss"] != NONE_GLOSS]  # NINGUNA no es una seña del catálogo
+            rows = [r for r in csv.DictReader(open(path, encoding="utf-8")) if r["gloss"] != NONE_GLOSS]
+            listed = {r["gloss"] for r in rows}
+            out = [{"gloss": r["gloss"], "category": theme_of(r["gloss"], r["category"]),
+                    "has_reference": r["gloss"] in references} for r in rows]  # NINGUNA no es una seña del catálogo
+            # Referencias agregadas sin reentrenar (add_mendeley_reference.py, p. ej. MAMA): también se practican
+            return out + [{"gloss": g, "category": theme_of(g), "has_reference": True}
+                          for g in sorted(references) if g not in listed and g != NONE_GLOSS]
         return [{"gloss": g, "category": theme_of(g), "has_reference": True}
                 for g in sorted(references) if g != NONE_GLOSS]
 

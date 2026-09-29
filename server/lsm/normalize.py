@@ -33,6 +33,14 @@ class NormSequence:
             return NormSequence(hands=z["hands"], present=z["present"], **json.loads(str(z["meta"])))
 
 
+def mirror(norm: NormSequence) -> NormSequence:
+    """Espejo horizontal: x → -x y se intercambian las manos (slot 0 ↔ 1). No modifica `norm`."""
+    h = norm.hands.copy()
+    h[..., 0] *= -1
+    return NormSequence(hands=h[:, ::-1].copy(), present=norm.present[:, ::-1].copy(),
+                        sample_id=norm.sample_id, signer=norm.signer)
+
+
 def to_head_units(h: np.ndarray, cx: float, cy: float, s: float) -> np.ndarray:
     n = h.astype(np.float32).copy()
     n[:, 0] = (n[:, 0] - cx) / s

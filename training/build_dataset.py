@@ -7,7 +7,7 @@ from collections import Counter
 import numpy as np
 
 from lsm.anchor import AnchorError
-from lsm.normalize import normalize
+from lsm.normalize import NormSequence, mirror, normalize
 from lsm.paths import DATASETS, PROCESSED, RAW_LANDMARKS
 from lsm.schema import RawSequence
 from lsm.splits import split_of
@@ -20,11 +20,19 @@ TRAIN_DATASETS = ("glosses", "own")
 MENDELEY_GLOSSES = ("MAMA",)
 
 
+def prepare(n: NormSequence, dataset: str) -> NormSequence:
+    """Mendeley está en espejo respecto a la cámara en vivo: se refleja igual que en add_mendeley_reference.py."""
+    return mirror(n) if dataset == "mendeley" else n
+
+
 def main():
     anchors_path = PROCESSED / "mendeley_anchors.json"
     if "mendeley" in TRAIN_DATASETS and not anchors_path.exists():
         raise SystemExit("Falta mendeley_anchors.json: ejecuta training/mendeley_anchors.py")
     signer_anchors = json.load(open(anchors_path, encoding="utf-8"))["signers"] if anchors_path.exists() else {}
+    if MENDELEY_GLOSSES and not signer_anchors:
+        print(f"AVISO: falta {anchors_path.name}: {', '.join(MENDELEY_GLOSSES)} (Mendeley) no entrará al dataset. "
+              "Ejecuta training/mendeley_anchors.py.")
 
     norm_dir = PROCESSED / "norm"
     norm_dir.mkdir(parents=True, exist_ok=True)
@@ -53,7 +61,7 @@ def main():
                     continue
                 anchor = np.array(signer_anchors[r["signer"]], np.float32)
             try:
-                n = normalize(RawSequence.load(r["path"]), anchor=anchor)
+                n = prepare(normalize(RawSequence.load(r["path"]), anchor=anchor), r["dataset"])
             except AnchorError:
                 skipped["sin_cabeza"] += 1
                 continue

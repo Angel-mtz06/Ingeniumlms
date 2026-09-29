@@ -16,7 +16,7 @@ import numpy as np
 
 from lsm.anchor import AnchorError
 from lsm.evaluator.references import build_reference, load_references, save_references
-from lsm.normalize import NormSequence, normalize
+from lsm.normalize import mirror, normalize
 from lsm.paths import RAW_LANDMARKS
 from lsm.schema import RawSequence
 from lsm.vocab import lookup
@@ -61,11 +61,8 @@ def main():
         except AnchorError:
             print("omitida (sin cabeza):", r["sample_id"])
             continue
-        if not args.no_mirror:  # mismo espejo que lsm.augment: x → -x y se intercambian los slots
-            h = n.hands.copy()
-            h[..., 0] *= -1
-            n = NormSequence(hands=h[:, ::-1].copy(), present=n.present[:, ::-1].copy(),
-                             sample_id=n.sample_id, signer=n.signer)
+        if not args.no_mirror:  # mismo espejo que build_dataset.prepare: x → -x y se intercambian los slots
+            n = mirror(n)
         norms.append(n)
     if len(norms) < 3:
         raise SystemExit(f"Solo {len(norms)} muestras válidas de {args.gloss}: se necesitan al menos 3.")

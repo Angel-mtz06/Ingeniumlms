@@ -201,3 +201,14 @@ def test_setup_logging_writes_rotating_file(tmp_path):
     finally:
         logging.getLogger("lsm").removeHandler(h)
         h.close()
+
+
+def test_vocab_includes_reference_only_glosses(tmp_path):
+    # Una referencia agregada sin reentrenar (p. ej. MAMA desde Mendeley) debe poder elegirse en Práctica
+    v = tmp_path / "vocab.csv"
+    v.write_text("gloss,category,sources\nHOLA,saludos,x\n", encoding="utf-8")
+    app = create_app(FakeClassifier(), {"HOLA": ref(), "MAMA": ref(), "NINGUNA": ref()},
+                     SentenceBuilder(llm=None, provider="none"), own_dir=tmp_path / "own", vocab_csv=v)
+    got = {x["gloss"]: x for x in TestClient(app).get("/api/vocab").json()}
+    assert list(got) == ["HOLA", "MAMA"]
+    assert got["MAMA"] == {"gloss": "MAMA", "category": "Personas", "has_reference": True}

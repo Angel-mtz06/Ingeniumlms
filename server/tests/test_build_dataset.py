@@ -103,3 +103,13 @@ def test_build_references_out_path(tmp_path, monkeypatch):
     build_references.main(["--out", str(out)])
     assert set(load_references(out)) == {"HOLA"}
     assert not (tmp_path / "models" / "references.json").exists()  # la de v1 no se toca
+
+
+def test_mendeley_samples_are_mirrored():
+    # Las fotos de Mendeley están en espejo respecto a la cámara en vivo (igual que add_mendeley_reference.py)
+    h = np.zeros((2, 2, 21, 3), np.float32)
+    h[:, 0, :, 0] = 1.0
+    n = NormSequence(hands=h, present=np.array([[True, False]] * 2))
+    m = build_dataset.prepare(n, "mendeley")
+    assert m.present[:, 1].all() and np.allclose(m.hands[:, 1, :, 0], -1.0)
+    assert build_dataset.prepare(n, "glosses") is n

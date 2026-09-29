@@ -71,3 +71,15 @@ def test_assign_slots_two_hands_sorted_and_single_by_side():
     assert assign_slots([b, a], [None, None]) == [1, 0]
     assert assign_slots([make_hand(wrist=(0.5, 2))], [None, None]) == [1]
     assert assign_slots([make_hand(wrist=(0.2, 2))], [np.array([-0.1, 2, 0]), None]) == [0]
+
+
+def test_mirror_flips_x_and_swaps_slots():
+    from lsm.normalize import NormSequence, mirror
+    h = np.zeros((3, 2, 21, 3), np.float32)
+    h[:, 0, :, 0], h[:, 0, :, 1], h[:, 1, :, 0] = 1.5, 2.0, -4.0
+    p = np.array([[True, False]] * 3)
+    m = mirror(NormSequence(hands=h, present=p, sample_id="s", signer="x"))
+    assert m.present[:, 1].all() and not m.present[:, 0].any()  # la mano del slot 0 pasa al slot 1
+    assert np.allclose(m.hands[:, 1, :, 0], -1.5) and np.allclose(m.hands[:, 1, :, 1], 2.0)
+    assert np.allclose(m.hands[:, 0, :, 0], 4.0)
+    assert (m.sample_id, m.signer) == ("s", "x") and h[0, 0, 0, 0] == 1.5  # no modifica la original
