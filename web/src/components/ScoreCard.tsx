@@ -10,6 +10,11 @@ export interface ScoreCardProps {
   tips: string[];
   /** false: la toma no se pudo calificar (falta una mano o no hay referencia); se muestra el consejo. */
   evaluable?: boolean;
+  /**
+   * false: el total ya se ve en otro lugar (el medidor sobre la cámara en Práctica); la tarjeta
+   * queda como detalle por parámetro y el total solo se dice a lectores de pantalla.
+   */
+  showTotal?: boolean;
 }
 
 /**
@@ -17,7 +22,7 @@ export interface ScoreCardProps {
  * (Configuración, Ubicación, Movimiento, Orientación) con su número, y hasta dos correcciones.
  * Si la toma no es evaluable, en lugar de puntajes muestra los consejos como guía.
  */
-export function ScoreCard({ scores, total, tips, evaluable = true }: ScoreCardProps) {
+export function ScoreCard({ scores, total, tips, evaluable = true, showTotal = true }: ScoreCardProps) {
   const id = useId();
   const shownTips = tips.slice(0, 2);
 
@@ -47,19 +52,32 @@ export function ScoreCard({ scores, total, tips, evaluable = true }: ScoreCardPr
   const tone = scoreTone(t);
   return (
     <section className="score" aria-labelledby={id}>
-      <h3 id={id} className="visually-hidden">
-        Resultado
-      </h3>
-      <div className="score__total" data-tone={tone}>
-        <ToneIcon tone={tone} size={40} />
-        <p>
-          <span className="score__word">{TONE_WORD[tone]}</span>
-          <span className="score__number tabular">
-            {Math.round(t)}
-            <span className="score__of"> de 100</span>
-          </span>
-        </p>
-      </div>
+      {showTotal ? (
+        <>
+          <h3 id={id} className="visually-hidden">
+            Resultado
+          </h3>
+          <div className="score__total" data-tone={tone}>
+            <ToneIcon tone={tone} size={40} />
+            <p>
+              <span className="score__word">{TONE_WORD[tone]}</span>
+              <span className="score__number tabular">
+                {Math.round(t)}
+                <span className="score__of"> de 100</span>
+              </span>
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          <h3 id={id} className="score__title">
+            Detalle de tu toma
+          </h3>
+          <p className="visually-hidden">
+            Puntaje total: {Math.round(t)} de 100, {TONE_WORD[tone].toLowerCase()}.
+          </p>
+        </>
+      )}
 
       <dl className="score__bars">
         {SCORE_PARAMS.map(({ key, label }) => {

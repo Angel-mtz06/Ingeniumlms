@@ -1,11 +1,14 @@
 import { memo, useCallback, useEffect, useState } from "react";
 import { Catalog } from "../components/Catalog";
 import { HandDiagram } from "../components/HandDiagram";
-import { IconWarning } from "../components/icons";
+import { IconWarning, ToneIcon } from "../components/icons";
 import { ReferencePlayer } from "../components/ReferencePlayer";
 import { ScoreCard } from "../components/ScoreCard";
+import { ScoreGauge } from "../components/ScoreGauge";
+import { firstTip, gaugeView } from "../lib/gauge";
 import { glossLabel, percent } from "../lib/ui";
-import { CalibrationLostNotice, CameraStage, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
+import { LiveCamera } from "./LiveCamera";
+import { CalibrationLostNotice, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
 // Las 121 señas no deben re-renderizarse con cada mensaje `live` (~15 por segundo).
 const MemoCatalog = memo(Catalog);
@@ -13,8 +16,9 @@ const MemoCatalog = memo(Catalog);
 const WARNING_MS = 6000;
 
 /**
- * Práctica: se elige una seña del catálogo; al lado de la referencia animada va la cámara, abajo
- * la calificación de la última toma y el estado de cada dedo en vivo.
+ * Práctica: se elige una seña del catálogo; al lado de la referencia animada va la cámara con el
+ * puntaje de la última toma en una esquina y el primer consejo debajo (todo en la primera pantalla).
+ * Más abajo, el detalle por parámetro y el estado de cada dedo en vivo.
  */
 export function Practice() {
   const { session, vocab, vocabError, go } = useApp();
@@ -70,6 +74,8 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
   const top = result?.recognized[0];
   const signing = live?.segment === "active";
   const handsSeen = live?.hands.some(Boolean) ?? false;
+  const view = gaugeView(result, canScore);
+  const tip = firstTip(result);
 
   return (
     <div className="screen">
@@ -78,7 +84,7 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
           <h2 className="screen__title">
             Practica: <span translate="no">{label}</span>
           </h2>
-          <p className="screen__lead">Mira el ejemplo, haz la seña frente a la cámara y baja las manos al terminar para recibir tu calificación.</p>
+          <p className="screen__lead">Mira el ejemplo, haz la seña y baja las manos al terminar para ver tu puntaje.</p>
         </div>
         <button type="button" className="btn btn--secondary" onClick={onChange}>
           Elegir otra seña
@@ -94,10 +100,13 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
         </p>
       )}
 
+      {/* Primera pantalla: ejemplo y cámara lado a lado; el puntaje va sobre la cámara y el primer consejo justo debajo. */}
       <div className="practice-stage">
-        <ReferencePlayer gloss={target} />
+        <div className="practice-ref">
+          <ReferencePlayer gloss={target} />
+        </div>
         <div className="practice-camera">
-          <CameraStage>
+          <LiveCamera corner={<ScoreGauge view={view} />}>
             {shownWarning ? (
               <p className="overlay-pill overlay-pill--warn" role="alert">
                 <IconWarning />
@@ -109,32 +118,54 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
                 <span>Leyendo tu seña. Baja las manos al terminar.</span>
               </p>
             ) : null}
-          </CameraStage>
-          <p className="stage-caption">
-            {handsSeen ? "Te veo. Haz la seña cuando quieras." : "Coloca las manos dentro del cuadro para empezar."}
-          </p>
+          </LiveCamera>
+          <div className="practice-note" data-tone={view.kind === "score" ? view.tone : view.kind === "guide" ? "warn" : undefined}>
+            {result ? (
+              <>
+                <p className="practice-note__tip">
+                  {view.kind === "score" ? <ToneIcon tone={view.tone} /> : <IconWarning />}
+                  <span>
+                    {tip ? (
+                      <>
+                        <strong>{result.evaluable ? "Para mejorar: " : "Para calificarla: "}</strong>
+                        {tip}
+                      </>
+                    ) : !result.evaluable ? (
+                      "Vuelve a hacer la seña con las manos dentro del cuadro."
+                    ) : view.kind === "score" && view.tone === "ok" ? (
+                      "Sin correcciones. Puedes repetirla o elegir otra seña."
+                    ) : (
+                      "Vuelve a intentarlo mirando el ejemplo."
+                    )}
+                  </span>
+                </p>
+                {top ? (
+                  <p className="practice-note__meta">
+                    La app reconoció: <strong translate="no">{glossLabel(top[0])}</strong>{" "}
+                    <span className="tabular">({percent(top[1])})</span>
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="practice-note__meta">
+                {handsSeen ? "Te veo. Haz la seña cuando quieras." : "Coloca las manos dentro del cuadro para empezar."}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="practice-result">
         <div className="practice-score" aria-live="polite">
           {result ? (
-            <>
-              <ScoreCard scores={result.scores} total={result.total} tips={result.tips} evaluable={result.evaluable} />
-              {top ? (
-                <p className="recognized">
-                  La app reconoció: <strong translate="no">{glossLabel(top[0])}</strong>{" "}
-                  <span className="tabular">({percent(top[1])})</span>
-                </p>
-              ) : null}
-            </>
+            <ScoreCard scores={result.scores} total={result.total} tips={result.tips} evaluable={result.evaluable} showTotal={false} />
           ) : (
-            <section className="sheet sheet--empty" aria-label="Calificación">
-              <h3 className="sheet__title">Tu calificación aparecerá aquí</h3>
+            <section className="sheet sheet--empty" aria-label="Cómo practicar">
+              <h3 className="sheet__title">Cómo practicar</h3>
               <ol className="howto">
                 <li>Mira la referencia animada.</li>
                 <li>Haz la seña frente a la cámara.</li>
-                <li>Baja las manos para terminar la toma.</li>
+                <li>Baja las manos para terminar la toma. Tu puntaje aparece sobre la cámara.</li>
               </ol>
             </section>
           )}

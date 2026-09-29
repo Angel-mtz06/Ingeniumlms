@@ -3,7 +3,8 @@ import { GlossChips } from "../components/GlossChips";
 import { IconSpeaker, IconWarning } from "../components/icons";
 import { SentencePanel } from "../components/SentencePanel";
 import { lostMessage } from "../lib/translate";
-import { CameraStage, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
+import { LiveCamera } from "./LiveCamera";
+import { ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
 const VOICE_KEY = "lsm.voz";
 
@@ -129,7 +130,7 @@ export function Translate() {
       ) : null}
 
       <div className="translate-grid">
-        <CameraStage />
+        <LiveCamera />
         <section className="sheet" aria-labelledby="traduccion-senas">
           <h3 id="traduccion-senas" className="sheet__title" tabIndex={-1}>
             Señas reconocidas
