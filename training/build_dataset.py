@@ -16,6 +16,8 @@ from lsm.windows import NONE_GLOSS, windows
 
 MIN_HAND_RATIO = 0.3
 TRAIN_DATASETS = ("glosses", "own")
+# Mendeley no entra completo (fotos con caras pixeladas): solo estas glosas que ningún otro dataset trae.
+MENDELEY_GLOSSES = ("MAMA",)
 
 
 def main():
@@ -36,10 +38,10 @@ def main():
         for r in csv.DictReader(open(idx, encoding="utf-8")):
             if r["dataset"] == "glosses":
                 glosses_names.add(r["source_label"])
-            if r["dataset"] not in TRAIN_DATASETS:
+            gloss = lookup(r["dataset"], r["source_label"])
+            if r["dataset"] not in TRAIN_DATASETS and not (r["dataset"] == "mendeley" and gloss in MENDELEY_GLOSSES):
                 skipped["dataset_excluido"] += 1
                 continue
-            gloss = lookup(r["dataset"], r["source_label"])
             is_none = r["dataset"] == "own" and gloss == NONE_GLOSS
             if float(r["hand_ratio"]) < MIN_HAND_RATIO and not is_none:  # NINGUNA: se filtra por ventana
                 skipped["pocas_manos"] += 1

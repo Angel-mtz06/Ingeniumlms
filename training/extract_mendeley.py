@@ -52,6 +52,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None,
                          help="Procesar solo las primeras N muestras (tras ordenar); por defecto, todas.")
+    parser.add_argument("--words", type=int, nargs="+", default=None,
+                        help="Solo estos ids de palabra de Mendeley (p. ej. 58 = MAMA); por defecto, todas.")
     args = parser.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -60,7 +62,8 @@ def main():
         for n in z.namelist():
             parts = n.split("/")
             if n.lower().endswith(".jpg") and len(parts) >= 4:
-                groups[parts[-2]].append(n)
+                if args.words is None or int(parts[-2][2:]) in args.words:
+                    groups[parts[-2]].append(n)
     items = sorted(groups.items())
     if args.limit is not None:
         items = items[:args.limit]

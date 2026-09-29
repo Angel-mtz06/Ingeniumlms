@@ -6,7 +6,7 @@ import { ReferencePlayer } from "../components/ReferencePlayer";
 import { ScoreCard } from "../components/ScoreCard";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { firstTip, gaugeView } from "../lib/gauge";
-import { glossLabel, percent } from "../lib/ui";
+import { glossLabel } from "../lib/ui";
 import { LiveCamera } from "./LiveCamera";
 import { CalibrationLostNotice, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
@@ -124,7 +124,6 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
   }, [live]);
 
   const result = evaluation && evaluation.target === target ? evaluation : null;
-  const top = result?.recognized[0];
   const signing = live?.segment === "active";
   const handsSeen = live?.hands.some(Boolean) ?? false;
   const view = gaugeView(result, canScore);
@@ -191,12 +190,6 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
                     )}
                   </span>
                 </p>
-                {top ? (
-                  <p className="practice-note__meta">
-                    La app reconoció: <strong translate="no">{glossLabel(top[0])}</strong>{" "}
-                    <span className="tabular">({percent(top[1])})</span>
-                  </p>
-                ) : null}
               </>
             ) : (
               <p className="practice-note__meta">
