@@ -21,10 +21,12 @@
   --color-warn: #7a5b00;        /* entre Carbon yellow-60 y yellow-70 */
   --color-bad: #a2191f;         /* Carbon red-70 */
   --color-border: #7a8076;      /* >= 3:1 sobre bg, surface y surface-2 (WCAG 1.4.11) */
+  --color-purple: #6929c4;      /* Carbon purple-70: boton "Elegir otra seña" (accent-contrast encima: 7.5:1) */
 
   /* ---------- Tipografia (fuentes del sistema: la demo funciona sin internet) ---------- */
-  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, "Noto Sans", Arial, sans-serif;
-  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, "Noto Sans", Arial, sans-serif;
+  /* SF Pro primero (macOS/iOS), luego Segoe UI Variable (Windows): ambas son fuentes del sistema. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, "Helvetica Neue", Roboto, "Noto Sans", Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, "Helvetica Neue", Roboto, "Noto Sans", Arial, sans-serif;
 
   --text-xs: 0.875rem;   /* 14px: solo metadatos, nunca instrucciones */
   --text-sm: 1rem;       /* 16px: etiquetas, pestanas */
@@ -55,6 +57,27 @@
 
   /* ---------- Foco (Carbon: contorno solido del acento) ---------- */
   --focus-ring: 3px solid var(--color-accent);
+
+  /* ---------- Liquid Glass (capa visual de styles/glass.css) ---------- */
+  --radius-xl: 28px;     /* tarjetas de cristal (squircle) */
+  --radius-pill: 999px;  /* botones, pestañas, chips, insignias */
+  --glass-blur: blur(20px) saturate(180%);
+  --glass-blur-strong: blur(28px) saturate(200%);
+  /* Rellenos translúcidos derivados de la superficie: el texto conserva el contraste de DESIGN.md */
+  --glass-fill: color-mix(in srgb, var(--color-surface) 62%, transparent);
+  --glass-fill-strong: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  --glass-fill-subtle: color-mix(in srgb, var(--color-surface) 40%, transparent);
+  --glass-border: rgb(255 255 255 / 0.55);       /* reflejo de luz del borde */
+  --glass-edge: rgb(14 15 12 / 0.07);            /* contorno exterior para leer el borde sobre fondo claro */
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.70);
+  --glass-shadow: 0 1px 2px rgb(14 15 12 / 0.05), 0 8px 24px rgb(14 15 12 / 0.07), 0 24px 48px rgb(14 15 12 / 0.06);
+  --glass-shadow-float: 0 2px 6px rgb(14 15 12 / 0.08), 0 16px 40px rgb(14 15 12 / 0.16);
+  --bezel: #16181a;                               /* marco de la cámara: pantalla de dispositivo */
+  --bezel-edge: rgb(255 255 255 / 0.14);
+  --orb-1: rgb(120 169 255 / 0.55);               /* azul (acento) */
+  --orb-2: rgb(111 220 140 / 0.40);               /* verde salvia */
+  --orb-3: rgb(190 149 255 / 0.42);               /* lavanda */
+  --orb-4: rgb(255 196 140 / 0.35);               /* durazno */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -70,8 +93,24 @@
     --color-warn: #f1c21b;        /* Carbon yellow-30 */
     --color-bad: #ff8389;         /* Carbon red-40 */
     --color-border: #767d71;
+    --color-purple: #be95ff;      /* Carbon purple-40 (accent-contrast encima: 8.5:1) */
 
     --shadow-1: 0 0 0 1px rgb(238 241 234 / 0.06), 0 2px 6px rgb(0 0 0 / 0.30), 0 4px 8px rgb(0 0 0 / 0.30);
     --shadow-2: 0 0 0 1px rgb(238 241 234 / 0.08), 0 8px 16px rgb(0 0 0 / 0.40), 0 16px 32px rgb(0 0 0 / 0.45);
+
+    --glass-fill: color-mix(in srgb, var(--color-surface) 58%, transparent);
+    --glass-fill-strong: color-mix(in srgb, var(--color-surface) 78%, transparent);
+    --glass-fill-subtle: color-mix(in srgb, var(--color-surface) 36%, transparent);
+    --glass-border: rgb(255 255 255 / 0.10);
+    --glass-edge: rgb(0 0 0 / 0.35);
+    --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.08);
+    --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.30), 0 8px 24px rgb(0 0 0 / 0.30), 0 24px 48px rgb(0 0 0 / 0.25);
+    --glass-shadow-float: 0 2px 6px rgb(0 0 0 / 0.35), 0 16px 40px rgb(0 0 0 / 0.50);
+    --bezel: #050605;
+    --bezel-edge: rgb(255 255 255 / 0.10);
+    --orb-1: rgb(0 67 206 / 0.55);
+    --orb-2: rgb(14 120 60 / 0.42);
+    --orb-3: rgb(118 56 220 / 0.40);
+    --orb-4: rgb(180 90 40 / 0.26);
   }
 }

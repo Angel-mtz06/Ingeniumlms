@@ -39,9 +39,9 @@ export function Home() {
           <span className="entry__icon">
             <IconSpeaker size={32} />
           </span>
-          <span className="entry__title">Traducción</span>
+          <span className="entry__title">Interpretación</span>
           <span className="entry__text">Haz varias señas seguidas y la app forma la oración en español, lista para leerse en voz alta.</span>
-          <span className="entry__go">Ir a Traducción</span>
+          <span className="entry__go">Ir a Interpretación</span>
         </a>
       </div>
 

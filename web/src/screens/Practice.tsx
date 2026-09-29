@@ -1,7 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from "react";
 import { Catalog } from "../components/Catalog";
 import { HandDiagram } from "../components/HandDiagram";
-import { IconWarning, ToneIcon } from "../components/icons";
+import { IconEye, IconEyeOff, IconWarning, ToneIcon } from "../components/icons";
 import { ReferencePlayer } from "../components/ReferencePlayer";
 import { ScoreCard } from "../components/ScoreCard";
 import { ScoreGauge } from "../components/ScoreGauge";
@@ -14,13 +14,36 @@ import { CalibrationLostNotice, ServerNotice, useApp, useFrameSink, useSessionMo
 const MemoCatalog = memo(Catalog);
 
 const WARNING_MS = 6000;
+const SHOW_REF_KEY = "lsm.practice.showReference";
+
+/** Preferencia de mostrar el ejemplo, recordada en este navegador (si el almacenamiento falla, se muestra). */
+function useShowReference(): [boolean, () => void] {
+  const [show, setShow] = useState(() => {
+    try {
+      return window.localStorage.getItem(SHOW_REF_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const toggle = useCallback(() => {
+    setShow((v) => {
+      try {
+        window.localStorage.setItem(SHOW_REF_KEY, v ? "0" : "1");
+      } catch {
+        /* sin almacenamiento: solo dura esta sesión */
+      }
+      return !v;
+    });
+  }, []);
+  return [show, toggle];
+}
 
 /**
- * Práctica: se elige una seña del catálogo; al lado de la referencia animada va la cámara con el
- * puntaje de la última toma en una esquina y el primer consejo debajo (todo en la primera pantalla).
- * Más abajo, el detalle por parámetro y el estado de cada dedo en vivo.
+ * Práctica: se elige una seña del catálogo. La cámara es lo principal, con el puntaje de la última
+ * toma en una esquina y el primer consejo debajo; a su lado, los dedos en vivo y el ejemplo animado
+ * (compacto y plegable). Más abajo, el detalle por parámetro.
  *
- * Incluye la nueva opción "Practicar Alfabeto" que abre AlphabetPractice.
+ * Incluye la opción "Practicar Alfabeto" que abre AlphabetPractice.
  */
 export function Practice() {
   const { session, vocab, vocabError, go } = useApp();
@@ -106,17 +129,18 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
   const handsSeen = live?.hands.some(Boolean) ?? false;
   const view = gaugeView(result, canScore);
   const tip = firstTip(result);
+  const [showRef, toggleRef] = useShowReference();
 
   return (
     <div className="screen">
-      <header className="screen__head screen__head--row">
+      <header className="screen__head screen__head--row screen__head--compact">
         <div className="screen__head-text">
           <h2 className="screen__title">
             Practica: <span translate="no">{label}</span>
           </h2>
-          <p className="screen__lead">Mira el ejemplo, haz la seña y baja las manos al terminar para ver tu puntaje.</p>
+          <p className="screen__lead">Haz la seña frente a la cámara y baja las manos al terminar para ver tu puntaje.</p>
         </div>
-        <button type="button" className="btn btn--secondary" onClick={onChange}>
+        <button type="button" className="btn btn--change btn--small" onClick={onChange}>
           Elegir otra seña
         </button>
       </header>
@@ -130,11 +154,9 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
         </p>
       )}
 
-      {/* Primera pantalla: ejemplo y cámara lado a lado; el puntaje va sobre la cámara y el primer consejo justo debajo. */}
+      {/* Primera pantalla: la cámara (con el puntaje encima y el primer consejo debajo) y, a su lado,
+          los dedos en vivo y el ejemplo plegable. */}
       <div className="practice-stage">
-        <div className="practice-ref">
-          <ReferencePlayer gloss={target} />
-        </div>
         <div className="practice-camera">
           <LiveCamera corner={<ScoreGauge view={view} />}>
             {shownWarning ? (
@@ -183,6 +205,42 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
             )}
           </div>
         </div>
+
+        <div className="practice-side">
+          <section className="sheet practice-ref" aria-labelledby="practica-ejemplo" data-open={showRef}>
+            <div className="practice-ref__head">
+              <h3 id="practica-ejemplo" className="practice-ref__title">
+                Ejemplo
+              </h3>
+              <button
+                type="button"
+                className="eye-toggle"
+                onClick={toggleRef}
+                aria-expanded={showRef}
+                aria-controls="practica-ejemplo-cuerpo"
+                aria-label={showRef ? "Ocultar ejemplo" : "Mostrar ejemplo"}
+                title={showRef ? "Ocultar ejemplo" : "Mostrar ejemplo"}
+              >
+                {showRef ? <IconEye /> : <IconEyeOff />}
+              </button>
+            </div>
+            {/* Oculto se desmonta: la animación deja de dibujar y no gasta GPU junto a la cámara. */}
+            <div id="practica-ejemplo-cuerpo" hidden={!showRef}>
+              {showRef ? <ReferencePlayer gloss={target} /> : null}
+            </div>
+          </section>
+
+          <section className="sheet hands-panel" aria-labelledby="practica-dedos">
+            <h3 id="practica-dedos" className="sheet__title">
+              Tus dedos en vivo
+            </h3>
+            {/* El video va en espejo: la mano derecha (slot 0) se ve a la DERECHA de la pantalla, igual aquí. */}
+            <div className="hands-panel__pair">
+              <HandDiagram side="izquierda" fingers={live?.fingers[1] ?? []} />
+              <HandDiagram side="derecha" fingers={live?.fingers[0] ?? []} />
+            </div>
+          </section>
+        </div>
       </div>
 
       <div className="practice-result">
@@ -193,24 +251,13 @@ function PracticeSession({ target, hasReference, onChange }: { target: string; h
             <section className="sheet sheet--empty" aria-label="Cómo practicar">
               <h3 className="sheet__title">Cómo practicar</h3>
               <ol className="howto">
-                <li>Mira la referencia animada.</li>
+                <li>Mira el ejemplo animado (puedes ocultarlo cuando ya la sepas).</li>
                 <li>Haz la seña frente a la cámara.</li>
                 <li>Baja las manos para terminar la toma. Tu puntaje aparece sobre la cámara.</li>
               </ol>
             </section>
           )}
         </div>
-
-        <section className="sheet hands-panel" aria-labelledby="practica-dedos">
-          <h3 id="practica-dedos" className="sheet__title">
-            Tus dedos en vivo
-          </h3>
-          {/* El video va en espejo: la mano derecha (slot 0) se ve a la DERECHA de la pantalla, igual aquí. */}
-          <div className="hands-panel__pair">
-            <HandDiagram side="izquierda" fingers={live?.fingers[1] ?? []} />
-            <HandDiagram side="derecha" fingers={live?.fingers[0] ?? []} />
-          </div>
-        </section>
       </div>
     </div>
   );

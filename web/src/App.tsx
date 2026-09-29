@@ -18,7 +18,7 @@ import { Translate } from "./screens/Translate";
 const TABS: readonly { id: TabId; label: string; camera: boolean }[] = [
   { id: "inicio", label: "Inicio", camera: false },
   { id: "practica", label: "Práctica", camera: true },
-  { id: "traduccion", label: "Traducción", camera: true },
+  { id: "traduccion", label: "Interpretación", camera: true },
   { id: "calibracion", label: "Calibración", camera: true },
   { id: "grabar", label: "Grabar", camera: true },
   { id: "diagnostico", label: "Diagnóstico", camera: false },

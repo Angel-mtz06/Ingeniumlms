@@ -120,6 +120,23 @@ export const IconSearch = (p: IconProps) => (
 );
 
 /** Ícono de estado con forma distinta por tono (DESIGN.md §2 regla 2). */
+/** Ojo abierto (trazo fino, minimalista): mostrar. */
+export const IconEye = (p: IconProps) => (
+  <Icon strokeWidth={1.6} {...p}>
+    <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+    <circle cx="12" cy="12" r="2.75" />
+  </Icon>
+);
+
+/** Ojo tachado (trazo fino, minimalista): ocultar. */
+export const IconEyeOff = (p: IconProps) => (
+  <Icon strokeWidth={1.6} {...p}>
+    <path d="M9.9 5.8A9.9 9.9 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.2 7.4C3.9 9.1 2.5 12 2.5 12S6 18.5 12 18.5c1.9 0 3.5-.6 4.9-1.5" />
+    <path d="M10.1 10.1a2.75 2.75 0 0 0 3.8 3.8" />
+    <path d="m3.5 3.5 17 17" />
+  </Icon>
+);
+
 export function ToneIcon({ tone, ...p }: IconProps & { tone: Tone }) {
   if (tone === "ok") return <IconCheck {...p} />;
   if (tone === "warn") return <IconWarning {...p} />;
