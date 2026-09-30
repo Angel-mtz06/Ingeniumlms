@@ -1928,10 +1928,17 @@
 }
 
 /* ---------- Juegos ---------- */
+/* Menú de juegos: cuadrícula de 2×2 (una columna en pantallas angostas). */
 .game-menu {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-5);
+}
+
+@media (max-width: 720px) {
+  .game-menu {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .game-card {
