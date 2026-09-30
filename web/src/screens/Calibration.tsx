@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { IconCheck, IconError, IconWarning, ToneIcon } from "../components/icons";
+import { useBodyOverlay } from "../hooks/useBodyOverlay";
 import { calibrationOutcome } from "../lib/calibration";
 import type { FramePayload, ServerMsg } from "../lib/protocol";
 import { CalibrationLostNotice, CameraStage, GloveControls, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
@@ -233,7 +234,8 @@ export function Calibration() {
         </section>
 
         <div className="calib-side">
-          <CameraStage>{overlay}</CameraStage>
+          <CameraStage body>{overlay}</CameraStage>
+          <BodyDetection />
           <GloveControls compact />
         </div>
       </div>
@@ -265,5 +267,77 @@ function CalibrationResult({ sides, had }: { sides: { L: boolean; R: boolean }; 
         })}
       </ul>
     </div>
+  );
+}
+
+type Seen = { ready: boolean; hands: number; face: boolean; torso: boolean };
+
+/** Qué ve MediaPipe ahora (se consulta 4 veces por segundo; el estado solo cambia si cambia algo). */
+function useBodySeen(): Seen {
+  const { vision, camera } = useApp();
+  const [seen, setSeen] = useState<Seen>({ ready: false, hands: 0, face: false, torso: false });
+  const ready = camera.ready && !vision.loading && !vision.error;
+  useEffect(() => {
+    const read = () => {
+      const { face, pose } = vision.lastBody();
+      const vis = (i: number) => (pose?.[i]?.visibility ?? 0) > 0.5;
+      const next = { ready, hands: vision.lastHands().length, face: face !== null, torso: vis(11) && vis(12) };
+      setSeen((s) => (s.ready === next.ready && s.hands === next.hands && s.face === next.face && s.torso === next.torso ? s : next));
+    };
+    read();
+    const id = window.setInterval(read, 250);
+    return () => window.clearInterval(id);
+  }, [vision, ready]);
+  return seen;
+}
+
+/**
+ * Detección de cuerpo: la cámara de arriba dibuja la cara (magenta), el cuello, los hombros y el torso (verde
+ * azulado) y las manos (azul). Aquí va la leyenda con lo que se ve ahora y el interruptor para mostrar la cara y el
+ * torso también en Práctica, Alfabeto e Interpretación.
+ */
+function BodyDetection() {
+  const seen = useBodySeen();
+  const [show, setShow] = useBodyOverlay();
+  const rows = [
+    { key: "hands", swatch: "hands", label: "Manos", ok: seen.hands > 0,
+      text: seen.hands === 0 ? "no se ven" : seen.hands === 1 ? "1 detectada" : `${seen.hands} detectadas` },
+    { key: "face", swatch: "face", label: "Cara", ok: seen.face, text: seen.face ? "detectada" : "no se ve" },
+    { key: "torso", swatch: "torso", label: "Cuello y torso", ok: seen.torso, text: seen.torso ? "hombros detectados" : "no se ven los hombros" },
+  ] as const;
+  return (
+    <section className="sheet body-detect" aria-labelledby="calib-cuerpo">
+      <h3 id="calib-cuerpo" className="sheet__title">
+        Detección de cuerpo
+      </h3>
+      <p className="sheet__hint">La app ubica tu cara, cuello y torso para no confundirlos con tus manos y para saber a qué altura haces cada seña.</p>
+      {seen.ready ? (
+        <ul className="body-detect__list">
+          {rows.map((r) => (
+            <li key={r.key} className="body-detect__item" data-tone={r.ok ? "ok" : "warn"}>
+              <span className="body-detect__swatch" data-part={r.swatch} aria-hidden="true" />
+              <span className="body-detect__label">{r.label}</span>
+              <span className="body-detect__state">
+                <ToneIcon tone={r.ok ? "ok" : "warn"} size={18} />
+                {r.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="body-detect__wait">Esperando la cámara…</p>
+      )}
+      {seen.ready && !seen.torso ? (
+        <p className="sheet__hint">Aléjate un poco de la cámara para que se vean tus hombros.</p>
+      ) : null}
+      <button type="button" role="switch" aria-checked={show} className="switch switch--inline" onClick={() => setShow(!show)}>
+        <span className="switch__track" aria-hidden="true">
+          <span className="switch__thumb" />
+        </span>
+        <span className="switch__label">Mostrar cara y torso</span>
+        <span className="switch__state">{show ? "activado" : "desactivado"}</span>
+      </button>
+      <p className="sheet__hint">Se ve también en la cámara de Práctica, Alfabeto e Interpretación.</p>
+    </section>
   );
 }

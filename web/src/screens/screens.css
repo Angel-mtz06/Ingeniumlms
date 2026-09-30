@@ -1121,6 +1121,64 @@
   color: var(--color-text-muted);
 }
 
+/* Detección de cuerpo (Calibración): leyenda de la capa de la cámara con lo que se ve ahora. */
+.body-detect {
+  min-width: 0;
+}
+
+.body-detect .switch__label {
+  white-space: normal;
+}
+
+.body-detect__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.body-detect__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.body-detect__swatch {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--color-accent-contrast);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.body-detect__swatch[data-part="hands"] { background: var(--color-accent); }
+.body-detect__swatch[data-part="face"] { background: var(--color-face); }
+.body-detect__swatch[data-part="torso"] { background: var(--color-torso); }
+
+.body-detect__label {
+  font-weight: 600;
+}
+
+.body-detect__state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.body-detect__item[data-tone="ok"] .body-detect__state svg { color: var(--color-ok); }
+.body-detect__item[data-tone="warn"] .body-detect__state svg { color: var(--color-warn); }
+
+.body-detect__wait {
+  color: var(--color-text-muted);
+}
+
 .calib-result {
   display: grid;
   gap: var(--space-3);

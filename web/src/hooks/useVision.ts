@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FramePayload } from "../lib/protocol";
 import { FpsMeter, monotonic } from "../lib/ui";
-import { createVision, type Delegate, type Vision } from "../lib/vision";
+import { type BodyPoints, createVision, type Delegate, type Vision } from "../lib/vision";
 
 export type HandPoints = { x: number; y: number; z: number }[][];
+
+const NO_BODY: BodyPoints = { face: null, pose: null };
 
 export interface VisionHandle {
   loading: boolean;
@@ -13,6 +15,8 @@ export interface VisionHandle {
   delegate: Delegate | null;
   /** Últimas manos detectadas (normalizadas 0..1, sin espejo). Función estable: no provoca renders. */
   lastHands: () => HandPoints;
+  /** Última cara y pose detectadas (mismo objeto mientras no cambien). Función estable. */
+  lastBody: () => BodyPoints;
   /** Mediciones de rendimiento (una vez por segundo): qué limita los FPS, la cámara o MediaPipe. */
   stats: VisionStats | null;
 }
@@ -190,6 +194,7 @@ export function useVision(
   }, [ready, vision, videoRef, paused]);
 
   const lastHands = useCallback((): HandPoints => visionRef.current?.lastHands() ?? [], []);
+  const lastBody = useCallback((): BodyPoints => visionRef.current?.lastBody() ?? NO_BODY, []);
 
-  return { loading, error, fps, delegate, lastHands, stats };
+  return { loading, error, fps, delegate, lastHands, lastBody, stats };
 }
