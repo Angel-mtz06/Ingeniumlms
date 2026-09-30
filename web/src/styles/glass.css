@@ -1330,3 +1330,186 @@ h4,
     font-size: var(--text-xs);
   }
 }
+
+/* ---------- Teléfono: Práctica y Alfabeto con la cámara a pantalla completa ----------
+   (Versión anterior, ejemplo y manos arriba de la cámara: tag ui-mobile-v1.)
+   La cámara va de orilla a orilla y ocupa el alto de la pantalla; sobre ella flotan el ejemplo
+   (esquina superior derecha), el puntaje (superior izquierda) y los dedos en vivo como calcomanía,
+   sin tarjeta ni textos. Video y lienzo usan el mismo recorte (cover), así que los puntos siguen
+   alineados. */
+@media (max-width: 767px) {
+  /* Cabecera de Práctica con seña: título y "Elegir otra seña" en una fila, sin la guía. */
+  .screen__head--compact {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .screen__head--compact .screen__lead {
+    display: none;
+  }
+
+  .screen__head--compact .screen__title {
+    font-size: var(--text-md);
+  }
+
+  .screen__head--compact > .btn--change {
+    min-height: 32px;
+    padding: 2px var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  .practice-stage {
+    position: relative;
+    display: block;
+    margin-inline: calc(-1 * var(--space-4));
+  }
+
+  .practice-camera {
+    gap: var(--space-2);
+  }
+
+  .practice-camera > :not(.camera) {
+    margin-inline: var(--space-4);
+  }
+
+  .practice-stage .camera {
+    width: 100%;
+    height: calc(100dvh - 7rem);
+    min-height: 22rem;
+    aspect-ratio: auto;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .practice-stage .camera__media {
+    object-fit: cover;
+  }
+
+  .practice-stage .camera__fps {
+    display: none;
+  }
+
+  /* Puntaje arriba a la izquierda (la derecha es del ejemplo). */
+  .practice-stage .camera__corner {
+    inset-inline: var(--space-2) auto;
+    max-width: 55%;
+  }
+
+  /* Avisos arriba de la barra de navegación inferior. */
+  .practice-stage .camera__slot {
+    inset: auto var(--space-3) calc(5.75rem + env(safe-area-inset-bottom)) var(--space-3);
+  }
+
+  /* Capa de lo que flota sobre la cámara: no captura toques salvo en sus piezas. */
+  .practice-side {
+    position: absolute;
+    inset: 0 0 auto;
+    display: block;
+    height: calc(100dvh - 7rem);
+    min-height: 22rem;
+    pointer-events: none;
+  }
+
+  .practice-side > * {
+    pointer-events: auto;
+  }
+
+  /* Ejemplo: miniatura flotante (PiP) */
+  .practice-side .practice-ref {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    width: 40%;
+    max-width: 11rem;
+    padding: 4px;
+    border-radius: 16px;
+  }
+
+  .practice-ref .ref__stage,
+  .alfa-screen .practice-ref .ref__stage {
+    block-size: auto;
+    aspect-ratio: 3 / 4;
+    border-radius: 12px;
+  }
+
+  .practice-ref[data-open="true"] .practice-ref__head {
+    inset: 8px 8px auto;
+  }
+
+  .practice-ref[data-open="true"] .practice-ref__title {
+    padding: 0 var(--space-2);
+    font-size: 0.625rem;
+  }
+
+  .practice-ref .eye-toggle {
+    width: 26px;
+    height: 26px;
+  }
+
+  .practice-ref .eye-toggle .icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .alfa-tutorial-btn {
+    min-height: 24px;
+    padding: 0 var(--space-2);
+    font-size: 0.625rem;
+  }
+
+  /* Controles del reproductor de la referencia: más chicos dentro de la miniatura. */
+  .practice-ref .ref__bar {
+    transform: scale(0.8);
+    transform-origin: bottom center;
+  }
+
+  /* Oculto, el ejemplo queda como una pastilla con el ojo. */
+  .practice-side .practice-ref[data-open="false"] {
+    width: auto;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-pill);
+  }
+
+  /* Dedos en vivo: calcomanía sin tarjeta, al borde izquierdo, a media altura. */
+  .practice-side .hands-panel {
+    position: absolute;
+    left: var(--space-2);
+    top: 50%;
+    transform: translateY(-50%);
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    pointer-events: none;
+  }
+
+  .practice-side .hands-panel .sheet__title,
+  .practice-side .hand__caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .practice-side .hands-panel__pair {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .practice-side .hand__svg,
+  .alfa-screen .practice-side .hand__svg {
+    width: 52px;
+    max-width: 52px;
+    opacity: 0.85;
+    filter: var(--sticker-shadow);
+  }
+}
