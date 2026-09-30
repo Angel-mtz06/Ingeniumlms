@@ -50,3 +50,31 @@ def test_references_json_roundtrip(tmp_path):
     np.testing.assert_allclose(back.flex_mean[0], ref.flex_mean[0])
     assert np.isnan(back.flex_mean[1]).all() and back.dom == ref.dom
     assert "NaN" not in p.read_text(encoding="utf-8")
+
+
+def test_mirror_reference_scores_the_mirrored_sign_like_the_original():
+    import numpy as np
+    from lsm.evaluator.references import build_reference, mirror_reference
+    from lsm.evaluator.scoring import evaluate
+    from lsm.normalize import NormSequence, mirror
+    from tests.conftest import make_hand
+
+    def seq(x0, signer, flex=(0, 90, 90, 90, 90)):
+        T = 14
+        hands = np.zeros((T, 2, 21, 3), np.float32)
+        present = np.zeros((T, 2), bool)
+        for t in range(T):
+            h = make_hand(wrist=(x0 + 0.05 * t, 1.5), flex=flex)
+            h[:, 2] = np.linspace(0, 0.3, 21)  # algo de profundidad: la palma no queda plana
+            hands[t, 0] = h
+            present[t, 0] = True
+        return NormSequence(hands, present, f"{signer}_X", signer)
+
+    ref = build_reference("X", [seq(-0.8, "a"), seq(-0.7, "b"), seq(-0.9, "c")])
+    mref = mirror_reference(ref)
+    assert mref.slots_used.tolist() == [False, True] and mref.dom == 1
+    for s in (seq(-0.75, "d"), seq(-0.4, "e", flex=(0, 40, 90, 90, 90))):
+        a, b = evaluate(ref, s), evaluate(mref, mirror(s))
+        assert a.scores == b.scores and a.total == b.total
+    # sin reflejar la seña, la referencia en espejo no la acepta igual
+    assert evaluate(mref, seq(-0.75, "d")).total < evaluate(ref, seq(-0.75, "d")).total

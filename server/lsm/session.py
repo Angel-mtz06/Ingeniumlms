@@ -15,7 +15,7 @@ from lsm.classifier.infer import predict_tta
 from lsm.context import LOCK_P, MIN_P, START, ContextModel, rerank, token
 from lsm.context import context_weight as env_context_weight
 from lsm.evaluator.feedback import messages
-from lsm.evaluator.scoring import evaluate, finger_status
+from lsm.evaluator.scoring import align_one_hand, evaluate, finger_status, live_flex_for
 from lsm.features import finger_flexion
 from lsm.glove.calibration import Calibrator
 from lsm.glove.protocol import GloveReading, parse_line
@@ -293,7 +293,7 @@ class Session:
         ref = self.references.get(self.target) if self.mode == "practice" else None
         if ref is not None and self.idx % LIVE_EVERY == 0:
             flex = np.where(np.isnan(gf), cam, gf)
-            out.append({"type": "live", "fingers": finger_status(ref, flex).tolist(),
+            out.append({"type": "live", "fingers": finger_status(ref, live_flex_for(ref, flex, present)).tolist(),
                         "hands": present.tolist(), "segment": self.segmenter.state})
         self.no_hand = 0 if present.any() else self.no_hand + 1
         if not self.no_hand:
@@ -465,7 +465,7 @@ class Session:
             q = (b - a) // 4
             gflex = _nanmedian(np.stack(self.gflex[a + q:b - q + 1]))
             gcont = _nanmedian(np.stack(self.gcont[a + q:b - q + 1]))
-            ev = evaluate(ref, seq, gflex, gcont)
+            ev = evaluate(ref, *align_one_hand(ref, seq, gflex, gcont))
             self._last_issues = [(i.param, round(float(i.z), 1), {k: round(float(v), 2) for k, v in i.detail.items() if isinstance(v, (int, float))}) for i in ev.issues[:4]]
             return [{"type": "evaluation", "target": self.target, "recognized": recognized, "scores": ev.scores,
                      "total": ev.total, "tips": messages(ev, ref, body=self.normalizer.body),

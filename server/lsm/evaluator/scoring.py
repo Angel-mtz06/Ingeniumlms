@@ -68,6 +68,32 @@ def _angle(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.degrees(np.arccos(np.clip(np.dot(a, b), -1.0, 1.0))))
 
 
+def align_one_hand(ref: GlossRef, seq: NormSequence, glove_flex: np.ndarray | None = None,
+                   glove_contacts: np.ndarray | None = None):
+    """Seña de UNA mano: si la mano de la persona quedó en el otro lado (pasa con señas al centro de la cara, como
+    MAMÁ: el lado se decide por la posición), se intercambian los lados para evaluar esa mano. No se refleja nada:
+    la orientación de la palma sigue distinguiendo la mano correcta de la otra. Devuelve (seq, glove_flex,
+    glove_contacts), sin cambios si la seña usa las dos manos o la mano ya está en su lado."""
+    used = np.flatnonzero(np.asarray(ref.slots_used, bool))
+    if len(used) != 1:
+        return seq, glove_flex, glove_contacts
+    s = int(used[0])
+    frac = np.asarray(seq.present, bool).mean(axis=0)
+    if frac[s] >= 0.5 or frac[1 - s] < 0.5:
+        return seq, glove_flex, glove_contacts
+    swapped = NormSequence(seq.hands[:, ::-1].copy(), seq.present[:, ::-1].copy(), seq.sample_id, seq.signer)
+    flip = lambda a: None if a is None else np.asarray(a)[::-1].copy()  # noqa: E731
+    return swapped, flip(glove_flex), flip(glove_contacts)
+
+
+def live_flex_for(ref: GlossRef, flex: np.ndarray, present: np.ndarray) -> np.ndarray:
+    """Lo mismo para los dedos en vivo: la flexión de la mano que sí se ve, en el lado de la referencia."""
+    used = np.flatnonzero(np.asarray(ref.slots_used, bool))
+    if len(used) == 1 and not present[used[0]] and present[1 - used[0]]:
+        return np.asarray(flex)[::-1].copy()
+    return flex
+
+
 def evaluate(ref: GlossRef, seq: NormSequence, glove_flex: np.ndarray | None = None,
              glove_contacts: np.ndarray | None = None) -> Evaluation:
     st = sample_stats(seq)
