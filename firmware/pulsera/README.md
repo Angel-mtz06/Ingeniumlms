@@ -11,13 +11,16 @@ Lee 6 MPU-6050 (dorso + 5 dedales) por un multiplexor TCA9548A y envía las lect
    - `LADO`: `'R'` para la pulsera derecha y `'L'` para la izquierda (se carga una vez con cada valor).
    - `MODO_WIFI`: `WIFI_ESTACION` (se conecta a la zona con cobertura de la laptop) o `WIFI_PUNTO_ACCESO`.
    - Pines `PIN_SDA` / `PIN_SCL` y canales del TCA9548A en `CANAL_IMU` (orden: dorso, pulgar, índice, medio,
-     anular, meñique). **Pendiente: actualizar con los pines del armado real.**
+     anular, meñique). Ya están los del guante derecho: SDA 8, SCL 9, I²C a 100 kHz; dorso SD2, meñique SD3,
+     anular SD4, medio SD5, índice SD6, pulgar SD7.
 
 ## Compilar y cargar
 
-- Placa: **ESP32 Dev Module** (`esp32:esp32:esp32`), núcleo ESP32 de Arduino 3.x.
-- Librería: **WebSockets** de Markus Sattler (links2004), desde el gestor de librerías.
-- Arduino IDE o `arduino-cli compile --fqbn esp32:esp32:esp32 firmware/pulsera`.
+- Placa: **ESP32C3 Dev Module** (`esp32:esp32:esp32c3`, el ESP32-C3 Super Mini), núcleo ESP32 de Arduino 3.x.
+  - En Herramientas: **USB CDC On Boot: Enabled**; si no, el monitor serie y la app no reciben nada por USB.
+- Librería: **WebSockets** de Markus Sattler (links2004), desde el gestor de librerías. No hace falta
+  MPU6050_light: este código lee las MPU directamente.
+- Arduino IDE o `arduino-cli compile --fqbn esp32:esp32:esp32c3 firmware/pulsera`.
 
 ## Montaje de las MPU-6050
 

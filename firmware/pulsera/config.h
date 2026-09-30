@@ -19,15 +19,17 @@
 #define NOMBRE_IZQ "pulsera-izq"
 
 // ---------- I²C y multiplexor ----------
-#define PIN_SDA 21          // ESP32 DevKit: SDA = GPIO21
-#define PIN_SCL 22          // ESP32 DevKit: SCL = GPIO22
-#define I2C_HZ 400000
+// Guante derecho: ESP32-C3 Super Mini (pines confirmados con el código de prueba del equipo).
+#define PIN_SDA 8           // ESP32-C3 Super Mini: SDA = GPIO8
+#define PIN_SCL 9           // ESP32-C3 Super Mini: SCL = GPIO9
+#define I2C_HZ 100000       // 100 kHz: estable con los cables largos hasta los dedales
 #define DIR_TCA9548A 0x70   // A0–A2 a GND
 #define DIR_MPU6050 0x68    // AD0 a GND en todas las MPU (el multiplexor las separa)
 
 // Canal del TCA9548A de cada IMU, en el orden del protocolo:
 // 0 = dorso (pulsera), 1 = pulgar, 2 = índice, 3 = medio, 4 = anular, 5 = meñique
-static const uint8_t CANAL_IMU[6] = {0, 1, 2, 3, 4, 5};
+// Armado del guante derecho: dorso SD2, meñique SD3, anular SD4, medio SD5, índice SD6, pulgar SD7.
+static const uint8_t CANAL_IMU[6] = {2, 7, 6, 5, 4, 3};
 
 // ---------- Envío ----------
 #define PERIODO_MS 20       // 50 lecturas por segundo
