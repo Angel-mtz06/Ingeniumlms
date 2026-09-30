@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ServerMsg } from "./protocol";
-import { lostMessage, newEvents, pausingFraction, pausingText, serverIndex, TRANSLATE_INITIAL, translateReducer, type TranslateState, validateKey, validation, validCorrected } from "./translate";
+import { bestCandidate, lostMessage, newEvents, pausingFraction, pausingText, serverIndex, TRANSLATE_INITIAL, translateReducer, type TranslateState, validateKey, validation, validCorrected } from "./translate";
 
 const sign = (index: number, gloss: string, confident = true): ServerMsg => ({
   type: "sign",
@@ -260,3 +260,14 @@ describe("deletreo", () => {
     expect(s.chips[0].spelled).toBe(true);
   });
 });
+
+describe("bestCandidate", () => {
+  it("elige la de mayor % aunque la sugerida (por contexto) sea otra", () => {
+    expect(bestCandidate({ gloss: "NO", top3: [["NO", 0.3], ["HOLA", 0.5], ["SI", 0.2]] })).toBe("HOLA");
+    expect(bestCandidate({ gloss: "SI", top3: [["SI", 0.8], ["NO", 0.1]] })).toBe("SI");
+  });
+  it("sin candidatas se queda la glosa mostrada", () => {
+    expect(bestCandidate({ gloss: "MARIO", top3: [] })).toBe("MARIO");
+  });
+});
+

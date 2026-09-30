@@ -197,6 +197,13 @@ export interface Validation {
   ready: boolean;
 }
 
+/** La candidata con mayor probabilidad (la que se elige sola si nadie elige); sin top3, la glosa mostrada. */
+export function bestCandidate(chip: Pick<ChipItem, "gloss" | "top3">): string {
+  let best: [string, number] | null = null;
+  for (const [g, p] of chip.top3) if (best === null || p > best[1]) best = [g, p];
+  return best ? best[0] : chip.gloss;
+}
+
 /** Resumen de "Validar cada seña". */
 export function validation(chips: readonly ChipItem[]): Validation {
   const live = chips.filter((c) => !c.removed);
