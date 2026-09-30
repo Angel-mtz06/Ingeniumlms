@@ -143,9 +143,11 @@ function SimonFrame<T>({ simon, assist, title, lead, onBack, label, showCard, as
 }) {
   const { phase, expected } = simon;
   const playing = phase === "play";
+  // La asistencia solo enseña la nueva de la ronda (la última): el chiste es recordar las anteriores.
+  const isNew = expected !== null && simon.pos === simon.seq.length - 1;
   const help = (
     <p className="sheet__hint game-help">
-      💡 <strong>Pista:</strong> te muestro un momento lo que toca ({PEEKS} por partida). 🧑‍🏫 <strong>Asistencia:</strong> siempre a la vista qué toca y cómo se hace, con más tiempo. Con ayuda no se guarda récord.
+      💡 <strong>Pista:</strong> te muestro un momento lo que toca ({PEEKS} por partida). 🧑‍🏫 <strong>Asistencia:</strong> te enseña cómo se hace la nueva de cada ronda, con más tiempo; las anteriores van de memoria. Con ayuda no se guarda récord.
     </p>
   );
   return (
@@ -176,9 +178,7 @@ function SimonFrame<T>({ simon, assist, title, lead, onBack, label, showCard, as
             <Note note={phase === "good" ? { tone: "ok", text: `¡Bien! Viene una más.` } : phase === "fail" ? { tone: "warn", text: `${simon.reason}. Mira otra vez la secuencia.` }
               : phase === "show" ? { text: "Memoriza la secuencia…" } : { text: playNote }} />
             <div className="sheet__actions">
-              {!assist.on ? (
-                <button type="button" className="btn btn--secondary" onClick={simon.peek} disabled={!playing || simon.peeking || !simon.peeksLeft}>💡 Pista ({simon.peeksLeft})</button>
-              ) : null}
+              <button type="button" className="btn btn--secondary" onClick={simon.peek} disabled={!playing || simon.peeking || !simon.peeksLeft}>💡 Pista ({simon.peeksLeft})</button>
               <button type="button" className="btn btn--quiet" onClick={() => simon.fail("Te rendiste")} disabled={!playing}>Ver otra vez (−1 vida)</button>
             </div>
           </>
@@ -197,12 +197,14 @@ function SimonFrame<T>({ simon, assist, title, lead, onBack, label, showCard, as
                 </p>
                 <Dots simon={simon} label={label} />
               </section>
-              {expected !== null && assist.on ? assistFor(expected)
-                : expected !== null && simon.peeking ? (
-                  <section className="sheet game-hint simon-show" aria-live="polite">
-                    <p className="game-target__label">💡 Pista · toca</p>
-                    <div className="simon-show__card">{showCard(expected)}</div>
-                  </section>
+              {expected !== null && simon.peeking ? (
+                <section className="sheet game-hint simon-show" aria-live="polite">
+                  <p className="game-target__label">💡 Pista · toca</p>
+                  <div className="simon-show__card">{showCard(expected)}</div>
+                </section>
+              ) : expected !== null && assist.on && isNew ? assistFor(expected)
+                : expected !== null && assist.on ? (
+                  <p className="sheet__hint game-help">🧠 Esta va de memoria. La asistencia te enseña solo la nueva, que es la última de la secuencia (si no te acuerdas, usa una 💡 pista).</p>
                 ) : playing ? help : null}
             </>
           )}
