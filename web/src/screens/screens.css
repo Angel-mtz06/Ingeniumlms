@@ -252,8 +252,13 @@
 /* ---------- Inicio: dos entradas grandes ---------- */
 .entries {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   gap: var(--space-5);
+}
+
+.entry__icon--emoji {
+  font-size: 2rem;
+  line-height: 1;
 }
 
 .entry {
@@ -1922,3 +1927,270 @@
   font: 800 11px/1 var(--font-sans);
 }
 
+/* ---------- Juegos ---------- */
+.game-menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--space-5);
+}
+
+.game-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+}
+
+.game-card__icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.game-card__actions,
+.game-levels,
+.game-head__right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.game-card__list {
+  display: grid;
+  gap: var(--space-1);
+  padding-left: 1.1rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.game-levels {
+  margin-bottom: var(--space-3);
+}
+
+.game-score {
+  font: 700 var(--text-lg)/1 var(--font-display);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.game-target {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.game-target__label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Letras de la palabra: hechas (verde), saltadas (tachadas), actual (resaltada), pendientes. */
+.game-word {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-1);
+  font: 800 var(--text-xl)/1 var(--font-display);
+}
+
+.game-word--big {
+  font-size: var(--text-3xl);
+}
+
+.game-word__letter {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.6em;
+  height: 1.8em;
+  padding: 0 0.15em;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+
+.game-word__letter[data-state="done"] {
+  background: color-mix(in srgb, var(--color-ok) 22%, var(--color-surface));
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 2px var(--color-ok);
+}
+
+.game-word__letter[data-state="skip"] {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  box-shadow: inset 0 0 0 2px var(--color-warn);
+}
+
+.game-word__letter[data-state="now"] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  box-shadow: none;
+  transform: translateY(-3px);
+}
+
+.game-word__gap {
+  width: 0.8em;
+}
+
+.game-phrase {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  font: 800 var(--text-2xl)/1.2 var(--font-display);
+}
+
+.game-phrase__word {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.game-phrase__word[data-state="done"] {
+  background: color-mix(in srgb, var(--color-ok) 22%, var(--color-surface));
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 2px var(--color-ok);
+}
+
+.game-phrase__word[data-state="now"] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  box-shadow: none;
+}
+
+.game-now strong {
+  font: 800 var(--text-xl)/1 var(--font-display);
+}
+
+.game-done {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.game-done__title {
+  font: 800 var(--text-2xl)/1.2 var(--font-display);
+}
+
+/* Carrera: un carril por corredor; el carro avanza con el porcentaje del texto deletreado. */
+.race {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.race-track {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.race-lane {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr) 3.5rem;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.race-lane[data-you] {
+  font-weight: 700;
+}
+
+.race-lane__name small {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.race-lane__road {
+  position: relative;
+  height: 2.6rem;
+  border-radius: var(--radius-md);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 18px, color-mix(in srgb, var(--color-text-muted) 35%, transparent) 18px 30px) center / 100% 2px no-repeat,
+    var(--color-surface-2);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.race-lane[data-you] .race-lane__road {
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+
+.race-car {
+  position: absolute;
+  top: 50%;
+  font-size: 1.7rem;
+  line-height: 1;
+  /* El emoji mira a la izquierda: se voltea para que avance hacia la meta. */
+  transform: translate(-50%, -50%) scaleX(-1);
+  transition: left 300ms linear;
+}
+
+.race-lane__goal {
+  position: absolute;
+  top: 50%;
+  right: 0.3rem;
+  transform: translateY(-50%);
+  font-size: 1.2rem;
+}
+
+.race-lane__pct {
+  text-align: right;
+}
+
+.race-count {
+  font: 800 5rem/1 var(--font-display);
+  color: var(--color-accent);
+}
+
+.race-results {
+  display: grid;
+  gap: var(--space-1);
+  min-width: min(20rem, 100%);
+  padding: 0;
+  list-style: none;
+  counter-reset: pos;
+}
+
+.race-results li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  counter-increment: pos;
+}
+
+.race-results li::before {
+  content: counter(pos) ".º";
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.race-results li span:first-child {
+  flex: 1;
+}
+
+.race-results li[data-you] {
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .race-lane {
+    grid-template-columns: 5.5rem minmax(0, 1fr) 2.8rem;
+    gap: var(--space-2);
+  }
+  .race-lane__name small {
+    display: none;
+  }
+  .game-word--big {
+    font-size: var(--text-2xl);
+  }
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import type { CameraStatus } from "./components/StatusBar";
 import { useCamera } from "./hooks/useCamera";
 import { useGloves } from "./hooks/useGloves";
@@ -19,15 +19,27 @@ const TABS: readonly { id: TabId; label: string; camera: boolean }[] = [
   { id: "inicio", label: "Inicio", camera: false },
   { id: "practica", label: "Práctica", camera: true },
   { id: "traduccion", label: "Interpretación", camera: true },
+  { id: "juegos", label: "Juegos", camera: true },
   { id: "calibracion", label: "Calibración", camera: true },
   { id: "grabar", label: "Grabar", camera: true },
   { id: "diagnostico", label: "Diagnóstico", camera: false },
 ];
 
+// Juegos usa el reconocedor del alfabeto (datos grandes): se carga al abrir la pestaña.
+const GamesScreen = lazy(() => import("./screens/Games"));
+function Games() {
+  return (
+    <Suspense fallback={<p className="screen" role="status">Cargando juegos…</p>}>
+      <GamesScreen />
+    </Suspense>
+  );
+}
+
 const SCREENS: Record<TabId, () => JSX.Element> = {
   inicio: Home,
   practica: Practice,
   traduccion: Translate,
+  juegos: Games,
   calibracion: Calibration,
   grabar: RecordScreen,
   diagnostico: Diagnostics,

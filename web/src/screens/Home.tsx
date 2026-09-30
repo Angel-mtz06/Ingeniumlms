@@ -4,14 +4,14 @@ import { StatusBar } from "../components/StatusBar";
 import { GloveControls, HealthNotice, useApp } from "./shared";
 
 /**
- * Inicio: las dos entradas principales (Práctica y Traducción), el estado del sistema
+ * Inicio: las entradas principales (Práctica, Interpretación y Juegos), el estado del sistema
  * y la conexión opcional de los guantes.
  */
 export function Home() {
   const { gloves, session, vision, cameraStatus, go } = useApp();
   const anyGlove = gloves.sides.L.connected || gloves.sides.R.connected;
   // Enlaces reales (Ctrl/clic medio abren otra pestaña); el clic normal cambia de pestaña y mueve el foco.
-  const link = (tab: "practica" | "traduccion" | "calibracion") => (e: MouseEvent<HTMLAnchorElement>) => {
+  const link = (tab: "practica" | "traduccion" | "juegos" | "calibracion") => (e: MouseEvent<HTMLAnchorElement>) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault();
     go(tab);
@@ -42,6 +42,12 @@ export function Home() {
           <span className="entry__title">Interpretación</span>
           <span className="entry__text">Haz varias señas seguidas y la app forma la oración en español, lista para leerse en voz alta.</span>
           <span className="entry__go">Ir a Interpretación</span>
+        </a>
+        <a href="#juegos" className="entry" onClick={link("juegos")}>
+          <span className="entry__icon entry__icon--emoji" aria-hidden="true">🎮</span>
+          <span className="entry__title">Juegos</span>
+          <span className="entry__text">Completa palabras con letras o con señas, o gana una carrera deletreando.</span>
+          <span className="entry__go">Ir a Juegos</span>
         </a>
       </div>
 
