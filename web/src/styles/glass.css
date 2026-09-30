@@ -73,7 +73,9 @@ body::before {
   animation: orb-drift-a 38s ease-in-out infinite alternate;
 }
 
+/* Orbe inferior izquierdo: desactivado (se dejó solo el destello superior derecho). */
 body::after {
+  display: none;
   inset: auto auto -25vmax -15vmax;
   width: 65vmax;
   height: 65vmax;
@@ -1633,5 +1635,256 @@ h4,
   /* En Práctica del teléfono, arriba de la barra de navegación inferior. */
   .practice-stage .camera__gauge {
     inset-block-end: calc(5.75rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---------- Inicio: "¿Para qué sirve?", tarjetas inclinadas y "A quién buscamos ayudar" ----------
+   Las tarjetas se inclinan en patrón alterno (como fichas sobre una mesa) y se enderezan al pasar el
+   cursor o enfocarlas. Entran escalonadas al abrir Inicio. Sin animación si se pide movimiento reducido. */
+.home-about {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 46rem;
+  padding-block: var(--space-2) var(--space-4);
+}
+
+.home-about__eyebrow {
+  justify-self: start;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.home-about__title {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  line-height: 1.1;
+}
+
+.home-about__text {
+  font-size: var(--text-lg);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.home-section-title {
+  margin-top: var(--space-4);
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+}
+
+/* Inclinación alterna de las tarjetas de entrada */
+.entries {
+  padding-block: var(--space-2);
+}
+
+.entries .entry {
+  --tilt: 0deg;
+  --lift: 0px;
+  transform: translateY(var(--lift)) rotate(var(--tilt));
+  animation: card-in 600ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+.entries .entry:nth-child(3n + 1) { --tilt: -1.6deg; }
+.entries .entry:nth-child(3n + 2) { --tilt: 1.2deg; --lift: 10px; animation-delay: 80ms; }
+.entries .entry:nth-child(3n + 3) { --tilt: -0.8deg; animation-delay: 160ms; }
+
+.entries .entry:hover,
+.entries .entry:focus-visible {
+  transform: translateY(-6px) rotate(0deg) scale(1.02);
+}
+
+.entries .entry:active {
+  transform: translateY(-2px) rotate(0deg) scale(0.99);
+}
+
+/* A quién buscamos ayudar */
+.home-help {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.home-help__lead {
+  max-width: 44rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+}
+
+.home-help__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-5);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) 0;
+  list-style: none;
+}
+
+.home-help__card {
+  --tilt: 0deg;
+  --lift: 0px;
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  background: var(--glass-sheen), var(--glass-fill);
+  box-shadow: var(--glass-rim), var(--glass-highlight), var(--glass-caustic), 0 0 0 1px var(--glass-edge), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur-card);
+  backdrop-filter: var(--glass-blur-card);
+  transform: translateY(var(--lift)) rotate(var(--tilt));
+  transition: transform 300ms cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 300ms ease-out;
+  animation: card-in 600ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+.home-help__card:nth-child(3n + 1) { --tilt: 1.4deg; --lift: 6px; animation-delay: 120ms; }
+.home-help__card:nth-child(3n + 2) { --tilt: -1.2deg; animation-delay: 200ms; }
+.home-help__card:nth-child(3n + 3) { --tilt: 1deg; --lift: 12px; animation-delay: 280ms; }
+
+.home-help__card:hover {
+  transform: translateY(-4px) rotate(0deg);
+  box-shadow: var(--glass-rim), var(--glass-highlight), var(--glass-caustic), 0 0 0 1px var(--glass-edge), var(--glass-shadow-float);
+}
+
+.home-help__card .entry__icon {
+  width: 60px;
+  height: 60px;
+  margin-bottom: var(--space-1);
+  border-radius: 17px;
+}
+
+.home-help__title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+}
+
+.home-help__text {
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--lift) + 24px)) rotate(calc(var(--tilt) * 3));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(var(--lift)) rotate(var(--tilt));
+  }
+}
+
+@media (max-width: 767px) {
+  .home-about__title {
+    font-size: var(--text-2xl);
+  }
+
+  .home-about__text {
+    font-size: var(--text-md);
+  }
+
+  /* En una columna, inclinaciones más suaves para que no se vea desordenado. */
+  .entries .entry:nth-child(3n + 1),
+  .home-help__card:nth-child(3n + 2) { --tilt: -0.8deg; --lift: 0px; }
+  .entries .entry:nth-child(3n + 2),
+  .home-help__card:nth-child(3n + 1) { --tilt: 0.8deg; --lift: 0px; }
+  .entries .entry:nth-child(3n + 3),
+  .home-help__card:nth-child(3n + 3) { --tilt: -0.5deg; --lift: 0px; }
+
+  .home-help__cards {
+    gap: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entries .entry,
+  .home-help__card {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ---------- Menú en Liquid Glass ----------
+   La cápsula de pestañas (y la barra inferior del teléfono) usa el mismo vidrio que las tarjetas:
+   brillo diagonal, canto iluminado, resplandor interior y sombra. La pestaña activa es una gota de
+   acento con reflejo arriba. Radios sin cambio. */
+.app-header .tabs,
+.bottom-nav {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-sheen), var(--glass-fill);
+  box-shadow: var(--glass-rim), var(--glass-highlight), var(--glass-caustic), 0 0 0 1px var(--glass-edge), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur-card);
+  backdrop-filter: var(--glass-blur-card);
+}
+
+.app-header .tab:hover:not([aria-selected="true"]) {
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+}
+
+.app-header .tab[aria-selected="true"],
+.bottom-nav__item[aria-current="page"],
+.bottom-nav__item[data-active],
+.bottom-nav__item[aria-expanded="true"] {
+  /* Verde translúcido (no sólido): deja ver el vidrio de atrás, con reflejo arriba y canto del acento. */
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 55%, transparent), transparent 60%),
+    color-mix(in srgb, var(--color-accent) 24%, transparent);
+  color: var(--color-text);
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-surface) 70%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 38%, transparent),
+    0 4px 14px -6px color-mix(in srgb, var(--color-accent) 45%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(160%);
+  backdrop-filter: blur(8px) saturate(160%);
+}
+
+/* ---------- Encabezado sin línea de corte: el vidrio se difumina hacia abajo ----------
+   El vidrio (color + desenfoque) vive en ::before, que baja 3 rem más que el encabezado y se desvanece con
+   una máscara: arriba es vidrio pleno y abajo se funde con la página, sin filete ni sombra. */
+.app-header {
+  isolation: isolate;
+  background: none;
+  border-bottom: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.app-header::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -3rem;
+  z-index: -1;
+  pointer-events: none;
+  /* Del color del fondo de la página (menta en claro, negro en oscuro): se funde sin tono gris. */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 78%, transparent) 0%, color-mix(in srgb, var(--color-bg) 45%, transparent) 60%, transparent 100%);
+  -webkit-backdrop-filter: var(--glass-blur-strong);
+  backdrop-filter: var(--glass-blur-strong);
+  -webkit-mask-image: linear-gradient(180deg, var(--color-text) 0%, var(--color-text) 55%, transparent 100%);
+  mask-image: linear-gradient(180deg, var(--color-text) 0%, var(--color-text) 55%, transparent 100%);
+}
+
+/* "SingLink: sirve para…": una sola frase grande, con el nombre en el color de acento. */
+.home-about__text {
+  font-size: var(--text-xl);
+  line-height: 1.45;
+  color: var(--color-text);
+}
+
+.home-about__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+@media (max-width: 767px) {
+  .home-about__text {
+    font-size: var(--text-lg);
   }
 }

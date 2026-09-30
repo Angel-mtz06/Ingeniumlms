@@ -213,3 +213,29 @@ export const IconSimon = (p: IconProps) => (
     <circle cx="12" cy="12" r="2.5" />
   </Icon>
 );
+
+/** Dos personas: familias y comunidad (Inicio, "A quién buscamos ayudar"). */
+export const IconPeople = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+    <path d="M16 4.8a3.5 3.5 0 0 1 0 6.4" />
+    <path d="M18.5 14.2A6.5 6.5 0 0 1 21.5 20" />
+  </Icon>
+);
+
+/** Libro abierto: escuelas y maestros. */
+export const IconBook = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 6.5C10 5 7 4.5 3 5v13.5c4-.5 7 0 9 1.5 2-1.5 5-2 9-1.5V5c-4-.5-7 0-9 1.5Z" />
+    <path d="M12 6.5V20" />
+  </Icon>
+);
+
+/** Corazón con pulso: salud y emergencias. */
+export const IconHeartPulse = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M20.5 8.5c0 5.5-8.5 11-8.5 11S3.5 14 3.5 8.5A4.5 4.5 0 0 1 12 6.4a4.5 4.5 0 0 1 8.5 2.1Z" />
+    <path d="M6.5 12H9l1.5-2.5 2 5 1.5-2.5h3" />
+  </Icon>
+);

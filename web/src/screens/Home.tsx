@@ -1,11 +1,11 @@
 import type { MouseEvent } from "react";
-import { IconCamera, IconGamepad, IconSpeaker } from "../components/icons";
+import { IconBook, IconCamera, IconGamepad, IconHeartPulse, IconPeople, IconSpeaker } from "../components/icons";
 import { StatusBar } from "../components/StatusBar";
 import { GloveControls, HealthNotice, useApp } from "./shared";
 
 /**
- * Inicio: las entradas principales (Práctica, Interpretación y Juegos), el estado del sistema
- * y la conexión opcional de los guantes.
+ * Inicio: para qué sirve SingLink, las entradas principales (Práctica, Interpretación y Juegos),
+ * a quién buscamos ayudar, el estado del sistema y la conexión de los guantes.
  */
 export function Home() {
   const { gloves, session, vision, cameraStatus, go } = useApp();
@@ -19,13 +19,17 @@ export function Home() {
 
   return (
     <div className="screen">
-      <header className="screen__head">
-        <h2 className="screen__title">¿Qué quieres hacer?</h2>
-        <p className="screen__lead">Solo necesitas tu cámara.</p>
-      </header>
+      <section className="home-about" aria-label="Qué es SingLink">
+        <p className="home-about__text">
+          <strong className="home-about__name" translate="no">SingLink:</strong> sirve para aprender Lengua de Señas
+          Mexicana y comunicarte con ella. La cámara lee tus manos, te dice qué corregir y convierte tus señas en texto
+          y voz.
+        </p>
+      </section>
 
       <HealthNotice />
 
+      <h2 className="home-section-title">¿Qué quieres hacer?</h2>
       <div className="entries">
         <a href="#practica" className="entry" onClick={link("practica")}>
           <span className="entry__icon">
@@ -52,6 +56,28 @@ export function Home() {
           <span className="entry__go">Ir a Juegos</span>
         </a>
       </div>
+
+      <section className="home-help" aria-labelledby="inicio-ayudar">
+        <h2 id="inicio-ayudar" className="home-section-title">A quién buscamos ayudar</h2>
+        <p className="home-help__lead">Que más personas oyentes aprendan LSM y que la comunidad sorda se comunique sin barreras.</p>
+        <ul className="home-help__cards">
+          <li className="home-help__card">
+            <span className="entry__icon" aria-hidden="true"><IconPeople size={36} strokeWidth={1.75} /></span>
+            <h3 className="home-help__title">Familias</h3>
+            <p className="home-help__text">Para que en casa todos puedan hablar en señas.</p>
+          </li>
+          <li className="home-help__card">
+            <span className="entry__icon" aria-hidden="true"><IconBook size={36} strokeWidth={1.75} /></span>
+            <h3 className="home-help__title">Escuelas</h3>
+            <p className="home-help__text">Para enseñar y practicar LSM en clase.</p>
+          </li>
+          <li className="home-help__card">
+            <span className="entry__icon" aria-hidden="true"><IconHeartPulse size={36} strokeWidth={1.75} /></span>
+            <h3 className="home-help__title">Salud y emergencias</h3>
+            <p className="home-help__text">Para pedir ayuda y entenderse cuando más importa.</p>
+          </li>
+        </ul>
+      </section>
 
       <div className="home-panels">
         <section className="sheet" aria-labelledby="inicio-estado">

@@ -117,9 +117,9 @@
     --color-bg: #000000;          /* Void Black */
     --color-surface: #181818;     /* Ground Iron */
     --color-surface-2: #212525;   /* Carbon Veil */
-    --color-text: #ddffdc;        /* Phosphor White */
+    --color-text: #ffffff;        /* blanco puro (antes Phosphor White #ddffdc, se veía verdoso) */
     --color-text-muted: #8cab87;  /* Sage 60 */
-    --color-heading: #ddffdc;
+    --color-heading: #ffffff;
     --color-accent: #7fee64;      /* Lime Pulse: el LED, racionado */
     --color-accent-contrast: #181818;
     --color-link: #aed2a4;        /* Moss 80 */
