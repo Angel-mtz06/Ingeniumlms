@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { freeGauge, motionGauge, staticGauge } from "./alphabetView";
+import { freeGauge, motionGauge, staticGauge, spellStatus } from "./alphabetView";
 import type { Feedback } from "./alphabetFeedback";
 
 const fb = (x: Partial<Feedback>): Feedback => ({ correct: false, type: "finger", issue: "should_extend", message: "Extiende el dedo índice.", ...x });
@@ -25,5 +25,19 @@ describe("corner gauge for the alphabet (same component as Práctica)", () => {
     const g = freeGauge(["M", 0.87], null);
     expect(g.kind === "score" && [g.word, g.value]).toEqual(["M", 87]);
     expect(freeGauge(null, null).kind).toBe("idle");
+  });
+});
+
+describe("deletreo en Interpretación: una sola línea de estado", () => {
+  const none = { feedback: null, phase: "idle" as const, motionResult: null, freeReady: "", stable: null };
+  it("prioridad: captura → movimiento en curso → resultado → pose lista → letra", () => {
+    const capture = { correct: false, type: "capture" as const, issue: "too_small" as const, message: "Acércate a la cámara." };
+    expect(spellStatus({ ...none, feedback: capture, phase: "capturing" }).text).toBe("Acércate a la cámara.");
+    expect(spellStatus({ ...none, phase: "capturing", freeReady: "J" }).text).toBe("Siguiendo el movimiento…");
+    expect(spellStatus({ ...none, motionResult: { prediction: ["J", .9], reason: "" } }).text).toBe("Letra J (con movimiento).");
+    expect(spellStatus({ ...none, motionResult: { prediction: null, reason: "Z: demasiado rápido" } }).tone).toBe("warn");
+    expect(spellStatus({ ...none, freeReady: "ÑQ", stable: ["N", .9] }).text).toBe("Pose de Ñ / Q lista: haz el movimiento.");
+    expect(spellStatus({ ...none, stable: ["A", .9] }).text).toBe("Letra A.");
+    expect(spellStatus(none).text).toMatch(/Coloca tu mano/);
   });
 });

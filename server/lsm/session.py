@@ -177,6 +177,16 @@ class Session:
             except (KeyError, ValueError, TypeError):
                 return [{"type": "error", "message": f"mensaje inválido: {t}"}]
             return [{"type": "pending", "glosses": [p["gloss"] for p in self.pending]}]
+        if t == "add_gloss":
+            # Palabra deletreada con el alfabeto en el navegador (p. ej. "M-A-R-I-O"): entra a las señas
+            # pendientes como una seña confirmada más, en el orden en que se hizo.
+            gloss = msg.get("gloss")
+            if not isinstance(gloss, str) or not canonical(gloss).strip("-_"):
+                return [{"type": "error", "message": "mensaje inválido: add_gloss"}]
+            g = canonical(gloss)
+            item = {"gloss": g, "top3": [(g, 1.0)], "confident": True}
+            self.pending.append(item)
+            return [{"type": "sign", "index": len(self.pending) - 1, **item}]
         if t == "build_sentence":
             return await self._sentence() if self.pending else [{"type": "pending", "glosses": []}]
         if t == "reset":

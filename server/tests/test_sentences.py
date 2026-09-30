@@ -7,6 +7,9 @@ def test_template_moves_time_first_and_conjugates_yo():
     assert template_sentence(["YO", "ESCUELA", "IR", "MAÑANA"]) == "Mañana voy a ir a escuela."
     assert template_sentence(["YO", "DOCTOR", "NECESITAR"]) == "Necesito doctor."
     assert template_sentence(["HOLA"]) == "Hola."
+    # Deletreo con el alfabeto: la palabra, no las letras.
+    assert template_sentence(["HOLA", "A-N-A"]) == "Hola Ana."
+    assert template_sentence(["PEÑA"]) == "Peña."
 
 
 def test_llm_used_and_context_passed():

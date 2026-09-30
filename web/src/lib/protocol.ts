@@ -19,6 +19,8 @@ export type ClientMsg =
   | { type: "calibrate"; step: "open" | "fist" | "done" }
   | { type: "confirm_gloss"; index: number; gloss: string }
   | { type: "remove_gloss"; index: number }
+  /** Palabra deletreada con el alfabeto (letras separadas por guiones, p. ej. "M-A-R-I-O"). */
+  | { type: "add_gloss"; gloss: string }
   | { type: "build_sentence" }
   | { type: "reset" };
 

@@ -674,6 +674,45 @@
   gap: var(--space-3);
 }
 
+/* Deletreo: el alfabeto dentro de Interpretación. */
+.translate-side {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.translate-spell__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.translate-spell[data-on] {
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+
+.translate-spell__word {
+  min-height: 2.5rem;
+}
+
+.translate-spell__empty {
+  color: var(--color-text-muted);
+}
+
+.translate-spell__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.translate-spell__status[data-tone] {
+  color: var(--color-text);
+}
+
 .voice-row {
   display: flex;
   flex-wrap: wrap;

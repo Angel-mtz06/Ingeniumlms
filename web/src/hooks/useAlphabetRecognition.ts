@@ -34,6 +34,22 @@ const EMPTY = { pose: null, static: null, ranking: [] as Prediction[], shares: [
  *  - Letra con movimiento con objetivo: seguimiento EN VIVO (LiveMotion), sin cuenta regresiva.
  *  - Libre: letra estable + top 3; las cinco letras con movimiento se siguen en vivo a la vez (FreeMotion).
  */
+/**
+ * Letras reconocidas en Libre, en orden (como ir escribiendo). La misma letra se repite solo si antes
+ * se perdió la mano o se reconoció otra. Una letra con movimiento reemplaza a la pose con la que
+ * empezó (I→J, N→Ñ, D→Z): esa pose no era otra letra. Lo usan Alfabeto (Libre) e Interpretación.
+ */
+export function useLetterSequence(stable: string | null, max = 60) {
+  const [letters, setLetters] = useState<string[]>([]);
+  useEffect(() => {
+    if (!stable) return;
+    const start = motionBaseLetter(stable);
+    setLetters((prev) => start && start !== stable && prev.at(-1) === start
+      ? [...prev.slice(0, -1), stable] : [...prev, stable].slice(-max));
+  }, [stable, max]);
+  return [letters, setLetters] as const;
+}
+
 export function useAlphabetRecognition(target: string | null, mode: AlphabetMode, enabled: boolean) {
   const [detected, setDetected] = useState<Prediction | null>(null);
   const [ranking, setRanking] = useState<Prediction[]>([]);

@@ -87,6 +87,18 @@ def test_confirm_and_remove_gloss():
     assert out[-1] == {"type": "pending", "glosses": ["ADIOS"]}
 
 
+def test_add_spelled_gloss():
+    s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
+    s.pending = [{"gloss": "YO", "top3": [], "confident": True}]
+    out = asyncio.run(run(s, [{"type": "add_gloss", "gloss": "m-a-r-i-o"}]))
+    assert out == [{"type": "sign", "index": 1, "gloss": "M-A-R-I-O", "top3": [("M-A-R-I-O", 1.0)], "confident": True}]
+    out = asyncio.run(run(s, [{"type": "build_sentence"}]))
+    assert out[-1]["glosses"] == ["YO", "M-A-R-I-O"] and out[-1]["text"] == "Yo Mario."
+    for bad in [{"type": "add_gloss"}, {"type": "add_gloss", "gloss": "  "}, {"type": "add_gloss", "gloss": 3}]:
+        out = asyncio.run(run(s, [bad]))
+        assert len(out) == 1 and out[0]["type"] == "error"
+
+
 def test_no_hand_warning_once():
     s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
     out = asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}] + [frame(None)] * 130))

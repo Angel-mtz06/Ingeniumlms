@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { LETTERS, MOTION_LETTERS } from "../lib/alphabet";
-import { useAlphabetRecognition, type AlphabetMode } from "../hooks/useAlphabetRecognition";
+import { useAlphabetRecognition, useLetterSequence, type AlphabetMode } from "../hooks/useAlphabetRecognition";
 import { HandDiagram } from "../components/HandDiagram";
 import { IconEye, IconEyeOff, IconWarning, ToneIcon } from "../components/icons";
 import { ScoreGauge } from "../components/ScoreGauge";
@@ -151,17 +151,8 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
     if (complete && target) setDoneLetters((prev) => prev.has(target) ? prev : new Set(prev).add(target));
   }, [complete]);
 
-  // Libre: cada vez que se reconoce una letra nueva se agrega a la lista (como ir escribiendo). La
-  // misma letra se repite solo si antes se perdió la mano o se reconoció otra. Una letra con
-  // movimiento reemplaza a la pose con la que empezó (I→J, N→Ñ, D→Z): esa pose no era otra letra.
-  const stableLetter = mode === "free" ? recognition.stable?.[0] ?? null : null;
-  const [freeLetters, setFreeLetters] = useState<string[]>([]);
-  useEffect(() => {
-    if (!stableLetter) return;
-    const start = motionBaseLetter(stableLetter);
-    setFreeLetters((prev) => start && start !== stableLetter && prev.at(-1) === start
-      ? [...prev.slice(0, -1), stableLetter] : [...prev, stableLetter].slice(-60));
-  }, [stableLetter]);
+  // Libre: cada letra nueva se agrega a la lista, como ir escribiendo (useLetterSequence).
+  const [freeLetters, setFreeLetters] = useLetterSequence(mode === "free" ? recognition.stable?.[0] ?? null : null);
 
   const correct = complete || (!motion && !!feedback?.correct);
   const prevLetter = () => setLetterIdx((i) => Math.max(0, i - 1));

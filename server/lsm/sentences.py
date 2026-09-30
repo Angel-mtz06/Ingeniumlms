@@ -13,6 +13,7 @@ Reglas de la LSM a considerar:
 - El orden es tema-comentario; no hay artículos ni conjugación: tú los agregas.
 - Los pronombres se señalan (YO, TÚ, ÉL…); si no hay sujeto explícito, infiérelo del contexto.
 - Las preguntas (DÓNDE, CÓMO, CUÁNTO, QUÉ) pueden ir al final.
+- Una glosa de letras separadas por guiones (M-A-R-I-O) es una palabra deletreada con el alfabeto, casi siempre un nombre propio: escríbela como palabra (Mario).
 Responde SOLO con una oración en español natural y correcto, con puntuación.
 No agregues información que no esté en las glosas o en el contexto. Mantén coherencia de género y número con el contexto."""
 
@@ -25,6 +26,15 @@ Llm = Callable[[str, str], Awaitable[str]]
 log = logging.getLogger(__name__)
 
 
+def spelled_word(gloss: str) -> str | None:
+    """"M-A-R-I-O" (deletreo con el alfabeto) → "Mario"; None si la glosa no es un deletreo."""
+    parts = gloss.split("-")
+    if len(parts) < 2 or not all(len(p) == 1 and p.isalpha() for p in parts):
+        return None
+    word = "".join(parts)
+    return word[:1] + word[1:].lower()
+
+
 def template_sentence(glosses: list[str]) -> str:
     time = [TIME[g] for g in glosses if g in TIME]
     rest = [g for g in glosses if g not in TIME]
@@ -32,7 +42,7 @@ def template_sentence(glosses: list[str]) -> str:
     rest = [g for g in rest if g != "YO"] if has_yo else rest
     verbs = [g for g in rest if has_yo and g in YO_VERBS]
     others = [g for g in rest if g not in verbs]
-    words = [YO_VERBS[v] for v in verbs] + [o.lower().replace("_", " ") for o in others]
+    words = [YO_VERBS[v] for v in verbs] + [spelled_word(o) or o.lower().replace("_", " ") for o in others]
     if has_yo and not verbs:
         words = ["yo"] + words
     body = " ".join(words)
