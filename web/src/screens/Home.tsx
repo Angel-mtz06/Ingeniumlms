@@ -45,33 +45,35 @@ export function Home() {
         </a>
       </div>
 
-      <section className="sheet" aria-labelledby="inicio-estado">
-        <h3 id="inicio-estado" className="sheet__title">
-          Estado del sistema
-        </h3>
-        <StatusBar
-          camera={cameraStatus}
-          gloves={{ L: gloves.sides.L, R: gloves.sides.R, supported: gloves.supported }}
-          connected={session.connected}
-          fps={vision.fps}
-          paused
-        />
-      </section>
+      <div className="home-panels">
+        <section className="sheet" aria-labelledby="inicio-estado">
+          <h3 id="inicio-estado" className="sheet__title">
+            Estado del sistema
+          </h3>
+          <StatusBar
+            camera={cameraStatus}
+            gloves={{ L: gloves.sides.L, R: gloves.sides.R, supported: gloves.supported }}
+            connected={session.connected}
+            fps={vision.fps}
+            paused
+          />
+        </section>
 
-      <section className="sheet" aria-labelledby="inicio-guantes">
-        <h3 id="inicio-guantes" className="sheet__title">
-          Guantes <span className="sheet__aside">(opcional)</span>
-        </h3>
-        <GloveControls />
-        {anyGlove ? (
-          <p className="sheet__next">
-            Antes de practicar, calibra los guantes para que la app conozca tu mano abierta y tu puño.{" "}
-            <a href="#calibracion" className="btn btn--quiet btn--inline" onClick={link("calibracion")}>
-              Ir a Calibración
-            </a>
-          </p>
-        ) : null}
-      </section>
+        <section className="sheet" aria-labelledby="inicio-guantes">
+          <h3 id="inicio-guantes" className="sheet__title">
+            Guantes <span className="sheet__aside">(opcional)</span>
+          </h3>
+          <GloveControls />
+          {anyGlove ? (
+            <p className="sheet__next">
+              Antes de practicar, calibra los guantes para que la app conozca tu mano abierta y tu puño.{" "}
+              <a href="#calibracion" className="btn btn--quiet btn--inline" onClick={link("calibracion")}>
+                Ir a Calibración
+              </a>
+            </p>
+          ) : null}
+        </section>
+      </div>
     </div>
   );
 }

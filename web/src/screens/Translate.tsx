@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { GlossChips } from "../components/GlossChips";
-import { IconSpeaker, IconWarning, ToneIcon } from "../components/icons";
+import { IconSpeaker, IconWarning } from "../components/icons";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { SentencePanel } from "../components/SentencePanel";
 import { TopicPicker } from "../components/TopicPicker";
 import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
-import { useFrameRecorder } from "../hooks/useFrameRecorder";
-import { freeGauge, spellStatus } from "../lib/alphabetView";
+import { freeGauge } from "../lib/alphabetView";
 import { SpellingTracker, type SpellEvent } from "../lib/spelling";
 import { lostMessage, type Pausing, pausingFraction, pausingText, serverIndex, validation } from "../lib/translate";
 import { LiveCamera } from "./LiveCamera";
@@ -82,12 +81,6 @@ function SpellIndicator({ word }: { word: string }) {
   );
 }
 
-/** Texto del estado de "Validar cada seña" (vacío si no hay nada pendiente). */
-function validateStatus(unvalidated: number): string {
-  if (unvalidated <= 0) return "";
-  return unvalidated === 1 ? "Valida las palabras para formar la oración (falta 1)." : `Valida las palabras para formar la oración (faltan ${unvalidated}).`;
-}
-
 /**
  * Interpretación: cámara, señas reconocidas (validables o corregibles) y la oración en español. Al llegar una
  * oración nueva se lee en voz alta si el interruptor "Voz" está activo.
@@ -142,9 +135,7 @@ export function Translate() {
   holdRef.current = holding;
   // Letras: siempre activas, junto con las palabras del servidor (salvo mientras se elige una seña).
   const alpha = useAlphabetRecognition(null, "free", true);
-  const recorder = useFrameRecorder(10000);
   useFrameSink((f) => {
-    recorder.push(f);
     if (correcting.current || holdRef.current) return;
     session.send(f);
     alpha.onFrame(f);
@@ -179,7 +170,6 @@ export function Translate() {
   };
   const word = letters.join("");
   const showLetter = spelling || alpha.stable !== null || alpha.phase !== "idle";
-  const status = showLetter ? spellStatus({ ...alpha, freeReady: spelling ? alpha.freeReady : "" }) : null;
 
   // Solo se leen las oraciones que llegan con la pantalla abierta (no la que ya estaba al entrar).
   const spoken = useRef(translate.sentence);
@@ -230,7 +220,8 @@ export function Translate() {
   const remove = (index: number) => {
     const at = serverIndex(translate.chips, index);
     if (at < 0) return;
-    translateDispatch({ kind: "remove", index, ghost: validate });
+    // "Ninguna" la quita de la lista: la siguiente lectura ocupa su lugar (misma posición y número).
+    translateDispatch({ kind: "remove", index });
     session.send({ type: "remove_gloss", index: at });
   };
 
@@ -243,61 +234,73 @@ export function Translate() {
 
   const s = translate.sentence;
   const hasContent = translate.chips.length > 0 || s !== null || letters.length > 0;
-  const hasSigns = v.live > 0;
 
   return (
-    <div className="screen">
-      <header className="screen__head">
-        <h2 className="screen__title">Interpretación en vivo</h2>
-        <p className="screen__lead">Haz las señas una tras otra. Cuando bajas las manos unos segundos, la app forma la oración en español.</p>
-      </header>
-
-      <ServerNotice />
-      {/* Región viva siempre montada (vacía al montar) y rellenada después: así sí se anuncia. */}
-      <p className="visually-hidden" role="status">
-        {lostAnnounce}
-      </p>
-      <p className="visually-hidden" role="status">
-        {pauseAnnounce}
-      </p>
-      {translate.lost > 0 ? (
-        <div className="notice notice--warn notice--action">
-          <IconWarning />
-          <span className="notice__text">{lostMessage(translate.lost)}</span>
-          <button type="button" className="btn btn--quiet" onClick={() => translateDispatch({ kind: "dismissLost" })}>
-            Entendido
-          </button>
-        </div>
-      ) : null}
-
+    <div className="screen translate-screen">
       <div className="translate-grid">
-        <LiveCamera corner={showLetter ? <ScoreGauge view={freeGauge(alpha.stable, alpha.feedback)} /> : undefined}>
-          {spelling ? (
-            <SpellIndicator word={word} />
-          ) : holding ? (
-            <HoldIndicator n={v.unvalidated} />
-          ) : translate.pausing ? (
-            <PauseIndicator pausing={translate.pausing} />
+        <div className="translate-main">
+          <header className="screen__head">
+            <h2 className="screen__title">Interpretación en vivo</h2>
+            <p className="screen__lead">Haz las señas una tras otra. Cuando bajas las manos unos segundos, la app forma la oración en español.</p>
+          </header>
+
+          <ServerNotice />
+          {/* Región viva siempre montada (vacía al montar) y rellenada después: así sí se anuncia. */}
+          <p className="visually-hidden" role="status">
+            {lostAnnounce}
+          </p>
+          <p className="visually-hidden" role="status">
+            {pauseAnnounce}
+          </p>
+          {translate.lost > 0 ? (
+            <div className="notice notice--warn notice--action">
+              <IconWarning />
+              <span className="notice__text">{lostMessage(translate.lost)}</span>
+              <button type="button" className="btn btn--quiet" onClick={() => translateDispatch({ kind: "dismissLost" })}>
+                Entendido
+              </button>
+            </div>
           ) : null}
-        </LiveCamera>
+          <LiveCamera corner={showLetter ? <ScoreGauge view={freeGauge(alpha.stable, alpha.feedback)} /> : undefined}>
+            {spelling ? (
+              <SpellIndicator word={word} />
+            ) : holding ? (
+              <HoldIndicator n={v.unvalidated} />
+            ) : translate.pausing ? (
+              <PauseIndicator pausing={translate.pausing} />
+            ) : null}
+          </LiveCamera>
+          <div className="sentence-block">
+            <div className="voice-row">
+              <button type="button" role="switch" aria-checked={voice && canSpeak} className="switch" onClick={toggleVoice} disabled={!canSpeak}>
+                <span className="switch__track" aria-hidden="true">
+                  <span className="switch__thumb" />
+                </span>
+                <IconSpeaker />
+                <span className="switch__label">Voz</span>
+                <span className="switch__state">{!canSpeak ? "no disponible" : voice ? "leer cada oración nueva" : "desactivada"}</span>
+              </button>
+              {canSpeak ? null : <p className="voice-row__note">Este navegador no puede leer en voz alta.</p>}
+            </div>
+            <SentencePanel
+              text={s?.text ?? ""}
+              paragraph={s?.paragraph ?? ""}
+              source={s?.source ?? "template"}
+              glosses={s?.glosses ?? []}
+              corrected={s?.corrected ?? []}
+              onSpeak={() => s && speak(s.text)}
+              onCopy={() => navigator.clipboard.writeText(s?.text ?? "")}
+            />
+          </div>
+        </div>
         <div className="translate-side">
         <section className="sheet translate-spell" aria-labelledby="traduccion-deletreo" data-on={spelling || undefined}>
           <h3 id="traduccion-deletreo" className="sheet__title">Letras (deletreo)</h3>
-          <p className="sheet__hint">
-            Se reconocen palabras y letras a la vez. Para deletrear un nombre, haz cada letra y sostenla un momento
-            (J, Ñ, Q, X y Z con su movimiento); al bajar la mano, la palabra entra a las señas.
-          </p>
           <p className="alfa-free-letters__text translate-spell__word" translate="no" aria-live="polite" aria-label={word ? `Deletreando: ${word}` : "Sin letras"}>
             {letters.length
               ? letters.map((l, i) => <span key={i} data-last={i === letters.length - 1 || undefined}>{l}</span>)
               : <span className="translate-spell__empty">…</span>}
           </p>
-          {status ? (
-            <p className="translate-spell__status" data-tone={status.tone} role="status">
-              {status.tone === "ok" ? <ToneIcon tone="ok" /> : status.tone === "warn" ? <IconWarning /> : null}
-              <span>{status.text}</span>
-            </p>
-          ) : null}
           {letters.length ? (
             <div className="sheet__actions">
               <button type="button" className="btn btn--primary" onClick={() => finishWord()} disabled={!session.connected}>
@@ -311,43 +314,21 @@ export function Translate() {
               </button>
             </div>
           ) : null}
-          <p className="sheet__hint">
-            ¿Algo salió mal?{" "}
-            <button type="button" className="btn btn--quiet btn--small" onClick={() => recorder.download("interpretacion", {
-              screen: "interpretacion", letters, chips: translate.chips.map((c) => c.gloss), sentence: translate.sentence?.text ?? null,
-            })}>Descargar intento</button>{" "}
-            (últimos 10 s, solo puntos de la mano).
-          </p>
         </section>
         <section className="sheet" aria-labelledby="traduccion-senas">
           <h3 id="traduccion-senas" className="sheet__title" tabIndex={-1}>
             Señas reconocidas
           </h3>
-          <TopicPicker value={topic} onChange={setTopic} />
-          <button type="button" role="switch" aria-checked={validate} className="switch switch--inline" onClick={() => setValidate(!validate)}>
-            <span className="switch__track" aria-hidden="true">
-              <span className="switch__thumb" />
-            </span>
-            <span className="switch__label">Validar cada seña</span>
-            <span className="switch__state">{validate ? "activado" : "automático"}</span>
-          </button>
-          {validate ? (
-            <p className="sheet__hint">
-              Toca la palabra correcta o <strong>Ninguna</strong>. Con teclado: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> eligen, <kbd>X</kbd> quita y las flechas{" "}
-              <kbd aria-hidden="true">↑</kbd> <kbd aria-hidden="true">↓</kbd>
-              <span className="visually-hidden">arriba y abajo</span> cambian de seña.
-            </p>
-          ) : (
-            <p className="sheet__hint">Toca una seña para cambiarla o quitarla. Las dudosas dicen “¿revisar?”.</p>
-          )}
-          {hasSigns ? (
-            <p className="sheet__hint">Forma la oración antes de practicar o calibrar: al cambiar de modo, las señas sin oración se borran.</p>
-          ) : null}
-          {validate ? (
-            <p className="sheet__status" role="status">
-              {validateStatus(v.unvalidated)}
-            </p>
-          ) : null}
+          <div className="translate-controls">
+            <TopicPicker value={topic} onChange={setTopic} />
+            <button type="button" role="switch" aria-checked={validate} className="switch switch--inline" onClick={() => setValidate(!validate)}>
+              <span className="switch__track" aria-hidden="true">
+                <span className="switch__thumb" />
+              </span>
+              <span className="switch__label">Validar cada seña</span>
+              <span className="switch__state">{validate ? "activado" : "automático"}</span>
+            </button>
+          </div>
           <GlossChips
             items={translate.chips}
             validate={validate}
@@ -394,29 +375,6 @@ export function Translate() {
           </p>
         </section>
         </div>
-      </div>
-
-      <div className="sentence-block">
-        <div className="voice-row">
-          <button type="button" role="switch" aria-checked={voice && canSpeak} className="switch" onClick={toggleVoice} disabled={!canSpeak}>
-            <span className="switch__track" aria-hidden="true">
-              <span className="switch__thumb" />
-            </span>
-            <IconSpeaker />
-            <span className="switch__label">Voz</span>
-            <span className="switch__state">{!canSpeak ? "no disponible" : voice ? "leer cada oración nueva" : "desactivada"}</span>
-          </button>
-          {canSpeak ? null : <p className="voice-row__note">Este navegador no puede leer en voz alta.</p>}
-        </div>
-        <SentencePanel
-          text={s?.text ?? ""}
-          paragraph={s?.paragraph ?? ""}
-          source={s?.source ?? "template"}
-          glosses={s?.glosses ?? []}
-          corrected={s?.corrected ?? []}
-          onSpeak={() => s && speak(s.text)}
-          onCopy={() => navigator.clipboard.writeText(s?.text ?? "")}
-        />
       </div>
     </div>
   );
