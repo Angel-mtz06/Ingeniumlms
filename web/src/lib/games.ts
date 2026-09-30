@@ -61,21 +61,90 @@ export function wordCorrect(recognized: Glosses, target: string): boolean {
 
 /* ------------------------------ Carrera ------------------------------ */
 
-export const RACE_TEXTS: string[] = [
-  "HOLA AMIGO", "EL SOL SALE", "MI CASA", "UN GATO", "LA LUNA", "AGUA FRIA", "BUEN DIA", "MAMA Y PAPA",
-  "EL PERRO", "LA MESA", "MI FAMILIA", "UNA FLOR",
-];
+export type RaceLevel = "fácil" | "normal" | "difícil" | "experto";
+export const RACE_LEVEL_ORDER: RaceLevel[] = ["fácil", "normal", "difícil", "experto"];
 
-export type RaceLevel = "fácil" | "normal" | "difícil";
+export interface RaceLevelConfig {
+  label: string;
+  /** Una línea para el selector: qué cambia en este nivel. */
+  summary: string;
+  texts: string[];
+  /** Rivales con ritmo fijo, en letras por minuto. */
+  rivals: { name: string; lpm: number }[];
+  /** Segundos que cuesta saltar una letra. */
+  skipPenalty: number;
+  /** ¿Se muestra la foto de la letra actual durante la carrera? */
+  hint: boolean;
+}
+
 /**
- * Rivales con ritmo fijo, en letras por minuto. Una persona que empieza deletrea ~10–15 letras por
- * minuto frente a la cámara (cada letra se sostiene ~0.8 s y hay que cambiar de forma).
+ * Niveles de la carrera. Una persona que empieza deletrea ~10–15 letras por minuto frente a la cámara
+ * (cada letra se sostiene ~0.8 s y hay que cambiar de forma). Subir de nivel alarga el texto, agrega
+ * letras con movimiento (J, Ñ, Q, X, Z), acelera a los rivales, encarece saltar y quita la foto de ayuda.
  */
-export const RIVALS: Record<RaceLevel, { name: string; lpm: number }[]> = {
-  "fácil": [{ name: "Tortuga", lpm: 6 }, { name: "Caracol", lpm: 8 }, { name: "Koala", lpm: 10 }],
-  normal: [{ name: "Burro", lpm: 10 }, { name: "Perro", lpm: 13 }, { name: "Caballo", lpm: 16 }],
-  "difícil": [{ name: "Liebre", lpm: 16 }, { name: "Guepardo", lpm: 20 }, { name: "Halcón", lpm: 24 }],
+export const RACE_LEVELS: Record<RaceLevel, RaceLevelConfig> = {
+  "fácil": {
+    label: "Fácil", summary: "Palabras cortas sin movimiento · rivales lentos · con foto de ayuda",
+    texts: ["SOL", "MAMA", "CASA", "LUNA", "GATO", "HOLA", "MESA", "AGUA", "PAPA", "OSO"],
+    rivals: [{ name: "Tortuga", lpm: 5 }, { name: "Caracol", lpm: 7 }, { name: "Koala", lpm: 9 }],
+    skipPenalty: 2, hint: true,
+  },
+  normal: {
+    label: "Normal", summary: "Dos palabras · rivales a tu ritmo · con foto de ayuda",
+    texts: ["HOLA AMIGO", "EL SOL SALE", "MI CASA", "LA LUNA", "UN GATO", "BUEN DIA", "LA MESA", "EL PERRO", "MI FAMILIA", "UNA FLOR"],
+    rivals: [{ name: "Burro", lpm: 10 }, { name: "Perro", lpm: 13 }, { name: "Caballo", lpm: 16 }],
+    skipPenalty: 3, hint: true,
+  },
+  "difícil": {
+    label: "Difícil", summary: "Con letras de movimiento (J, Ñ, Q, X, Z) · rivales rápidos · sin foto",
+    texts: ["JUGO DE UVA", "EL NIÑO", "QUESO RICO", "ZAPATO AZUL", "MEXICO LINDO", "LA PIZZA", "JUAN Y ANA", "QUE BONITO", "TAXI ROJO", "MAÑANA"],
+    rivals: [{ name: "Liebre", lpm: 14 }, { name: "Zorro", lpm: 18 }, { name: "Guepardo", lpm: 22 }],
+    skipPenalty: 4, hint: false,
+  },
+  experto: {
+    label: "Experto", summary: "Frases largas con movimiento · rivales muy rápidos · sin foto",
+    texts: ["EL NIÑO COME QUESO", "JUGO DE MANZANA", "MEXICO ES BONITO", "LA PIZZA ESTA RICA", "ZAPATOS Y JUGUETES", "QUIERO UN TAXI", "LA JIRAFA Y EL ZORRO", "EXAMEN DE MAÑANA"],
+    rivals: [{ name: "Halcón", lpm: 20 }, { name: "Cohete", lpm: 25 }, { name: "Rayo", lpm: 30 }],
+    skipPenalty: 6, hint: false,
+  },
 };
+
+/** Todos los textos de la carrera (para pruebas y listas). */
+export const RACE_TEXTS: string[] = RACE_LEVEL_ORDER.flatMap((l) => RACE_LEVELS[l].texts);
+export const RIVALS: Record<RaceLevel, { name: string; lpm: number }[]> = Object.fromEntries(
+  RACE_LEVEL_ORDER.map((l) => [l, RACE_LEVELS[l].rivals]),
+) as Record<RaceLevel, { name: string; lpm: number }[]>;
+
+/** Récord por nivel (mejor tiempo en ms), en este navegador. Si el almacenamiento falla, no hay récord. */
+const RECORD_KEY = "lsm.games.raceRecord";
+export function readRecords(storage: Pick<Storage, "getItem"> | null = safeStorage()): Partial<Record<RaceLevel, number>> {
+  try {
+    const raw = storage?.getItem(RECORD_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    return typeof data === "object" && data ? data : {};
+  } catch {
+    return {};
+  }
+}
+/** Guarda `ms` si mejora el récord del nivel; devuelve true si fue récord nuevo. */
+export function saveRecord(level: RaceLevel, ms: number, storage: Pick<Storage, "getItem" | "setItem"> | null = safeStorage()): boolean {
+  const records = readRecords(storage);
+  const best = records[level];
+  if (best !== undefined && best <= ms) return false;
+  try {
+    storage?.setItem(RECORD_KEY, JSON.stringify({ ...records, [level]: Math.round(ms) }));
+  } catch {
+    /* sin almacenamiento: el récord dura solo esta carrera */
+  }
+  return true;
+}
+function safeStorage(): Storage | null {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Avance 0–1 de un rival con `lpm` letras por minuto a los `ms` milisegundos de carrera. */
 export function rivalProgress(lpm: number, ms: number, total: number): number {

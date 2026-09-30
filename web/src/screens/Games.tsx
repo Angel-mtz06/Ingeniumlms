@@ -7,8 +7,8 @@ import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
 import { MOTION_LETTERS } from "../lib/alphabet";
 import { motionGauge, staticGauge } from "../lib/alphabetView";
 import {
-  availablePhrases, lettersOf, lettersPerMinute, pickOther, RACE_TEXTS, RIVALS, rivalFinishMs, rivalProgress,
-  SPELL_WORDS, spellable, standings, wordCorrect, type RaceLevel, type Racer,
+  availablePhrases, lettersOf, lettersPerMinute, pickOther, RACE_LEVEL_ORDER, RACE_LEVELS, readRecords, rivalFinishMs,
+  rivalProgress, saveRecord, SPELL_WORDS, spellable, standings, wordCorrect, type RaceLevel, type Racer,
 } from "../lib/games";
 import type { GaugeView } from "../lib/gauge";
 import type { Glosses } from "../lib/protocol";
@@ -350,11 +350,13 @@ function SignGame({ onBack }: { onBack(): void }) {
 /* ------------------------------ Carrera ------------------------------ */
 
 const CARS = ["🚗", "🚙", "🚕", "🚓"];
-const SKIP_PENALTY_MS = 3000;
+const LEVEL_ICON: Record<RaceLevel, string> = { "fácil": "🐢", normal: "🐴", "difícil": "🐆", experto: "🚀" };
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 
 function RaceGame({ onBack }: { onBack(): void }) {
   const [level, setLevel] = useState<RaceLevel>("normal");
-  const [text, setText] = useState(() => pickOther(RACE_TEXTS, null));
+  const cfg = RACE_LEVELS[level];
+  const [text, setText] = useState(() => pickOther(RACE_LEVELS.normal.texts, null));
   const letters = useMemo(() => lettersOf(text), [text]);
   const [phase, setPhase] = useState<"setup" | "countdown" | "racing" | "done">("setup");
   const [count, setCount] = useState(3);
@@ -362,6 +364,8 @@ function RaceGame({ onBack }: { onBack(): void }) {
   const [now, setNow] = useState(0);
   const [youMs, setYouMs] = useState<number | null>(null);
   const [skipped, setSkipped] = useState<Set<number>>(new Set());
+  const [records, setRecords] = useState(() => readRecords());
+  const [newRecord, setNewRecord] = useState(false);
   const run = useLetterRun(letters, phase === "racing");
 
   useEffect(() => {
@@ -376,14 +380,20 @@ function RaceGame({ onBack }: { onBack(): void }) {
     return () => window.clearInterval(id);
   }, [phase]);
   useEffect(() => {
-    if (phase === "racing" && run.done) { setYouMs(performance.now() - startAt.current); setPhase("done"); }
-  }, [phase, run.done]);
+    if (phase !== "racing" || !run.done) return;
+    const ms = performance.now() - startAt.current;
+    setYouMs(ms);
+    // Solo cuenta como récord si se deletreó al menos la mitad sin saltar.
+    const record = skipped.size * 2 <= letters.length && saveRecord(level, ms);
+    setNewRecord(record);
+    if (record) setRecords(readRecords());
+    setPhase("done");
+  }, [phase, run.done, level, skipped.size, letters.length]);
 
   const elapsed = phase === "racing" ? Math.max(0, now - startAt.current) : 0;
-  const rivals = RIVALS[level];
   const racers: Racer[] = [
     { name: "Tú", you: true, progress: letters.length ? run.index / letters.length : 0, finishMs: youMs },
-    ...rivals.map((r) => {
+    ...cfg.rivals.map((r) => {
       const finish = rivalFinishMs(r.lpm, letters.length);
       return phase === "done"
         ? { name: r.name, progress: youMs !== null && youMs < finish ? rivalProgress(r.lpm, youMs, letters.length) : 1, finishMs: finish }
@@ -393,20 +403,45 @@ function RaceGame({ onBack }: { onBack(): void }) {
   const order = standings(racers);
   const place = order.findIndex((r) => r.you) + 1;
 
-  const start = () => { run.reset(); setSkipped(new Set()); setYouMs(null); setCount(3); setPhase("countdown"); };
-  const again = () => { setText((t) => pickOther(RACE_TEXTS, t)); setPhase("setup"); };
-  const skip = () => { setSkipped((s) => new Set(s).add(run.index)); startAt.current -= SKIP_PENALTY_MS; run.skip(); };
+  const chooseLevel = (l: RaceLevel) => { setLevel(l); setText((t) => pickOther(RACE_LEVELS[l].texts, t)); };
+  const start = () => { run.reset(); setSkipped(new Set()); setYouMs(null); setNewRecord(false); setCount(3); setPhase("countdown"); };
+  const again = () => { setText((t) => pickOther(cfg.texts, t)); setPhase("setup"); };
+  const skip = () => { setSkipped((s) => new Set(s).add(run.index)); startAt.current -= cfg.skipPenalty * 1000; run.skip(); };
+  const best = records[level];
 
   return (
     <div className="screen">
       <GameHead title="Carrera de letras" lead="Deletrea el texto: cada letra correcta avanza tu carro. Gana quien llegue primero a la meta." onBack={onBack}
-        right={phase === "racing" ? <span className="game-score tabular">⏱ {(elapsed / 1000).toFixed(1)} s</span> : null} />
+        right={phase === "racing" ? <span className="game-score tabular">⏱ {seconds(elapsed)}</span>
+          : <span className="game-score">{LEVEL_ICON[level]} {cfg.label}</span>} />
+
+      {phase === "setup" ? (
+        <section className="sheet race-levels" aria-labelledby="carrera-nivel">
+          <h3 id="carrera-nivel" className="sheet__title">Elige la dificultad</h3>
+          <div className="race-levels__grid" role="radiogroup" aria-label="Dificultad de la carrera">
+            {RACE_LEVEL_ORDER.map((l) => {
+              const c = RACE_LEVELS[l], rec = records[l];
+              return (
+                <button key={l} type="button" role="radio" aria-checked={level === l} className="race-level" onClick={() => chooseLevel(l)}>
+                  <span className="race-level__icon" aria-hidden="true">{LEVEL_ICON[l]}</span>
+                  <span className="race-level__name">{c.label}</span>
+                  <span className="race-level__text">{c.summary}</span>
+                  <span className="race-level__meta tabular">
+                    Rivales {c.rivals[0].lpm}–{c.rivals[c.rivals.length - 1].lpm} letras/min · saltar +{c.skipPenalty} s
+                  </span>
+                  <span className="race-level__meta tabular">{rec !== undefined ? `🏆 Récord: ${seconds(rec)}` : "Sin récord todavía"}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <section className="sheet race" aria-label="Pista de carreras">
         <div className="race-track">
           {racers.map((r, i) => (
             <div key={r.name} className="race-lane" data-you={r.you || undefined}>
-              <span className="race-lane__name">{r.name}{r.you ? "" : <small> · {rivals[i - 1].lpm} l/min</small>}</span>
+              <span className="race-lane__name">{r.name}{r.you ? "" : <small> · {cfg.rivals[i - 1].lpm} l/min</small>}</span>
               <div className="race-lane__road">
                 <span className="race-car" style={{ left: `calc(1.2rem + (100% - 3rem) * ${r.progress.toFixed(4)})` }} aria-hidden="true">{CARS[i]}</span>
                 <span className="race-lane__goal" aria-hidden="true">🏁</span>
@@ -420,19 +455,15 @@ function RaceGame({ onBack }: { onBack(): void }) {
 
       {phase === "setup" ? (
         <section className="sheet game-done">
-          <p className="game-target__label">Elige la dificultad de los rivales</p>
-          <div className="game-levels" role="group" aria-label="Dificultad">
-            {(["fácil", "normal", "difícil"] as RaceLevel[]).map((l) => (
-              <button key={l} type="button" className={`btn btn--small ${level === l ? "btn--primary" : "btn--secondary"}`} aria-pressed={level === l} onClick={() => setLevel(l)}>
-                {l[0].toUpperCase() + l.slice(1)}
-              </button>
-            ))}
-          </div>
-          <p className="sheet__hint">Consejo: pon la mano frente a la cámara antes de empezar. Saltar una letra cuesta {SKIP_PENALTY_MS / 1000} s.</p>
+          <p className="sheet__hint">
+            {cfg.hint ? "Verás la foto de cada letra mientras corres." : "En este nivel no hay foto de ayuda: deletrea de memoria."}{" "}
+            Pon la mano frente a la cámara antes de arrancar.
+          </p>
           <div className="sheet__actions">
             <button type="button" className="btn btn--primary" onClick={start} autoFocus>¡Arrancar! 🏁</button>
-            <button type="button" className="btn btn--quiet" onClick={() => setText((t) => pickOther(RACE_TEXTS, t))}>Otro texto</button>
+            <button type="button" className="btn btn--quiet" onClick={() => setText((t) => pickOther(cfg.texts, t))}>Otro texto</button>
           </div>
+          {best !== undefined ? <p className="sheet__hint tabular">Tu récord en {cfg.label}: {seconds(best)}</p> : null}
         </section>
       ) : phase === "countdown" ? (
         <section className="sheet game-done" aria-live="assertive">
@@ -441,19 +472,27 @@ function RaceGame({ onBack }: { onBack(): void }) {
       ) : phase === "done" ? (
         <section className="sheet game-done" aria-live="polite">
           <p className="game-done__title">{place === 1 ? "🏆 ¡Ganaste!" : `Llegaste en ${place}.º lugar`}</p>
+          {newRecord ? <p className="race-record" role="status">⭐ ¡Nuevo récord en {cfg.label}!</p> : null}
           <ol className="race-results">
             {order.map((r) => (
               <li key={r.name} data-you={r.you || undefined}>
                 <span>{r.name}</span>
-                <span className="tabular">{r.finishMs !== null ? `${(r.finishMs / 1000).toFixed(1)} s` : "—"}</span>
+                <span className="tabular">{r.finishMs !== null ? seconds(r.finishMs) : "—"}</span>
               </li>
             ))}
           </ol>
           <p className="sheet__hint tabular">
-            {youMs !== null ? `${lettersPerMinute(letters.length - skipped.size, youMs)} letras por minuto` : ""}{skipped.size ? ` · ${skipped.size} saltada${skipped.size > 1 ? "s" : ""}` : ""}
+            {youMs !== null ? `${lettersPerMinute(letters.length - skipped.size, youMs)} letras por minuto` : ""}
+            {skipped.size ? ` · ${skipped.size} saltada${skipped.size > 1 ? "s" : ""}` : ""}
+            {best !== undefined && !newRecord ? ` · récord: ${seconds(best)}` : ""}
           </p>
           <div className="sheet__actions">
             <button type="button" className="btn btn--primary" onClick={again} autoFocus>Otra carrera →</button>
+            {level !== "experto" && place === 1 ? (
+              <button type="button" className="btn btn--secondary" onClick={() => { const next = RACE_LEVEL_ORDER[RACE_LEVEL_ORDER.indexOf(level) + 1]; chooseLevel(next); setPhase("setup"); }}>
+                Subir de nivel ↑
+              </button>
+            ) : null}
           </div>
         </section>
       ) : (
@@ -464,14 +503,16 @@ function RaceGame({ onBack }: { onBack(): void }) {
             </LiveCamera>
             <Note note={letterNote(run)} />
             <div className="sheet__actions">
-              <button type="button" className="btn btn--secondary" onClick={skip}>Saltar letra (+{SKIP_PENALTY_MS / 1000} s)</button>
+              <button type="button" className="btn btn--secondary" onClick={skip}>Saltar letra (+{cfg.skipPenalty} s)</button>
               <button type="button" className="btn btn--quiet" onClick={() => setPhase("setup")}>Rendirse</button>
             </div>
           </div>
           <div className="practice-side">
             <section className="sheet practice-ref" aria-labelledby="carrera-letra">
               <h3 id="carrera-letra" className="practice-ref__title">Ahora: <span translate="no">{run.target}</span></h3>
-              {run.target ? <LetterReference letter={run.target} /> : null}
+              {cfg.hint && run.target ? <LetterReference letter={run.target} /> : (
+                <p className="sheet__hint">Nivel {cfg.label}: sin foto de ayuda. Si te atoras, salta la letra (+{cfg.skipPenalty} s).</p>
+              )}
             </section>
           </div>
         </div>

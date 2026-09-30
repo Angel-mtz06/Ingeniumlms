@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  availablePhrases, lettersOf, lettersPerMinute, pickOther, RACE_TEXTS, rivalFinishMs, rivalProgress, SIGN_PHRASES,
-  SPELL_WORDS, spellable, standings, wordCorrect,
+  availablePhrases, lettersOf, lettersPerMinute, pickOther, RACE_LEVEL_ORDER, RACE_LEVELS, RACE_TEXTS, readRecords,
+  rivalFinishMs, rivalProgress, saveRecord, SIGN_PHRASES, SPELL_WORDS, spellable, standings, wordCorrect,
 } from "./games";
 import { LETTERS } from "./alphabet";
 
@@ -52,5 +52,33 @@ describe("Carrera", () => {
   it("otra palabra no repite la anterior", () => {
     expect(pickOther(["A", "B"], "A", () => 0)).toBe("B");
     expect(pickOther(["A"], "A", () => 0)).toBe("A");
+  });
+});
+
+describe("Carrera: niveles de dificultad", () => {
+  const motion = (t: string) => lettersOf(t).some((l) => "JÑQXZ".includes(l));
+  it("fácil y normal sin letras con movimiento; difícil y experto siempre con alguna", () => {
+    for (const l of ["fácil", "normal"] as const) expect(RACE_LEVELS[l].texts.some(motion)).toBe(false);
+    for (const l of ["difícil", "experto"] as const) expect(RACE_LEVELS[l].texts.every(motion)).toBe(true);
+  });
+  it("cada nivel es más difícil que el anterior: texto más largo, rivales más rápidos, saltar cuesta más", () => {
+    const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    for (let i = 1; i < RACE_LEVEL_ORDER.length; i++) {
+      const a = RACE_LEVELS[RACE_LEVEL_ORDER[i - 1]], b = RACE_LEVELS[RACE_LEVEL_ORDER[i]];
+      expect(avg(b.texts.map((t) => lettersOf(t).length))).toBeGreaterThan(avg(a.texts.map((t) => lettersOf(t).length)));
+      expect(avg(b.rivals.map((r) => r.lpm))).toBeGreaterThan(avg(a.rivals.map((r) => r.lpm)));
+      expect(b.skipPenalty).toBeGreaterThan(a.skipPenalty);
+    }
+    expect(RACE_LEVELS["fácil"].hint && !RACE_LEVELS.experto.hint).toBe(true);
+  });
+  it("récord por nivel: solo se guarda si mejora; sin almacenamiento no falla", () => {
+    const mem = new Map<string, string>();
+    const storage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, v); } };
+    expect(saveRecord("normal", 40000, storage)).toBe(true);
+    expect(saveRecord("normal", 45000, storage)).toBe(false);
+    expect(saveRecord("normal", 30000, storage)).toBe(true);
+    expect(readRecords(storage)).toEqual({ normal: 30000 });
+    expect(readRecords(null)).toEqual({});
+    expect(saveRecord("fácil", 1000, null)).toBe(true);
   });
 });
