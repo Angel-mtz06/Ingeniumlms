@@ -4,6 +4,7 @@ import { useCamera } from "./hooks/useCamera";
 import { useGloves } from "./hooks/useGloves";
 import { useSession } from "./hooks/useSession";
 import { useVision } from "./hooks/useVision";
+import { IconCamera, IconGamepad, IconHome, IconMore, IconSpeaker } from "./components/icons";
 import { CALIBRATION_INITIAL, calibrationReducer } from "./lib/calibration";
 import type { FramePayload, Mode, ServerMsg, Topic } from "./lib/protocol";
 import { newEvents, TRANSLATE_INITIAL, translateReducer } from "./lib/translate";
@@ -24,6 +25,67 @@ const TABS: readonly { id: TabId; label: string; camera: boolean }[] = [
   { id: "grabar", label: "Grabar", camera: true },
   { id: "diagnostico", label: "Diagnóstico", camera: false },
 ];
+
+/** Barra inferior del teléfono: las cuatro secciones principales con ícono; las demás van en "Más". */
+const MOBILE_MAIN: readonly { id: TabId; label: string; Icon: typeof IconHome }[] = [
+  { id: "inicio", label: "Inicio", Icon: IconHome },
+  { id: "practica", label: "Práctica", Icon: IconCamera },
+  { id: "traduccion", label: "Interpretar", Icon: IconSpeaker },
+  { id: "juegos", label: "Juegos", Icon: IconGamepad },
+];
+const MOBILE_MORE = TABS.filter((t) => !MOBILE_MAIN.some((m) => m.id === t.id));
+
+/**
+ * Navegación del teléfono (solo visible por CSS bajo 768 px; en pantallas anchas se usan las pestañas
+ * del encabezado). Es una <nav> con aria-current, no un segundo tablist.
+ */
+function MobileNav({ active, onSelect }: { active: TabId; onSelect(id: TabId): void }) {
+  const [open, setOpen] = useState(false);
+  const moreRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const moreActive = MOBILE_MORE.some((t) => t.id === active);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") { setOpen(false); moreRef.current?.focus(); }
+    };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!menuRef.current?.contains(t) && !moreRef.current?.contains(t)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
+  }, [open]);
+
+  const pick = (id: TabId) => { setOpen(false); onSelect(id); };
+
+  return (
+    <nav className="bottom-nav" aria-label="Secciones">
+      {open ? (
+        <div ref={menuRef} id="bottom-nav-more" className="bottom-nav__menu">
+          {MOBILE_MORE.map((t) => (
+            <button key={t.id} type="button" className="bottom-nav__menu-item" aria-current={t.id === active ? "page" : undefined} onClick={() => pick(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {MOBILE_MAIN.map(({ id, label, Icon }) => (
+        <button key={id} type="button" className="bottom-nav__item" aria-current={id === active ? "page" : undefined} onClick={() => pick(id)}>
+          <Icon size={22} />
+          <span>{label}</span>
+        </button>
+      ))}
+      <button ref={moreRef} type="button" className="bottom-nav__item" aria-expanded={open} aria-controls="bottom-nav-more"
+        data-active={moreActive || undefined} onClick={() => setOpen((v) => !v)}>
+        <IconMore size={22} />
+        <span>Más</span>
+      </button>
+    </nav>
+  );
+}
 
 // Juegos usa el reconocedor del alfabeto (datos grandes): se carga al abrir la pestaña.
 const GamesScreen = lazy(() => import("./screens/Games"));
@@ -249,6 +311,7 @@ export default function App() {
           </section>
         ))}
       </main>
+      <MobileNav active={active} onSelect={go} />
     </AppContext.Provider>
   );
 }

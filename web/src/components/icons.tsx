@@ -150,3 +150,32 @@ export function ToneIcon({ tone, ...p }: IconProps & { tone: Tone }) {
   if (tone === "warn") return <IconWarning {...p} />;
   return <IconError {...p} />;
 }
+
+/** Casa: pestaña Inicio en la barra inferior del teléfono. */
+export const IconHome = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 10.5 12 3.5l8.5 7" />
+    <path d="M5.5 9v10.5h13V9" />
+    <path d="M10 19.5v-5h4v5" />
+  </Icon>
+);
+
+/** Control de videojuego: pestaña Juegos. */
+export const IconGamepad = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M7 7h10a5 5 0 0 1 4.9 6l-.6 3a2.6 2.6 0 0 1-4.6 1.1L15 15H9l-1.7 2.1a2.6 2.6 0 0 1-4.6-1.1l-.6-3A5 5 0 0 1 7 7Z" />
+    <path d="M7.5 10v3" />
+    <path d="M6 11.5h3" />
+    <path d="M15.5 11h.01" />
+    <path d="M17.5 12.5h.01" />
+  </Icon>
+);
+
+/** Tres puntos: menú "Más" con las pestañas secundarias. */
+export const IconMore = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5.5 12h.01" />
+    <path d="M12 12h.01" />
+    <path d="M18.5 12h.01" />
+  </Icon>
+);

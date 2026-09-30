@@ -42,6 +42,8 @@ export const READY_HOLD_MS = 200, ONSET_PALMS = .15, STILL_MS = 450, STILL_PALMS
 /** Tolerancia de forma (RMS tras normalizar). La misma para el avance en vivo y el juicio final:
  * si el medidor llegó a 100 %, el resultado no puede decir lo contrario. */
 export const SHAPE_ERROR = .38;
+/** Ñ necesita un desplazamiento claro respecto al tamaño de la palma, no el temblor de una N. */
+export const ENYE_MIN_SPAN = .65;
 
 const dist = (a: number[], b: number[]) => Math.hypot(a[0]-b[0], a[1]-b[1]);
 const length = (points: number[][]) => points.slice(1).reduce((s,p,i) => s+dist(p,points[i]),0);
@@ -83,7 +85,7 @@ function prefix(path: number[][], f: number): number[][] {
 const RULES: {letter:string; tip:number; poses:string[]; base:string; path:number[][]}[] = [
   {letter:"J",tip:20,poses:["I","J"],base:"I",path:[[0,0],[0,.8],[-.1,1],[-.35,1.1],[-.55,.95],[-.55,.7]]},
   {letter:"Ñ",tip:8,poses:["N","Ñ"],base:"N",path:[[0,0],[.25,.16],[.5,.22],[.75,.16],[1,0]]},
-  {letter:"Q",tip:8,poses:["Q"],base:"Q",path:[[0,0],[.25,.16],[.5,.22],[.75,.16],[1,0]]},
+  {letter:"Q",tip:8,poses:["Q"],base:"Q",path:[[0,0],[.25,.09],[.5,.12],[.75,.09],[1,0]]},
   {letter:"X",tip:8,poses:["X"],base:"X",path:[[0,0],[.7,0],[0,0]]},
   {letter:"Z",tip:8,poses:["D","Z"],base:"D",path:[[0,0],[1,0],[0,.8],[1,.8]]},
 ];
@@ -177,7 +179,7 @@ function activeSpan(points: number[][], t: number[]): {frames: number; ms: numbe
  * X: ir y volver en CUALQUIER dirección (la plantilla horizontal fallaba si el movimiento iba en
  * diagonal o hacia la cámara). Devuelve 0–1: 0.5 al alejarse lo suficiente, 1 al regresar.
  */
-export const X_MIN_OUT = .3;
+export const X_MIN_OUT = .25;
 function outAndBack(points: number[][]): number {
   if (points.length < 3) return 0;
   const d = points.map((p)=>dist(p, points[0]));
@@ -199,7 +201,8 @@ function xStraight(points: number[][]): boolean {
 
 /** Rule-specific evidence beyond the overall shape (kept from the original analyzer). */
 function ruleGates(letter: string, points: number[][], span: number, travelled: number): boolean {
-  if (span < .4 || span > 5 || travelled/span > 6) return false;
+  const minSpan = letter === "Ñ" ? ENYE_MIN_SPAN : letter === "Q" || letter === "X" ? .3 : .4;
+  if (span < minSpan || span > 5 || travelled/span > 6) return false;
   if (letter === "Ñ" || letter === "Q") {
     const a=points[0], b=points.at(-1)!, chord=dist(a,b);
     const bend=Math.max(...points.map((p)=>chord ? Math.abs((b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]))/chord : 0));
@@ -287,6 +290,8 @@ export function analyzeMotionFor(frames: MotionFrame[], target: string, options:
   const active = activeSpan(points, t);
   const out = {...r, travel: travelled, activeFrames: active.frames, activeMs: active.ms};
   if (span < .25) return withIssue(out, "no_motion");
+  if (target === "Ñ" && span < ENYE_MIN_SPAN)
+    return withIssue(out, "too_small", "Para la Ñ, haz un arco más amplio manteniendo la forma de N.");
   if (span < .4) return withIssue(out, "too_small");
   if (tooFastSpan(active)) return withIssue(out, "too_fast");
   if (target === "X") {
@@ -392,9 +397,11 @@ function bend(points: number[][]): number {
  * de la J, el arco de Ñ/Q, los dos giros de la Z (la X ya exige ir y volver). Sin él el avance no
  * llega al 100 %; así se puede tolerar más la forma sin que una I que baja en línea recta sea J.
  */
-export const KEY_BEND: Record<string, number> = { J: .15, "Ñ": .12, Q: .12, Z: .2 };
+export const KEY_BEND: Record<string, number> = { J: .15, "Ñ": .16, Q: .08, Z: .2 };
 export function keyFeature(letter: string, points: number[][]): boolean {
   if (letter === "X") return outAndBack(points) >= .95 && xStraight(points);
+  // También se verifica en el avance en vivo: llegar al 100 % no debe saltarse este mínimo.
+  if (letter === "Ñ" && extent(points) < ENYE_MIN_SPAN) return false;
   const need = KEY_BEND[letter];
   if (need === undefined) return true;
   if (letter === "Z" && length(points)/Math.max(extent(points), 1e-6) < 1.8) return false;
@@ -411,7 +418,7 @@ export function trajectoryProgress(frames: MotionFrame[], target: string): numbe
     const x = outAndBack(points);
     return x >= DONE_PROGRESS && !xStraight(points) ? DONE_PROGRESS-.05 : x;
   }
-  if (extent(points) < .2) return 0;
+  if (extent(points) < (target === "Ñ" ? .35 : .2)) return 0;
   // La fracción del recorrido cuya forma se parece MÁS a lo hecho hasta ahora.
   let best = {f: 0, error: Infinity};
   for (let f=.1; f<=1.001; f+=.05) {
@@ -588,13 +595,14 @@ export class FreeMotion {
  * Cuándo se da por hecha una letra ESTÁTICA en Libre e Interpretación (sin letra objetivo):
  *  - solo con la mano quieta (STATIC_STILL_PALMS en los últimos STATIC_STILL_MS) y sin una letra con
  *    movimiento en curso: al trazar una Z con la forma de D no se escribe una D a media Z;
- *  - I, N y D (poses iniciales de J, Ñ y Z) esperan BASE_EXTRA_MS más, por si viene su movimiento
+ *  - I y D (poses iniciales de J y Z) esperan BASE_EXTRA_MS más, por si viene su movimiento
  *    (poco: si después llega la J, reemplaza a la I en la lista);
  *    las demás, STATIC_EXTRA_MS más que la estabilidad (StableLetter, 0.6 s);
  *  - perder la mano menos de HAND_GAP_MS no reinicia la letra.
  */
 export const STATIC_STILL_MS = 350, STATIC_STILL_PALMS = .15, STATIC_EXTRA_MS = 150, BASE_EXTRA_MS = 300;
-export const MOTION_START_POSES = new Set(RULES.filter((r)=>r.base !== r.letter).map((r)=>r.base));
+// N se escribe con la espera normal; si después llega Ñ, reemplaza N en la secuencia.
+export const MOTION_START_POSES = new Set(RULES.filter((r)=>r.base !== r.letter && r.base !== "N").map((r)=>r.base));
 export class StaticGate {
   private recent: MotionFrame[] = [];
   private letter: string | null = null;

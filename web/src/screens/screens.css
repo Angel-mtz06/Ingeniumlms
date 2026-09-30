@@ -2285,7 +2285,7 @@
 
 .race-lane__road {
   position: relative;
-  height: 2.6rem;
+  height: 3.2rem;
   border-radius: var(--radius-md);
   background:
     repeating-linear-gradient(90deg, transparent 0 18px, color-mix(in srgb, var(--color-text-muted) 35%, transparent) 18px 30px) center / 100% 2px no-repeat,
@@ -2300,11 +2300,33 @@
 .race-car {
   position: absolute;
   top: 50%;
-  font-size: 1.7rem;
-  line-height: 1;
-  /* El emoji mira a la izquierda: se voltea para que avance hacia la meta. */
-  transform: translate(-50%, -50%) scaleX(-1);
+  width: 3.4rem;
+  height: 3.4rem;
+  object-fit: contain;
+  /* Las imágenes ya miran a la derecha, hacia la meta. */
+  transform: translate(-50%, -50%);
   transition: left 300ms linear;
+  pointer-events: none;
+}
+
+/* Galope mientras corre: rebote y balanceo en lugar de un segundo cuadro del sprite. Cada carril
+   lleva un desfase para que no salten al mismo tiempo. */
+.race-car[data-running] {
+  animation: race-gallop 420ms ease-in-out infinite;
+}
+.race-lane:nth-child(2) .race-car { animation-delay: -110ms; }
+.race-lane:nth-child(3) .race-car { animation-delay: -220ms; }
+.race-lane:nth-child(4) .race-car { animation-delay: -330ms; }
+
+@keyframes race-gallop {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg) scale(1, 1); }
+  25% { transform: translate(-50%, -64%) rotate(-7deg) scale(1.03, 0.97); }
+  50% { transform: translate(-50%, -54%) rotate(0deg) scale(0.98, 1.03); }
+  75% { transform: translate(-50%, -46%) rotate(5deg) scale(1.02, 0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .race-car[data-running] { animation: none; }
 }
 
 .race-lane__goal {
@@ -2359,12 +2381,6 @@
 }
 
 /* Wordle: tablero de intentos (verde en su lugar, amarillo en otro lugar, gris no está). */
-.wordle-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  align-items: start;
-  gap: var(--space-5);
-}
 
 .wordle-main {
   display: grid;
@@ -2469,16 +2485,15 @@
 .wordle-key--sign {
   height: 2.6rem;
   padding: 0 var(--space-3);
+}
+
+button.wordle-key--sign {
   cursor: pointer;
 }
 
 .wordle-key--sign[aria-pressed="true"] {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-}
-
-.wordle-help {
-  width: min(22rem, 100%);
 }
 
 /* Simón dice */
@@ -2552,12 +2567,6 @@
   margin-top: var(--space-2);
 }
 
-@media (max-width: 900px) {
-  .wordle-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 /* Selector de dificultad de la carrera: una tarjeta por nivel, con qué cambia y el récord. */
 .race-levels__grid {
   display: grid;
@@ -2613,14 +2622,371 @@
 }
 
 @media (max-width: 640px) {
+  /* Teléfono: nombre y porcentaje arriba, la pista a todo lo ancho abajo. */
   .race-lane {
-    grid-template-columns: 5.5rem minmax(0, 1fr) 2.8rem;
-    gap: var(--space-2);
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name pct" "road road";
+    gap: 2px var(--space-2);
+  }
+  .race-lane__name { grid-area: name; }
+  .race-lane__pct { grid-area: pct; }
+  .race-lane__road {
+    grid-area: road;
+    height: 2.8rem;
+  }
+  .race-car {
+    width: 3rem;
+    height: 3rem;
   }
   .race-lane__name small {
     display: none;
   }
   .game-word--big {
     font-size: var(--text-2xl);
+  }
+}
+
+/* ---------- Juegos: acomodo, pistas y asistencia ---------- */
+/* Todo lo importante sin bajar: a la izquierda la cámara (su alto sale del alto de la ventana) con la
+   nota y los botones; a la derecha lo del juego. Si algo no cabe, solo la columna derecha se desplaza. */
+.screen.game-screen {
+  gap: var(--space-3);
+}
+
+.game-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.game-stage__cam,
+.game-stage__side {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.game-stage .sheet {
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.game-stage .sheet__actions {
+  margin-top: 0;
+}
+
+@media (min-width: 1024px) {
+  .game-stage {
+    --cam-h: clamp(13rem, 100vh - 19.5rem, 34rem);
+    --cam-h: clamp(13rem, 100dvh - 19.5rem, 34rem);
+    grid-template-columns: min(calc(var(--cam-h) * 16 / 9), calc(100% - 24rem - var(--space-4))) minmax(24rem, 1fr);
+  }
+
+  .game-stage[data-wide] {
+    --cam-h: clamp(12rem, 100vh - 25rem, 30rem);
+    --cam-h: clamp(12rem, 100dvh - 25rem, 30rem);
+  }
+
+  .game-stage__side {
+    max-height: calc(100vh - 11rem);
+    max-height: calc(100dvh - 11rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    padding-inline-end: var(--space-1);
+  }
+
+  .app-main:has(.game-stage),
+  body:has(.game-stage) .app-header__inner {
+    max-width: 1760px;
+    padding-inline: var(--space-5);
+  }
+
+  /* Menos margen arriba y abajo: así el juego completo cabe en la ventana. */
+  .app-main:has(.game-stage) {
+    padding-block: var(--space-4);
+  }
+}
+
+.game-stage__side .game-word--big {
+  font-size: clamp(var(--text-xl), 4.5dvh, var(--text-3xl));
+}
+
+.game-stage__side .game-levels {
+  margin-bottom: 0;
+}
+
+/* Interruptor de asistencia en la cabecera: compacto y resaltado cuando está activo. */
+.game-assist-toggle {
+  min-height: 40px;
+  padding-block: var(--space-1);
+}
+
+.game-assist-toggle[aria-checked="true"] {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+
+/* Qué hace cada ayuda (texto corto bajo el juego). */
+.game-help {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+/* Asistencia (siempre visible) y pista (un momento): referencia, tus dedos y qué corregir. */
+.game-assist,
+.game-hint {
+  display: grid;
+  align-content: start;
+}
+
+.game-assist {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.game-hint {
+  box-shadow: inset 0 0 0 2px var(--color-warn);
+  animation: simon-pop 250ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-hint { animation: none; }
+}
+
+.game-assist__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.game-assist__title {
+  font: 700 var(--text-md)/1.25 var(--font-display);
+}
+
+.game-assist__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.game-assist__ref {
+  width: 100%;
+  max-width: clamp(11rem, 100dvh - 30rem, 22rem);
+  justify-self: center;
+}
+
+.game-assist__ref .alfa-ref__stage {
+  padding: var(--space-2);
+}
+
+.game-assist__ref--sign {
+  max-width: clamp(13rem, 100dvh - 28rem, 26rem);
+}
+
+/* La animación de la seña: el título ya está en la tarjeta; controles compactos en una fila. */
+.game-assist__ref .ref__title {
+  display: none;
+}
+
+.game-assist__ref .ref {
+  gap: var(--space-2);
+}
+
+.game-assist__ref .ref__bar {
+  justify-content: center;
+}
+
+.game-assist__ref .ref__controls {
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+}
+
+.game-assist__ref .ref__controls .btn,
+.game-assist__ref .segmented__item {
+  min-height: 36px;
+  padding-inline: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.game-assist__hand .hand__svg {
+  max-width: clamp(70px, 100dvh - 42rem, 120px);
+}
+
+.game-assist__hand--pair {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.game-assist__hand--pair .hand__svg {
+  max-width: clamp(56px, 100dvh - 46rem, 90px);
+}
+
+.game-assist__hand--mini .hand__svg {
+  max-width: 48px;
+}
+
+.game-assist__hand--mini .hand__caption {
+  display: none;
+}
+
+.game-assist__tip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-warn);
+}
+
+/* Tabla del alfabeto (asistencia del Wordle con letras): hace de teclado, con los mismos colores. */
+.alpha-chart {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.6rem, 1fr));
+  gap: var(--space-1);
+}
+
+.alpha-chart__item {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+
+.alpha-chart__item .ref {
+  gap: 0;
+}
+
+.alpha-chart__item .alfa-ref__stage {
+  aspect-ratio: 186 / 260;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.alpha-chart__item figcaption {
+  border-radius: var(--radius-sm);
+  font: 800 var(--text-sm)/1.4 var(--font-display);
+  text-align: center;
+}
+
+.alpha-chart__item[data-now] {
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+
+.alpha-chart__item[data-mark="ok"] figcaption {
+  background: var(--color-ok);
+  color: #fff;
+}
+
+.alpha-chart__item[data-mark="near"] figcaption {
+  background: var(--color-warn);
+  color: #1b1300;
+}
+
+.alpha-chart__item[data-mark="no"] {
+  opacity: 0.4;
+}
+
+/* Wordle con asistencia: el tablero y la tabla del alfabeto lado a lado, para que quepan sin bajar. */
+.wordle-side {
+  display: grid;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.wordle-side[data-assist] {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.wordle-side[data-assist] .wordle-main {
+  max-width: 16rem;
+}
+
+.wordle-side[data-assist] .wordle-board[data-cols="3"] .wordle-cell {
+  min-width: 4.4rem;
+  font-size: var(--text-sm);
+}
+
+.game-assist__body[data-single] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.wordle-side[data-assist] .wordle-legend {
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .wordle-side[data-assist] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wordle-side[data-assist] .wordle-main {
+    max-width: none;
+  }
+}
+
+/* Wordle dentro del acomodo: casillas que se ajustan al alto de la ventana; pistas reveladas. */
+.game-stage .wordle-cell {
+  --cell: clamp(2.2rem, 5.4dvh, 3rem);
+  min-width: var(--cell);
+  min-height: var(--cell);
+}
+
+.game-stage .wordle-board[data-cols="3"] .wordle-cell {
+  min-width: 6rem;
+}
+
+.wordle-revealed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.wordle-cell--hint {
+  --cell: 2rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  font-size: var(--text-md);
+}
+
+.game-stage .wordle-board[data-cols="3"] ~ .wordle-revealed .wordle-cell--hint {
+  min-width: 5rem;
+  font-size: var(--text-sm);
+}
+
+/* Simón dentro del acomodo */
+.game-stage .simon-show__big {
+  font-size: clamp(3rem, 9dvh, 5rem);
+}
+
+.game-stage .simon-show__card .alfa-ref__stage {
+  max-height: clamp(9rem, 100dvh - 30rem, 18rem);
+}
+
+
+/* Carrera: en el acomodo, las 4 dificultades en una fila compacta. */
+.game-stage .race-level {
+  padding: var(--space-2) var(--space-3);
+}
+
+.game-stage .race-level__icon {
+  font-size: 1.4rem;
+}
+
+@media (min-width: 1024px) {
+  .game-stage .race-levels__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-2);
   }
 }
