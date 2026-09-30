@@ -14,3 +14,6 @@ models/
 web/.screens/
 web/public/mediapipe/
 logs/
+
+# Contraseña del WiFi de las pulseras
+firmware/**/secrets.h
