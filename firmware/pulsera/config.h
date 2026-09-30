@@ -37,15 +37,16 @@
 #define DIR_TCA9548A 0x70   // A0–A2 a GND
 #define DIR_MPU6050 0x68    // AD0 a GND
 
-// Solo una IMU: la de la muñeca (dorso de la mano). Es el canal del TCA9548A donde está conectada (SD2).
-// Si la MPU va directo a SDA/SCL, sin multiplexor, el código lo detecta al encender y este canal no se usa.
+// Solo una IMU: la de la muñeca (dorso de la mano). Es el canal del TCA9548A donde está conectada (SD2 en la derecha).
+// Si ahí no responde, al encender se busca en los 8 canales (la izquierda puede ir en otro). Si la MPU va directo a
+// SDA/SCL, sin multiplexor, también se detecta solo y este canal no se usa.
 // (Para volver a los 5 dedales: {2, 7, 6, 5, 4, 3} = dorso, pulgar, índice, medio, anular, meñique.)
 static const uint8_t CANAL_IMU[] = {2};
 
 // ---------- Envío ----------
 #define PERIODO_MS 20       // 50 lecturas por segundo
 #define SERIAL_BAUDIOS 921600
-#define FIRMWARE "1.4"
+#define FIRMWARE "1.5"
 
 // Filtro complementario: peso del giroscopio (0–1). Más alto = más suave, más bajo = responde más rápido.
 #define ALFA_GIRO 0.96f

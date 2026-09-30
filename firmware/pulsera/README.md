@@ -3,8 +3,12 @@
 Lee **una** MPU-6050, la de la muñeca (dorso de la mano), y envía las lecturas a la laptop por **WebSocket
 (puerto 81)** y por **USB serie (921 600 baudios)** con el protocolo de `docs/arquitectura.md`, sección 3.
 
-La MPU puede ir por el multiplexor TCA9548A (canal SD2) o directo a SDA/SCL: al encender se detecta sola y el
-monitor serie dice cuál encontró. La línea `D,…` conserva los 6 lugares del protocolo para que la app no cambie:
+La MPU puede ir por el multiplexor TCA9548A (en cualquier canal; primero prueba SD2) o directo a SDA/SCL: al
+encender se detecta sola y el monitor serie dice dónde la encontró.
+
+**Pulsera izquierda:** es el mismo código. En `config.h` cambia `#define LADO 'R'` por `'L'` y cárgalo. Queda
+con la IP **192.168.137.191** y el nombre `pulsera-izq.local`; usa la misma zona con cobertura y el mismo
+`secrets.h`. Si su placa no es un ESP32-C3 Super Mini, revisa `PIN_SDA` / `PIN_SCL`. La línea `D,…` conserva los 6 lugares del protocolo para que la app no cambie:
 el primero es la muñeca y los 5 dedos van en `0.0` con su bit de `status` apagado (los dedos los ve la cámara).
 
 ## Antes de cargarlo
@@ -38,7 +42,7 @@ Las líneas que empiezan con `#` son mensajes de estado (IMU que responden, camb
 
 | Comando | Qué hace |
 |---|---|
-| `ID?` | Responde la identificación de la pulsera (`ID,R,fw=1.4,imus=1,…`). |
+| `ID?` | Responde la identificación de la pulsera (`ID,R,fw=1.5,imus=1,…`). |
 | `CAL` | Con la pulsera **plana sobre una mesa** y quieta 2 s: calibra el giroscopio y esa postura queda como el cero de la inclinación y el giro lateral. Responde `CAL,R,ok,…` o `CAL,R,error,movimiento,0`. Se guarda en el ESP32. |
 | `PRUEBA` | Activa/desactiva el modo de prueba: cada 0.5 s un resumen legible (Hz, WiFi e IP, app conectada, muñeca ok o NO RESPONDE, inclinación, giro lateral y velocidad de giro). Mientras está activo no salen las líneas `D,…` por USB. |
 

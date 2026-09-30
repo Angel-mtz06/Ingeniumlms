@@ -1621,20 +1621,17 @@ h4,
   }
 }
 
-/* Inclinación de la muñeca: isla de cristal opaca como el puntaje (se lee sobre cualquier imagen). */
-.tilt__card {
+/* Inclinación de la muñeca: islas de cristal opacas como el puntaje (se leen sobre cualquier imagen). */
+.tilt__card,
+.tilt__toggle {
   background: var(--glass-fill-strong);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 
 @media (max-width: 767px) {
-  /* En Práctica del teléfono, arriba de la barra de navegación inferior; los avisos, encima de la ficha. */
+  /* En Práctica del teléfono, arriba de la barra de navegación inferior. */
   .practice-stage .camera__gauge {
     inset-block-end: calc(5.75rem + env(safe-area-inset-bottom));
-  }
-
-  .practice-stage .camera:has(.camera__gauge) .camera__slot {
-    inset-block-end: calc(5.75rem + env(safe-area-inset-bottom) + 6rem);
   }
 }

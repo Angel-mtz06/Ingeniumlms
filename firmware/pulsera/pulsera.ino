@@ -44,6 +44,7 @@
 
 static const int N_IMU = sizeof(CANAL_IMU) / sizeof(CANAL_IMU[0]);  // IMU conectadas (1: la muñeca)
 static const int IMU_PROTOCOLO = 6;  // lugares de la línea D (dorso + 5 dedos), fijos para la app
+uint8_t canalImu[N_IMU];  // canal del multiplexor de cada IMU (CANAL_IMU; con una sola IMU se busca al encender)
 static const float ACC_LSB = 8192.0f;   // ±4 g
 static const float GIRO_LSB = 65.5f;    // ±500 °/s
 static const float RAD_A_GRADOS = 57.2957795f;
@@ -109,7 +110,7 @@ bool leerCrudo(float& ax, float& ay, float& az, float& gx, float& gy, float& gz)
 bool iniciarImu(int i) {
   Imu& m = imus[i];
   m.ultimoIntento = millis();
-  if (!seleccionarCanal(CANAL_IMU[i])) return false;
+  if (!seleccionarCanal(canalImu[i])) return false;
   if (!escribirRegistro(0x6B, 0x01)) return false;   // despertar, reloj del giroscopio X
   escribirRegistro(0x1A, 0x03);                       // filtro digital ~44 Hz
   escribirRegistro(0x1B, 0x08);                       // giroscopio ±500 °/s
@@ -140,7 +141,7 @@ bool iniciarImu(int i) {
 void iniciarDesdeAcelerometro(int i) {
   Imu& m = imus[i];
   float ax, ay, az, gx, gy, gz;
-  if (!seleccionarCanal(CANAL_IMU[i]) || !leerCrudo(ax, ay, az, gx, gy, gz)) return;
+  if (!seleccionarCanal(canalImu[i]) || !leerCrudo(ax, ay, az, gx, gy, gz)) return;
   m.p = atan2f(-ax, az) * RAD_A_GRADOS;
   m.r = atan2f(ay, sqrtf(ax * ax + az * az)) * RAD_A_GRADOS;
   m.iniciada = m.ok = true;
@@ -199,7 +200,7 @@ void calibrarGiroscopios() {
   while (millis() - t0 < (uint32_t)CAL_MS) {
     for (int i = 0; i < N_IMU; i++) {
       float ax, ay, az, g[3];
-      if (!seleccionarCanal(CANAL_IMU[i]) || !leerCrudo(ax, ay, az, g[0], g[1], g[2])) continue;
+      if (!seleccionarCanal(canalImu[i]) || !leerCrudo(ax, ay, az, g[0], g[1], g[2])) continue;
       for (int k = 0; k < 3; k++) { s[i][k] += g[k]; q[i][k] += (double)g[k] * g[k]; }
       a[i][0] += ax; a[i][1] += ay; a[i][2] += az;
       n[i]++;
@@ -249,7 +250,7 @@ void actualizarImu(int i, float dt) {
     return;
   }
   float ax, ay, az, gx, gy, gz;
-  if (!seleccionarCanal(CANAL_IMU[i]) || !leerCrudo(ax, ay, az, gx, gy, gz)) {
+  if (!seleccionarCanal(canalImu[i]) || !leerCrudo(ax, ay, az, gx, gy, gz)) {
     m.ok = false;
     m.iniciada = false;
     return;
@@ -321,7 +322,7 @@ const char* NOMBRES_IMU[IMU_PROTOCOLO] = {"muneca ", "pulgar ", "indice ", "medi
 
 String textoCanal(int i) {
   if (!hayMultiplexor) return "directo";
-  return String("canal ") + CANAL_IMU[i];
+  return String("canal ") + canalImu[i];
 }
 
 String textoWifi() {
@@ -416,12 +417,31 @@ void setup() {
   hayMultiplexor = Wire.endTransmission() == 0;
   Serial.println(hayMultiplexor ? "# Multiplexor TCA9548A encontrado: la IMU se lee por su canal"
                                 : "# Sin multiplexor: la IMU se lee directo en SDA/SCL");
+  for (int i = 0; i < N_IMU; i++) canalImu[i] = CANAL_IMU[i];
+  if (hayMultiplexor && N_IMU == 1) buscarCanalMuneca();
   iniciarWifi();
   ws.begin();
   ws.onEvent(alRecibirWs);
   Serial.println(lineaId());
   Serial.println("# Comandos: ID?  CAL (calibrar giroscopios, mano quieta)  PRUEBA (resumen legible)");
   if (!debeEsperarWifi()) iniciarSensores();
+}
+
+// Con una sola IMU (la muñeca) y multiplexor: si no responde en CANAL_IMU, se busca en los 8 canales. Así el mismo
+// código sirve para las dos pulseras aunque la MPU quedó soldada en otro canal.
+void buscarCanalMuneca() {
+  for (int k = -1; k < 8; k++) {
+    uint8_t c = k < 0 ? CANAL_IMU[0] : k;  // primero el de config.h
+    if (!seleccionarCanal(c)) continue;
+    Wire.beginTransmission(DIR_MPU6050);
+    if (Wire.endTransmission() == 0) {
+      canalImu[0] = c;
+      Serial.printf("# MPU de la muñeca en el canal %u del multiplexor
+", c);
+      return;
+    }
+  }
+  Serial.println("# No encuentro la MPU en ningún canal del multiplexor: revisa el cable");
 }
 
 // Con ESPERAR_WIFI en modo estación, los sensores esperan a que la pulsera se conecte a la red.

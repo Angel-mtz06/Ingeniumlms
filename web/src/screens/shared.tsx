@@ -203,8 +203,9 @@ export function useVocab(): { vocab: VocabItem[] | null; error: string | null; r
 
 
 const WIFI_KEY = "lsm.pulsera";
-/** IP fija de la pulsera derecha en la zona con cobertura de Windows (firmware: IP_FIJA en config.h). */
+/** IP fija de cada pulsera en la zona con cobertura de Windows (firmware: IP_FIJA en config.h). */
 export const PULSERA_IP = "192.168.137.190";
+export const PULSERA_IP_IZQ = "192.168.137.191";
 
 function readAddress(): string {
   try {
@@ -220,6 +221,15 @@ function readAddress(): string {
 function WifiConnect() {
   const { gloves } = useApp();
   const [address, setAddress] = useState(readAddress);
+  // Ya conectada una pulsera, el campo pasa a la IP fija de la otra (si tenía la de la conectada).
+  const rOn = gloves.sides.R.connected, lOn = gloves.sides.L.connected;
+  useEffect(() => {
+    setAddress((a) => {
+      if (rOn && !lOn && a.trim() === PULSERA_IP) return PULSERA_IP_IZQ;
+      if (lOn && !rOn && a.trim() === PULSERA_IP_IZQ) return PULSERA_IP;
+      return a;
+    });
+  }, [rOn, lOn]);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     try {
