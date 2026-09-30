@@ -157,6 +157,11 @@ export function duplicateGloveMessage(side: "L" | "R"): string {
   return `Ya hay un guante ${SIDE_NAME[side]} conectado. Revisa que el otro guante esté configurado como ${SIDE_NAME[side === "L" ? "R" : "L"]}, o desconecta el primero antes.`;
 }
 
+/** Pulsera por WiFi que dejó de responder (zona con cobertura apagada, fuera de alcance, sin batería). */
+export function gloveWifiLostMessage(side: "L" | "R"): string {
+  return `Se perdió el WiFi del guante ${SIDE_NAME[side]}. Revisa la zona con cobertura y vuelve a conectarlo.`;
+}
+
 /** Guante que se desenchufó o dejó de responder mientras estaba conectado. */
 export function gloveLostMessage(side: "L" | "R"): string {
   return `El guante ${SIDE_NAME[side]} se desconectó. Revisa el cable y vuelve a conectarlo.`;

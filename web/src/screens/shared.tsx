@@ -200,6 +200,46 @@ export function useVocab(): { vocab: VocabItem[] | null; error: string | null; r
 }
 
 
+const WIFI_KEY = "lsm.pulsera";
+
+function readAddress(): string {
+  try {
+    return localStorage.getItem(WIFI_KEY) || "pulsera-der.local";
+  } catch {
+    return "pulsera-der.local";
+  }
+}
+
+/** Dirección de la pulsera + botón para conectarla por WiFi (la dirección se recuerda en este navegador). */
+function WifiConnect() {
+  const { gloves } = useApp();
+  const [address, setAddress] = useState(readAddress);
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      localStorage.setItem(WIFI_KEY, address.trim());
+    } catch {
+      /* sin almacenamiento: dura esta visita */
+    }
+    void gloves.connectWifi(address);
+  };
+  return (
+    <form className="gloves__wifi" onSubmit={submit}>
+      <label className="gloves__wifi-label" htmlFor="pulsera-dir">
+        Por WiFi: dirección de la pulsera
+      </label>
+      <div className="gloves__wifi-row">
+        <input id="pulsera-dir" name="pulsera" className="gloves__wifi-input" value={address} onChange={(e) => setAddress(e.target.value)}
+          autoComplete="off" spellCheck={false} inputMode="url" placeholder="pulsera-der.local o 192.168.137.…" />
+        <button type="submit" className="btn btn--secondary" disabled={gloves.connecting || !address.trim()}>
+          {gloves.connecting ? "Conectando…" : "Conectar por WiFi"}
+        </button>
+      </div>
+      <p className="gloves__hint">Si el nombre no funciona, usa la IP que muestra el monitor serie de la pulsera.</p>
+    </form>
+  );
+}
+
 /**
  * Conexión de guantes: botón "Conectar guantes" (un guante por vez; se identifica solo como derecho
  * o izquierdo), estado de cada lado con botón para desconectarlo, y el error visible si lo hay.
@@ -209,10 +249,19 @@ export function GloveControls({ compact = false }: { compact?: boolean }) {
   const { gloves } = useApp();
   if (!gloves.supported) {
     return (
-      <p className="notice notice--info">
-        <IconGlove />
-        <span>Tu navegador no permite conectar guantes; la app funciona solo con cámara.</span>
-      </p>
+      <div className={compact ? "gloves gloves--compact" : "gloves"}>
+        <p className="notice notice--info">
+          <IconGlove />
+          <span>Tu navegador no permite conectar guantes por USB; puedes conectarlos por WiFi.</span>
+        </p>
+        <WifiConnect />
+        {gloves.error ? (
+          <p className="notice notice--bad" role="alert">
+            <IconError />
+            <span>{gloves.error}</span>
+          </p>
+        ) : null}
+      </div>
     );
   }
   // Izquierdo primero: con el video en espejo, lo derecho de la persona queda a la derecha de la pantalla.
@@ -232,6 +281,7 @@ export function GloveControls({ compact = false }: { compact?: boolean }) {
         )}
         {compact ? null : <p className="gloves__hint">La app reconoce solo cuál es el derecho y cuál el izquierdo.</p>}
       </div>
+      {connectedCount === 2 ? null : <WifiConnect />}
       <ul className="gloves__list" hidden={connectedCount === 0}>
         {sides.map(({ side, label }) => {
           const g = gloves.sides[side];
@@ -240,7 +290,9 @@ export function GloveControls({ compact = false }: { compact?: boolean }) {
             <li key={side} className="gloves__item" data-tone={tone}>
               {tone === "off" ? <IconGlove style={side === "L" ? { transform: "scaleX(-1)" } : undefined} /> : <ToneIcon tone={tone} />}
               <span className="gloves__name">{label}</span>
-              <span className="gloves__state">{!g.connected ? "sin conectar" : g.stale ? "conectado, sin datos" : "conectado"}</span>
+              <span className="gloves__state">
+                {!g.connected ? "sin conectar" : g.stale ? "conectado, sin datos" : gloves.via[side] === "wifi" ? "conectado por WiFi" : "conectado por USB"}
+              </span>
               {g.connected ? (
                 <button type="button" className="btn btn--quiet gloves__off" onClick={() => void gloves.disconnect(side)}>
                   Desconectar<span className="visually-hidden"> {label.toLowerCase()}</span>

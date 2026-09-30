@@ -2,16 +2,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FramePayload } from "../lib/protocol";
 import { type GyroCal, parseCalLine } from "../lib/gyroCal";
 import { GloveSerial } from "../lib/serial";
-import { type GloveState, duplicateGloveMessage, gloveErrorMessage, gloveLostMessage, gloveState, sameGloveState, selectLatest } from "../lib/ui";
+import { GloveSocket } from "../lib/wsGlove";
+import { type GloveState, duplicateGloveMessage, gloveErrorMessage, gloveLostMessage, gloveState, gloveWifiLostMessage, sameGloveState, selectLatest } from "../lib/ui";
 
 export type { GloveState } from "../lib/ui";
 export type Side = "L" | "R";
+export type Via = "usb" | "wifi";
+/** Un guante por USB (Web Serial) o por WiFi (WebSocket de la pulsera): misma API. */
+type GloveLink = GloveSerial | GloveSocket;
 
 export interface GlovesHandle {
   supported: boolean;
   sides: { L: GloveState; R: GloveState };
   /** Abre el selector de puertos del navegador; el guante se identifica solo (ID? → L/R). */
   connect(): Promise<void>;
+  /** Se conecta por WiFi a la pulsera (nombre .local o IP que muestra su monitor serie). */
+  connectWifi(address: string): Promise<void>;
+  /** Por dónde está conectado cada guante (null = sin conectar). */
+  via: { L: Via | null; R: Via | null };
   disconnect(side: Side): Promise<void>;
   connecting: boolean;
   error: string | null;
@@ -36,7 +44,8 @@ export const CAL_TIMEOUT_MS = 6000;
  */
 export function useGloves(): GlovesHandle {
   const supported = GloveSerial.supported();
-  const ports = useRef<{ L: GloveSerial | null; R: GloveSerial | null }>({ L: null, R: null });
+  const ports = useRef<{ L: GloveLink | null; R: GloveLink | null }>({ L: null, R: null });
+  const [via, setVia] = useState<{ L: Via | null; R: Via | null }>({ L: null, R: null });
   const [sides, setSides] = useState<{ L: GloveState; R: GloveState }>({ L: OFF, R: OFF });
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,10 +71,9 @@ export function useGloves(): GlovesHandle {
 
   // Sondeo ligero del estado: solo re-renderiza cuando algo cambia.
   useEffect(() => {
-    if (!supported) return;
     const id = window.setInterval(refresh, POLL_MS);
     return () => window.clearInterval(id);
-  }, [supported, refresh]);
+  }, [refresh]);
 
   // Cerrar puertos al desmontar.
   const mounted = useRef(true);
@@ -81,18 +89,14 @@ export function useGloves(): GlovesHandle {
     };
   }, []);
 
-  const connect = useCallback(async () => {
-    if (!supported) {
-      setError("Este navegador no permite conectar los guantes. Usa Edge o Chrome en computadora.");
-      return;
-    }
+  /** Conecta `glove` con `open` (USB o WiFi) y lo deja listo: lado, CAL y aviso si se pierde. */
+  const attach = useCallback(async (glove: GloveLink, open: () => Promise<Side>, how: Via) => {
     setConnecting(true);
     setError(null);
-    const glove = new GloveSerial();
     try {
-      const side = await glove.connect();
+      const side = await open();
       if (!mounted.current) {
-        // El hook se desmontó mientras se abría el puerto: no guardar un guante huérfano.
+        // El hook se desmontó mientras se conectaba: no guardar un guante huérfano.
         await glove.disconnect();
         return;
       }
@@ -104,31 +108,46 @@ export function useGloves(): GlovesHandle {
         return;
       }
       ports.current[side] = glove;
+      setVia((v) => ({ ...v, [side]: how }));
       setSideCal(side, IDLE);
       glove.onCal = (line) => {
         const r = parseCalLine(line);
         if (r && r.side === side && ports.current[side] === glove && mounted.current) setSideCal(side, r.cal);
       };
-      // Desenchufado o error fatal de lectura: el lado vuelve a "sin conectar" (reaparece "Conectar").
+      // Desenchufado, WiFi caído o error fatal de lectura: el lado vuelve a "sin conectar".
       glove.onLost = () => {
         if (ports.current[side] !== glove) return;
         ports.current[side] = null;
         if (mounted.current) {
-          setError(gloveLostMessage(side));
+          setVia((v) => ({ ...v, [side]: null }));
+          setError(how === "wifi" ? gloveWifiLostMessage(side) : gloveLostMessage(side));
           refresh();
         }
       };
     } catch (err) {
-      // Sin depender del texto de serial.ts: cerrar el selector (NotFoundError) no es un error;
-      // permiso, puerto ocupado o falta de respuesta (tiempo agotado) tienen su propio mensaje.
-      if (mounted.current) setError(gloveErrorMessage(err));
+      // USB: sin depender del texto de serial.ts (cerrar el selector no es un error). WiFi: el mensaje ya es para la persona.
+      if (mounted.current) setError(how === "wifi" ? (err instanceof Error ? err.message : "No se pudo conectar por WiFi.") : gloveErrorMessage(err));
     } finally {
       if (mounted.current) {
         setConnecting(false);
         refresh();
       }
     }
-  }, [supported, refresh, setSideCal]);
+  }, [refresh, setSideCal]);
+
+  const connect = useCallback(async () => {
+    if (!supported) {
+      setError("Este navegador no permite conectar los guantes por USB. Usa Edge o Chrome en computadora, o conéctalos por WiFi.");
+      return;
+    }
+    const glove = new GloveSerial();
+    await attach(glove, () => glove.connect(), "usb");
+  }, [supported, attach]);
+
+  const connectWifi = useCallback(async (address: string) => {
+    const glove = new GloveSocket();
+    await attach(glove, () => glove.connect(address), "wifi");
+  }, [attach]);
 
   const calibrateGyro = useCallback(() => {
     for (const side of ["L", "R"] as const) {
@@ -154,6 +173,7 @@ export function useGloves(): GlovesHandle {
         glove.onCal = null;
       }
       setSideCal(side, IDLE);
+      setVia((v) => ({ ...v, [side]: null }));
       await glove?.disconnect();
       refresh();
     },
@@ -172,5 +192,5 @@ export function useGloves(): GlovesHandle {
     [],
   );
 
-  return { supported, sides, connect, disconnect, connecting, error, latest, gyro, calibrateGyro };
+  return { supported, sides, connect, connectWifi, via, disconnect, connecting, error, latest, gyro, calibrateGyro };
 }
