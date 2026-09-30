@@ -348,16 +348,18 @@ class Session:
             ev_out = next((m for m in out if m["type"] == "evaluation"), None)
             fps = self.rate.fps
             log.info("segmento modo=%s objetivo=%s cuadros=%d seg=%.2f motivo=%s fps=%.1f top3=%s total=%s "
-                     "top_y_min=%.2f top_y_fin=%.2f rest_y=%.2f", self.mode, self.target, b - a + 1,
+                     "top_y_min=%.2f top_y_fin=%.2f rest_y=%.2f scores=%s tips=%s issues=%s", self.mode, self.target, b - a + 1,
                      (b - a + 1) / fps, ev.reason, fps,
                      ",".join(f"{g}:{p:.2f}" for g, p in self._last_top[:3]) or "-",
                      f"{ev_out['total']:.2f}" if ev_out else "-",
                      float(np.nanmin(ys)) if np.isfinite(ys).any() else float("nan"), float(ys[-1]),
-                     self.segmenter.rest_y)
+                     self.segmenter.rest_y, ev_out["scores"] if ev_out else "-",
+                     " | ".join(ev_out["tips"][:2]) if ev_out else "-", self._last_issues)
         return out
 
     def _evaluate_segment(self, a: int, b: int) -> list[dict]:
         self._last_top: list = []
+        self._last_issues: list = []
         b = self._trim_descent(a, b)
         seq = NormSequence(np.stack(self.hands[a:b + 1]), np.stack(self.present[a:b + 1]))
         # k=5: NINGUNA nunca se muestra como alternativa; quitándola quedan ≥4 para el contexto
@@ -377,6 +379,7 @@ class Session:
             gflex = _nanmedian(np.stack(self.gflex[a + q:b - q + 1]))
             gcont = _nanmedian(np.stack(self.gcont[a + q:b - q + 1]))
             ev = evaluate(ref, seq, gflex, gcont)
+            self._last_issues = [(i.param, round(float(i.z), 1), {k: round(float(v), 2) for k, v in i.detail.items() if isinstance(v, (int, float))}) for i in ev.issues[:4]]
             return [{"type": "evaluation", "target": self.target, "recognized": recognized, "scores": ev.scores,
                      "total": ev.total, "tips": messages(ev, ref),
                      "fingers": finger_status(ref, ev.finger_flex).tolist(),

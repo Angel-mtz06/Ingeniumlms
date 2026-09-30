@@ -112,3 +112,31 @@ def test_tip_needs_margin_adjusted_z_above_issue_z():
     assert not any(t.startswith("Sube la mano") for t in messages(ev, REF))
     ev = evaluate(REF, seq(y=1.0 + 3.5 * 0.35))  # z = 3.5 → 2.5 > 2: consejo
     assert any(t.startswith("Sube la mano derecha") for t in messages(ev, REF))
+
+
+def test_tolerance_divides_z_of_that_parameter_only():
+    from dataclasses import replace
+    s = seq(y=1.0 + 3.5 * 0.35, flex=(0, 60, 90, 90, 90))  # ubicación z = 3.5; índice a 30° de la referencia
+    base = evaluate(REF, s)
+    loose = evaluate(replace(REF, tolerance={"ubicacion": 2.0}), s)
+    assert loose.scores["ubicacion"] > base.scores["ubicacion"] + 30  # z 3.5 → 1.75
+    assert loose.scores["configuracion"] == base.scores["configuracion"]  # el resto no cambia
+    assert any(t.startswith("Sube la mano") for t in messages(base, REF))
+    assert not any(t.startswith("Sube la mano") for t in messages(loose, replace(REF, tolerance={"ubicacion": 2.0})))
+
+
+def test_tolerance_none_or_empty_changes_nothing():
+    from dataclasses import replace
+    s = seq(y=2.0, flex=(0, 60, 90, 90, 90))
+    a = evaluate(REF, s)
+    for tol in (None, {}, {"movimiento": 1.0}):
+        b = evaluate(replace(REF, tolerance=tol), s)
+        assert (b.scores, b.total) == (a.scores, a.total)
+
+
+def test_tolerance_also_applies_to_live_finger_status():
+    from dataclasses import replace
+    flex = np.array([[0, 90, 40, 72, 60], [np.nan] * 5])
+    strict = finger_status(REF, flex)[0]
+    loose = finger_status(replace(REF, tolerance={"configuracion": 3.0}), flex)[0]
+    assert (loose <= strict).all() and loose.sum() < strict.sum()
