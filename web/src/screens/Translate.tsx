@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { handsUp, SpellWord } from "../lib/spell";
 import { GlossChips } from "../components/GlossChips";
 import { IconSpeaker, IconWarning } from "../components/icons";
@@ -7,6 +6,9 @@ import { SentencePanel } from "../components/SentencePanel";
 import { TopicPicker } from "../components/TopicPicker";
 import { lostMessage, type Pausing, pausingFraction, pausingText, serverIndex, validation } from "../lib/translate";
 import { LiveCamera } from "./LiveCamera";
+import type { FramePayload } from "../lib/protocol";
+
+const SpellRecognizer = lazy(() => import("./SpellRecognizer"));
 import { ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
 const VOICE_KEY = "lsm.voz";
@@ -130,10 +132,10 @@ export function Translate() {
   // Deletreo: las letras se reconocen en el navegador con el mismo reconocedor de Alfabeto (modo libre). Mientras
   // tanto no se mandan cuadros al servidor (no segmenta señas); la palabra llega con add_word al terminar.
   const [spelling, setSpelling] = useState(false);
-  const alpha = useAlphabetRecognition(null, "free", spelling);
+  const spellFrame = useRef<((f: FramePayload) => void) | null>(null);
   const spell = useRef(new SpellWord());
   const [word, setWord] = useState("");
-  const seenLetter = alpha.stable?.[0] ?? null;
+  const [seenLetter, setSeenLetter] = useState<string | null>(null);
   useEffect(() => {
     if (spelling && spell.current.letter(seenLetter)) setWord(spell.current.word);
   }, [seenLetter, spelling]);
@@ -143,6 +145,7 @@ export function Translate() {
     const w = spell.current.take();
     setWord("");
     setSpelling(false);
+    setSeenLetter(null);
     if (w) session.send({ type: "add_word", word: w, spelled: true });
   };
   const toggleSpelling = () => {
@@ -180,7 +183,7 @@ export function Translate() {
   holdRef.current = holding;
   useFrameSink((f) => {
     if (spelling) {
-      alpha.onFrame(f);
+      spellFrame.current?.(f);
       // Bajar las manos ~1 s termina la palabra.
       if (spell.current.frame(f.t ?? performance.now(), handsUp(f))) endSpelling();
       return;
@@ -257,6 +260,11 @@ export function Translate() {
       </header>
 
       <ServerNotice />
+      {spelling ? (
+        <Suspense fallback={null}>
+          <SpellRecognizer frameRef={spellFrame} onLetter={setSeenLetter} />
+        </Suspense>
+      ) : null}
       {/* Región viva siempre montada (vacía al montar) y rellenada después: así sí se anuncia. */}
       <p className="visually-hidden" role="status">
         {lostAnnounce}
