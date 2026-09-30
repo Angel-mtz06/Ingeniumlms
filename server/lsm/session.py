@@ -68,8 +68,15 @@ def env_tta() -> bool:
 TOP_K = 5  # candidatas que se piden al clasificador; el contexto solo reordena dentro de ellas
 # Deletreo (mensaje `spelling`): el navegador confirma la 1a letra ~0.6 s después de formarla, y el
 # segmentador ya pudo cerrar un segmento por quietud (0.4 s). Al empezar un deletreo se apartan también
-# las señas de los últimos SPELL_LOOKBACK_S segundos.
+# las señas de los últimos SPELL_LOOKBACK_S segundos. Un deletreo que empieza con Q o X llega hasta
+# que termina su movimiento: el navegador manda `lookback_s` (desde que empezó el intento), hasta
+# SPELL_LOOKBACK_MAX_S; nunca menos que SPELL_LOOKBACK_S.
 SPELL_LOOKBACK_S = 1.2
+SPELL_LOOKBACK_MAX_S = 4.0
+# Un deletreo de UNA letra regresa sus señas (casi siempre era la forma de la mano de una seña). Excepción:
+# la Q/X ya se verificaron por pose Y trayectoria, y el clasificador de señas (que no conoce letras) las lee
+# como estas señas (en pruebas en vivo, la Q salió ESTO con 61–89 % y OTRA_VEZ con 43 %): esas se descartan.
+LETTER_CONFUSED_WITH = {"Q": frozenset({"ESTO", "OTRA_VEZ"})}
 NO_HAND_WARN = 60  # cuadros a 30 fps (2 s); se escala con la tasa real
 GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
 SIDE_OF_SLOT = ("R", "L")
@@ -189,6 +196,7 @@ class Session:
         self.held: list[dict] = []
         self.spell_end = -1  # idx del cuadro en que terminó el último deletreo
         self.spell_word = False  # ese deletreo se agregó como palabra (sus segmentos se descartan)
+        self.spell_drop: frozenset = frozenset()  # fue una Q/X sola: sus segmentos con estas glosas se descartan
         self.no_hand = 0
         self.warned = False
         self._weak: tuple[int, int] | None = None  # último pedazo débil (idx absolutos), para leerlo con el siguiente
@@ -389,18 +397,23 @@ class Session:
                  **{k: v for k, v in item.items() if not k.startswith("_")}}]
 
     def _spelling(self, msg: dict) -> list[dict]:
-        """{"active": true}: empieza un deletreo; {"active": false, "word": "M-A-R-I-O" | null}: termina.
-        Con palabra, las señas apartadas eran el deletreo y se descartan; sin palabra (p. ej. una sola
-        letra, que casi siempre era parte de una seña) se regresan a las pendientes."""
-        active, word = msg.get("active"), msg.get("word")
+        """{"active": true, "lookback_s"?: s}: empieza un deletreo; {"active": false, "word": "M-A-R-I-O" | null}:
+        termina. Con palabra, las señas apartadas eran el deletreo y se descartan; sin palabra (p. ej. una sola
+        letra, que casi siempre era parte de una seña) se regresan a las pendientes. `letter` (sin palabra): la
+        letra suelta que se reconoció; si es Q/X, las señas que se confunden con ella se descartan."""
+        active, word, lookback = msg.get("active"), msg.get("word"), msg.get("lookback_s", SPELL_LOOKBACK_S)
+        letter = msg.get("letter")
         spelled = self._spelled(word) if word is not None else None
-        if not isinstance(active, bool) or (not active and word is not None and spelled is None):
+        if (not isinstance(active, bool) or (not active and word is not None and spelled is None)
+                or not _is_num(lookback) or lookback < 0
+                or (letter is not None and not (isinstance(letter, str) and len(letter) == 1))):
             return [{"type": "error", "message": "mensaje inválido: spelling"}]
         if active:
             if self.spelling:
                 return []
             self.spelling, self.held = True, []
-            since = self.idx - round(SPELL_LOOKBACK_S * self.rate.fps)
+            lookback = min(max(float(lookback), SPELL_LOOKBACK_S), SPELL_LOOKBACK_MAX_S)
+            since = self.idx - round(lookback * self.rate.fps)
             # Las que la persona ya validó no se apartan: esas sí eran señas.
             recent = [p for p in self.pending if p.get("_end", -1) >= since and not p.get("confirmed")]
             if not recent:
@@ -411,12 +424,17 @@ class Session:
         if not self.spelling:
             return self._append(spelled) if spelled is not None else []
         self.spelling, self.spell_end, self.spell_word = False, self.idx, word is not None
+        self.spell_drop = LETTER_CONFUSED_WITH.get(letter.upper(), frozenset()) if letter and word is None else frozenset()
         held, self.held = self.held, []
         if spelled is not None:
             return self._append(spelled)
+        dropped = [item["gloss"] for item in held if item["gloss"] in self.spell_drop]
+        if dropped:
+            log.info("letra sola %s: se descartan %s (se confunden con ella)", letter.upper(), ",".join(dropped))
         out: list[dict] = []
         for item in held:
-            out += self._append(item)
+            if item["gloss"] not in self.spell_drop:
+                out += self._append(item)
         return out
 
     def _update_gloves(self, lines: dict) -> dict[str, bool]:
@@ -531,6 +549,9 @@ class Session:
             return []
         if self.spell_word and start <= self.spell_end:
             return []  # empezó durante el deletreo ya agregado como palabra (p. ej. al bajar la mano)
+        if item["gloss"] in self.spell_drop and start <= self.spell_end:
+            log.info("letra sola: se descarta %s (empezó durante ella)", item["gloss"])
+            return []  # empezó durante una Q/X sola y es una seña que se confunde con ella
         return self._append(item)
 
     def _top_y(self, i: int) -> float:

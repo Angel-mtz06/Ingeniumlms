@@ -64,6 +64,8 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
   const [motionResult, setMotionResult] = useState<MotionResult | null>(null);
   /** Libre: letras con movimiento cuya pose inicial ya está lista (p. ej. "J" o "ÑQ"). */
   const [freeReady, setFreeReady] = useState("");
+  /** Libre: letras con movimiento con un intento en curso (pose lista o moviéndose), p. ej. "Q". */
+  const [freeActive, setFreeActive] = useState("");
   const hold = useRef(new AlphabetHold());
   const stabilizer = useRef(new StableLetter());
   const monitor = useRef(new CaptureMonitor());
@@ -86,7 +88,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
     tracker.current = dynamic && mode !== "free" ? new LiveMotion(target!) : null;
     state.current.completed=false; state.current.lastFrame=0;
     setDetected(null); setRanking([]); setFeedback(null); setFingers([]); setSide(null); setTargetShare(0); setStable(null);
-    setProgress(0); setComplete(false); setLive(null); setMotionResult(null); setFreeReady(""); state.current.failedAt=null;
+    setProgress(0); setComplete(false); setLive(null); setMotionResult(null); setFreeReady(""); setFreeActive(""); state.current.failedAt=null;
     transition("idle", performance.now());
   }, [enabled,dynamic,target,mode,transition]);
 
@@ -104,7 +106,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
       if (s.hidden) { s.hidden=false; restart(); return; }
       if (now-s.lastFrame>250) {
         hold.current.reset(); stabilizer.current.reset(); freeMotion.current.reset(); monitor.current.reset();
-        setDetected(null); setStable(null); setRanking([]); setFingers([]);
+        setDetected(null); setStable(null); setRanking([]); setFingers([]); setFreeActive("");
         if (!s.completed) { setProgress(0); setFeedback(null); }
       }
       if (s.phase === "result" && now-s.since > RESULT_MS) {
@@ -162,6 +164,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
       }
       const motion = freeMotion.current.push(frame, startOk, score);
       setFreeReady(motion.ready.join(""));
+      setFreeActive(motion.active.join(""));
       if (motion.result) {
         s.failedAt=null; stabilizer.current.reset(); setMotionResult(motion.result); setStable(motion.result.prediction); setFingers([]); setFreeReady("");
         transition("result", now);
@@ -195,5 +198,5 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
     setProgress(p);
     if (p>=1) { s.completed=true; setComplete(true); }
   };
-  return {onFrame,detected,ranking,feedback,fingers,side,targetShare,stable,progress,complete,live,phase,motionResult,freeReady,restart};
+  return {onFrame,detected,ranking,feedback,fingers,side,targetShare,stable,progress,complete,live,phase,motionResult,freeReady,freeActive,restart};
 }
