@@ -395,7 +395,14 @@ def test_translate_discards_confident_none_silently():
     assert s.pending == []
 
 
-def test_translate_weak_none_uses_first_real_alternative():
+def test_translate_none_at_035_is_discarded():
+    # Regla nueva: NINGUNA con p ≥ 0.35 descarta el segmento aunque no sea claramente la más probable.
+    s, out = _translate(NoneClassifier(0, p_none=0.45))
+    assert not [m for m in out if m["type"] == "sign"]
+
+
+def test_translate_weak_none_uses_first_real_alternative(monkeypatch):
+    monkeypatch.setenv("LSM_NONE_MIN", "0.5")  # la regla anterior sigue disponible
     s, out = _translate(NoneClassifier(0, p_none=0.45))
     sign = next(m for m in out if m["type"] == "sign")
     assert sign["gloss"] == "HOLA" and [g for g, _ in sign["top3"]] == ["HOLA", "ADIOS", "SI"]

@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from lsm.classifier.model import SignTransformer
-from lsm.features import featurize
+from lsm.features import active_span, featurize
 from lsm.normalize import NormSequence
 
 
@@ -72,3 +72,30 @@ def save_ensemble(paths: Sequence[str | Path], out: str | Path, **meta) -> None:
             raise ValueError("los checkpoints no tienen las mismas etiquetas en el mismo orden")
     torch.save({"ensemble": cks, "labels": list(cks[0]["labels"]), "members": [Path(p).name for p in paths], **meta},
                out)
+
+
+# Recortes del segmento para promediar (fracción del tramo activo que se quita al inicio, al final): el segmentador
+# en vivo no siempre corta la seña en su lugar. Con v2e, en personas no vistas: top-3 95.0 → 97.5 %, mismo top-1.
+TTA_CROPS = ((0.0, 0.0), (0.15, 0.0), (0.0, 0.15))
+MIN_CROP = 4  # cuadros mínimos de un recorte; más corto se usa la secuencia completa
+
+
+def crop_active(norm: NormSequence, lo: float, hi: float) -> NormSequence:
+    """Quita `lo` del inicio del tramo activo (junto con el reposo previo) y `hi` de su final."""
+    if lo <= 0 and hi <= 0:
+        return norm
+    a, b = active_span(norm, pad=0)
+    span = b - a + 1
+    s = a + int(round(lo * span)) if lo > 0 else 0
+    e = b + 1 - int(round(hi * span)) if hi > 0 else len(norm.hands)
+    if e - s < MIN_CROP:
+        return norm
+    return NormSequence(norm.hands[s:e], norm.present[s:e], norm.sample_id, norm.signer)
+
+
+def predict_tta(clf, norm: NormSequence, k: int = 3) -> list[tuple[str, float]]:
+    """Top-k con las probabilidades promediadas de los recortes TTA_CROPS. Un clasificador sin `probs` (p. ej. de
+    pruebas) predice solo con la secuencia completa."""
+    if not hasattr(clf, "probs"):
+        return clf.predict(norm, k=k)
+    return _top(np.mean([clf.probs(crop_active(norm, lo, hi)) for lo, hi in TTA_CROPS], axis=0), clf.labels, k)
