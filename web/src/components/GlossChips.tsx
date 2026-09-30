@@ -20,7 +20,7 @@ export interface GlossChipItem {
   removed?: boolean;
 }
 
-const EMPTY = "Todavía no hay señas. Haz una seña frente a la cámara y aparecerá aquí.";
+const EMPTY = "…";
 
 export interface GlossChipsProps {
   items: GlossChipItem[];

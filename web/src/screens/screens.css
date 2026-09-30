@@ -256,6 +256,20 @@
   gap: var(--space-5);
 }
 
+/* Inicio: estado y guantes lado a lado, en la misma cuadrícula que las entradas. */
+.home-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+
+/* En columna angosta, el estado se lee como lista: pastillas del mismo ancho. */
+.home-panels .status-bar__list {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+
 .entry__icon--emoji {
   font-size: 2rem;
   line-height: 1;
@@ -699,6 +713,98 @@
 .sentence-block {
   display: grid;
   gap: var(--space-3);
+}
+
+/* Interpretación: usa el ancho de la ventana (hasta 1600 px) y títulos más chicos. El menú no cambia. */
+.app-main:has(> .screen-panel > .translate-screen) {
+  max-width: 1600px;
+}
+
+.translate-screen {
+  gap: var(--space-4);
+}
+
+.translate-screen .screen__title {
+  font-size: var(--text-xl);
+}
+
+.translate-screen .screen__lead {
+  font-size: var(--text-md);
+}
+
+.translate-screen .sheet__title {
+  font-size: var(--text-lg);
+}
+
+.translate-screen .sheet {
+  padding: var(--space-5);
+}
+
+/* Tema y "Validar cada seña" en una fila. */
+.translate-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+}
+
+/* "Validar cada seña" compacto: una línea por seña (número, candidatas y Ninguna) para que quepan 3 o más. */
+.translate-screen .validate-list {
+  gap: var(--space-2);
+}
+
+.translate-screen .validate-item__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.translate-screen .validate-item__head {
+  font-size: var(--text-xs);
+}
+
+.translate-screen .validate-item__n {
+  width: 24px;
+  height: 24px;
+}
+
+/* Pendiente: el borde punteado ya lo dice; sin "Elige la correcta". */
+.translate-screen .validate-item[data-state="pending"] .validate-item__state,
+.translate-screen .validate-option__key,
+.translate-screen .validate-option__tag {
+  display: none;
+}
+
+.translate-screen .validate-item__options {
+  flex: 1 1 0;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.translate-screen .validate-option {
+  min-height: 40px;
+  padding: var(--space-1) var(--space-2);
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.translate-screen .validate-option .option__p {
+  font-size: var(--text-xs);
+}
+
+.translate-screen .validate-remove {
+  min-height: 40px;
+  padding-inline: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+/* Columna izquierda: cámara y, debajo, la oración (antes quedaba un hueco bajo la cámara). */
+.translate-main {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 /* Deletreo: el alfabeto dentro de Interpretación. */
@@ -1378,7 +1484,8 @@
   .translate-grid,
   .record-grid,
   .calib-grid,
-  .diag-grid {
+  .diag-grid,
+  .home-panels {
     grid-template-columns: minmax(0, 1fr);
   }
 
