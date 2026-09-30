@@ -244,3 +244,19 @@ describe("teclas de validación", () => {
     expect(k("x", { metaKey: true })).toBeNull();
   });
 });
+
+describe("deletreo", () => {
+  it("sign con spelled entra ya validada y como deletreada; se puede quitar", () => {
+    let s = run(TRANSLATE_INITIAL, sign(0, "HOLA", false), { type: "sign", index: 1, gloss: "ANGEL", top3: [], confident: true, spelled: true, confirmed: true });
+    expect(s.chips[1]).toEqual({ gloss: "ANGEL", top3: [], confident: true, spelled: true, confirmed: true });
+    expect(validation(s.chips)).toEqual({ live: 2, confirmed: 1, unvalidated: 1, ready: false });
+    s = translateReducer(s, { kind: "confirm", index: 0, gloss: "HOLA" });
+    expect(validation(s.chips).ready).toBe(true);
+    s = translateReducer(s, { kind: "remove", index: 1, ghost: true });
+    expect(s.chips[1]).toMatchObject({ gloss: "ANGEL", spelled: true, removed: true });
+    // pending del servidor conserva la marca de deletreo
+    s = run(TRANSLATE_INITIAL, { type: "sign", index: 0, gloss: "ANGEL", top3: [], confident: true, spelled: true, confirmed: true });
+    s = run(s, { type: "pending", glosses: ["ANGEL"], confirmed: [true] });
+    expect(s.chips[0].spelled).toBe(true);
+  });
+});

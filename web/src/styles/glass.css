@@ -556,7 +556,14 @@ body::after {
   background: color-mix(in srgb, var(--color-ok) 12%, var(--glass-fill-strong));
 }
 
+.spell {
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--glass-fill-subtle));
+  box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-border);
+}
+
 .validate-option__key,
+.btn kbd,
 .sheet__hint kbd {
   background: var(--glass-fill-strong);
 }

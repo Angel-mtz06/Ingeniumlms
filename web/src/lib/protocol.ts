@@ -26,7 +26,9 @@ export type ClientMsg =
   /** Preferencia de la conexión (sobrevive a hello y reset); el socket la reenvía tras `hello` al reconectar. */
   | { type: "topic"; topic: Topic }
   /** "Validar cada seña": sin oración mientras haya señas sin confirmar. Preferencia de la conexión, como `topic`. */
-  | { type: "validate"; enabled: boolean };
+  | { type: "validate"; enabled: boolean }
+  /** Palabra deletreada en el navegador (alfabeto manual); entra ya validada. */
+  | { type: "add_word"; word: string; spelled: true };
 
 export type Scores = { configuracion: number; ubicacion: number; movimiento: number; orientacion: number };
 
@@ -34,8 +36,11 @@ export type ServerMsg =
   | { type: "ready"; mode: Mode; target: string | null; has_reference: boolean }
   | { type: "live"; fingers: number[][]; hands: boolean[]; segment: "idle" | "active" }
   | { type: "evaluation"; target: string; recognized: Glosses; evaluable: boolean; scores: Scores | Record<string, never>; total: number; tips: string[]; fingers: number[][] }
-  /** `reranked`: el contexto (seña anterior) cambió el top-1 del clasificador; `top3` viene reordenado con las probabilidades originales. */
-  | { type: "sign"; index: number; gloss: string; top3: Glosses; confident: boolean; reranked?: boolean }
+  /**
+   * `reranked`: el contexto (seña anterior) cambió el top-1 del clasificador; `top3` viene reordenado con las probabilidades
+   * originales. `spelled` y `confirmed`: palabra deletreada (add_word), fija y ya validada (`top3: []`).
+   */
+  | { type: "sign"; index: number; gloss: string; top3: Glosses; confident: boolean; reranked?: boolean; spelled?: boolean; confirmed?: boolean }
   /**
    * Señas pendientes vigentes. `confirmed[i]`: la persona validó la seña i. `awaiting_validation`: con
    * "Validar cada seña", la pausa o build_sentence no formaron la oración porque faltan señas por validar.

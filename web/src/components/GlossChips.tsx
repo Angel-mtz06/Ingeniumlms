@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Glosses } from "../lib/protocol";
+import { spelledLabel } from "../lib/spell";
 import { validateKey } from "../lib/translate";
 import { focusAfterRemove, glossLabel, percent } from "../lib/ui";
 import { IconCheck, IconClose, IconWarning } from "./icons";
@@ -11,6 +12,8 @@ export interface GlossChipItem {
   confident: boolean;
   /** El contexto (la seña anterior) eligió esta glosa sobre el top-1 del clasificador: etiqueta "por contexto". */
   reranked?: boolean;
+  /** Palabra deletreada (alfabeto manual): fija, sin candidatas; se muestra letra por letra con "deletreo". */
+  spelled?: boolean;
   /** Validada por la persona ("Validar cada seña"). */
   confirmed?: boolean;
   /** Quitada: en "Validar cada seña" se ve tachada; en el modo de etiquetas no se muestra. */
@@ -124,7 +127,8 @@ function ChipList({ items, onConfirm, onRemove, onOpenChange }: GlossChipsProps)
               onClick={() => (open === i ? close(false) : setOpen(i))}
             >
               {it.confident ? null : <IconWarning size={18} />}
-              <span className="chip__gloss">{glossLabel(it.gloss)}</span>
+              <span className="chip__gloss">{it.spelled ? spelledLabel(it.gloss) : glossLabel(it.gloss)}</span>
+              {it.spelled ? <span className="chip__tag">deletreo</span> : null}
               {it.reranked ? (
                 <span className="chip__tag chip__tag--context" title="Elegida por la seña anterior; toca para ver las otras opciones">
                   por contexto
@@ -218,6 +222,7 @@ function ValidateList({ items, onConfirm, onRemove }: GlossChipsProps) {
       return;
     }
     if (it.removed) return;
+    if (a.kind === "pick" && it.spelled) return;
     if (a.kind === "remove") {
       e.preventDefault();
       remove(i);
@@ -241,7 +246,7 @@ function ValidateList({ items, onConfirm, onRemove }: GlossChipsProps) {
     <ol className="validate-list" aria-label="Señas reconocidas">
       {items.map((it, i) => {
         const state = it.removed ? "removed" : it.confirmed ? "confirmed" : "pending";
-        const label = glossLabel(it.gloss);
+        const label = it.spelled ? spelledLabel(it.gloss) : glossLabel(it.gloss);
         return (
           <li key={`${i}-${it.gloss}`} className="validate-item" data-state={state}>
             <div
@@ -251,7 +256,7 @@ function ValidateList({ items, onConfirm, onRemove }: GlossChipsProps) {
               className="validate-item__row"
               role="group"
               tabIndex={0}
-              aria-label={`Seña ${i + 1}: ${label}, ${STATE_TEXT[state]}`}
+              aria-label={`${it.spelled ? "Palabra deletreada" : "Seña"} ${i + 1}: ${it.spelled ? it.gloss : label}, ${STATE_TEXT[state]}`}
               aria-keyshortcuts="1 2 3 X Delete ArrowUp ArrowDown"
               onKeyDown={(e) => onRowKey(i, e)}
             >
@@ -263,7 +268,12 @@ function ValidateList({ items, onConfirm, onRemove }: GlossChipsProps) {
                   <span className="validate-item__gloss">
                     <s>{label}</s>
                   </span>
+                ) : it.spelled ? (
+                  <span className="validate-item__gloss validate-item__gloss--spelled" translate="no">
+                    {label}
+                  </span>
                 ) : null}
+                {it.spelled ? <span className="chip__tag">deletreo</span> : null}
                 <span className="validate-item__state">
                   {state === "confirmed" ? <IconCheck size={18} /> : state === "removed" ? <IconClose size={18} /> : null}
                   {state === "confirmed" ? "Validada" : state === "removed" ? "Quitada" : "Elige la correcta"}
@@ -274,7 +284,14 @@ function ValidateList({ items, onConfirm, onRemove }: GlossChipsProps) {
                   </span>
                 ) : null}
               </div>
-              {state === "removed" ? null : (
+              {state === "removed" ? null : it.spelled ? (
+                <div className="validate-item__options">
+                  <button type="button" className="btn btn--quiet validate-remove" aria-keyshortcuts="X Delete" onClick={() => remove(i)}>
+                    <IconClose size={18} />
+                    Quitar
+                  </button>
+                </div>
+              ) : (
                 <div className="validate-item__options">
                   {candidates(it).map(([g, p], k) => {
                     const chosen = !!it.confirmed && g === it.gloss;

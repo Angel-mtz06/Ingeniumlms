@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
+import { handsUp, SpellWord } from "../lib/spell";
 import { GlossChips } from "../components/GlossChips";
 import { IconCheck, IconSpeaker, IconWarning } from "../components/icons";
 import { SentencePanel } from "../components/SentencePanel";
@@ -57,6 +59,27 @@ function HoldIndicator({ n }: { n: number }) {
   );
 }
 
+/** Palabra en construcción sobre el video, grande y con la última letra resaltada. */
+function SpellIndicator({ word }: { word: string }) {
+  const letters = [...word];
+  return (
+    <div className="overlay-pill overlay-pill--spell" aria-hidden="true">
+      {letters.length ? (
+        <span className="spell-word" translate="no">
+          {letters.map((l, i) => (
+            <span key={i} className="spell-word__letter" data-last={i === letters.length - 1 || undefined}>
+              {l}
+            </span>
+          ))}
+        </span>
+      ) : (
+        <span>Deletrea: haz la primera letra</span>
+      )}
+      <span className="spell-hint">Baja la mano 1 s para terminar</span>
+    </div>
+  );
+}
+
 /** Texto del estado de "Validar cada seña" (vacío si no hay nada pendiente). */
 function validateStatus(unvalidated: number): string {
   if (unvalidated <= 0) return "";
@@ -105,12 +128,64 @@ export function Translate() {
   }, [pauseRunning]);
 
   useSessionMode("translate", null);
+  // Deletreo: las letras se reconocen en el navegador con el mismo reconocedor de Alfabeto (modo libre). Mientras
+  // tanto no se mandan cuadros al servidor (no segmenta señas); la palabra llega con add_word al terminar.
+  const [spelling, setSpelling] = useState(false);
+  const alpha = useAlphabetRecognition(null, "free", spelling);
+  const spell = useRef(new SpellWord());
+  const [word, setWord] = useState("");
+  const seenLetter = alpha.stable?.[0] ?? null;
+  useEffect(() => {
+    if (spelling && spell.current.letter(seenLetter)) setWord(spell.current.word);
+  }, [seenLetter, spelling]);
+
+  /** Termina la palabra (si tiene letras la manda al servidor) y sale del deletreo. */
+  const endSpelling = () => {
+    const w = spell.current.take();
+    setWord("");
+    setSpelling(false);
+    if (w) session.send({ type: "add_word", word: w, spelled: true });
+  };
+  const toggleSpelling = () => {
+    if (spelling) {
+      endSpelling();
+      return;
+    }
+    spell.current.reset();
+    setWord("");
+    setSpelling(true);
+  };
+  const backspace = () => {
+    if (spell.current.backspace()) setWord(spell.current.word);
+  };
+  // Tecla D: activa o termina el deletreo (no mientras se escribe en un campo).
+  const toggleRef = useRef(toggleSpelling);
+  toggleRef.current = toggleSpelling;
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "d" && e.key !== "D") return;
+      if (e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      e.preventDefault();
+      toggleRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Mientras se corrige una seña dudosa (panel abierto) o hay señas sin validar no se mandan cuadros: así el
   // contador de quietud del servidor (pausa automática) no avanza y no se cuela otra seña a media elección.
   const correcting = useRef(false);
   const holdRef = useRef(holding);
   holdRef.current = holding;
   useFrameSink((f) => {
+    if (spelling) {
+      alpha.onFrame(f);
+      // Bajar las manos ~1 s termina la palabra.
+      if (spell.current.frame(f.t ?? performance.now(), handsUp(f))) endSpelling();
+      return;
+    }
     if (!correcting.current && !holdRef.current) session.send(f);
   });
 
@@ -190,6 +265,9 @@ export function Translate() {
       <p className="visually-hidden" role="status">
         {pauseAnnounce}
       </p>
+      <p className="visually-hidden" role="status">
+        {spelling && word ? `Palabra: ${[...word].join(" ")}` : ""}
+      </p>
       {translate.lost > 0 ? (
         <div className="notice notice--warn notice--action">
           <IconWarning />
@@ -202,7 +280,13 @@ export function Translate() {
 
       <div className="translate-grid">
         <LiveCamera>
-          {holding ? <HoldIndicator n={v.unvalidated} /> : translate.pausing ? <PauseIndicator pausing={translate.pausing} /> : null}
+          {spelling ? (
+            <SpellIndicator word={word} />
+          ) : holding ? (
+            <HoldIndicator n={v.unvalidated} />
+          ) : translate.pausing ? (
+            <PauseIndicator pausing={translate.pausing} />
+          ) : null}
         </LiveCamera>
         <section className="sheet" aria-labelledby="traduccion-senas">
           <h3 id="traduccion-senas" className="sheet__title" tabIndex={-1}>
@@ -216,6 +300,37 @@ export function Translate() {
             <span className="switch__label">Validar cada seña</span>
             <span className="switch__state">{validate ? "activado" : "automático"}</span>
           </button>
+          <div className="spell-row">
+            <button type="button" className="btn btn--secondary" aria-pressed={spelling} aria-keyshortcuts="D" onClick={toggleSpelling}>
+              {spelling ? "Terminar palabra" : "Deletrear"} <kbd>D</kbd>
+            </button>
+            {spelling ? (
+              <button type="button" className="btn btn--quiet" onClick={backspace} disabled={!word} aria-label="Borrar la última letra">
+                ⌫ Borrar letra
+              </button>
+            ) : (
+              <span className="spell-row__hint">Para nombres: letra por letra con el alfabeto manual.</span>
+            )}
+          </div>
+          {spelling ? (
+            <div className="spell">
+              <p className="spell__word" translate="no" aria-hidden="true">
+                {word ? (
+                  [...word].map((l, i) => (
+                    <span key={i} className="spell-word__letter" data-last={i === word.length - 1 || undefined}>
+                      {l}
+                    </span>
+                  ))
+                ) : (
+                  <span className="spell__placeholder">Haz la primera letra</span>
+                )}
+              </p>
+              <p className="sheet__hint">
+                Sostén cada letra un momento. Para repetir una letra, mueve la mano entre las dos. Baja la mano 1 s para terminar.
+                {seenLetter ? ` Veo: ${seenLetter}.` : ""}
+              </p>
+            </div>
+          ) : null}
           {validate ? (
             <p className="sheet__hint">
               Toca la palabra correcta o <strong>Ninguna</strong>. Con teclado: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> eligen, <kbd>X</kbd> quita y las flechas{" "}

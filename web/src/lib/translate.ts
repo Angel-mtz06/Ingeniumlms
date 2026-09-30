@@ -10,6 +10,8 @@ export interface ChipItem {
   confident: boolean;
   /** El contexto (la seña anterior) eligió esta glosa en lugar del top-1 del clasificador. */
   reranked?: boolean;
+  /** Palabra deletreada con el alfabeto manual (normalmente un nombre propio): fija, sin candidatas. */
+  spelled?: boolean;
   /** La persona la validó (tocó una candidata o "Aceptar todas"): va fija a la oración. */
   confirmed?: boolean;
   /**
@@ -120,6 +122,8 @@ function onMessage(s: TranslateState, m: ServerMsg): TranslateState {
     case "sign": {
       const item: ChipItem = { gloss: m.gloss, top3: m.top3, confident: m.confident };
       if (m.reranked) item.reranked = true;
+      if (m.spelled) item.spelled = true;
+      if (m.confirmed) item.confirmed = true;
       // `index` es del servidor: cuenta solo las señas vivas (las quitadas siguen a la vista, pero él ya no las tiene).
       const at = livePositions(s.chips)[m.index];
       const chips = at === undefined ? [...s.chips, item] : s.chips.map((c, i) => (i === at ? item : c));

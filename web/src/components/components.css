@@ -831,6 +831,11 @@
   font-weight: 700;
 }
 
+.validate-item__gloss--spelled {
+  font-size: var(--text-xl);
+  letter-spacing: 0.04em;
+}
+
 .validate-item__state {
   display: inline-flex;
   align-items: center;
