@@ -25,9 +25,10 @@ export async function createVision(base = "/mediapipe", delegate: Delegate = "GP
   const opts = (name: string) => ({ baseOptions: { modelAssetPath: `${base}/${name}.task`, delegate }, runningMode: "VIDEO" as const });
   const created: { close(): void }[] = [];
   const track = <T extends { close(): void }>(t: T): T => (created.push(t), t);
+  // numHands 4: si alguien atrás muestra las manos, las de la persona no pierden su lugar; realHands deja 2.
   let hands: HandLandmarker, pose: PoseLandmarker, face: FaceLandmarker;
   try {
-    hands = track(await HandLandmarker.createFromOptions(fs, { ...opts("hand_landmarker"), numHands: 2, minHandDetectionConfidence: 0.3, minHandPresenceConfidence: 0.3, minTrackingConfidence: 0.3 }));
+    hands = track(await HandLandmarker.createFromOptions(fs, { ...opts("hand_landmarker"), numHands: 4, minHandDetectionConfidence: 0.3, minHandPresenceConfidence: 0.3, minTrackingConfidence: 0.3 }));
     pose = track(await PoseLandmarker.createFromOptions(fs, { ...opts("pose_landmarker_full"), minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3 }));
     face = track(await FaceLandmarker.createFromOptions(fs, { ...opts("face_landmarker"), numFaces: 1 }));
   } catch (err) {

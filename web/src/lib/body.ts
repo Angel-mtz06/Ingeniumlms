@@ -54,24 +54,58 @@ function shoulderWidth(pose: Pt[] | null, face: Pt[] | null, w: number, h: numbe
   return null;
 }
 
+/** Máximo de manos de la persona (MediaPipe busca más para que una mano del fondo no le quite el lugar a una suya). */
+export const MAX_HANDS = 2;
+/** Alcance: el centro de una mano real sin brazo de la pose cerca nunca pasó de 1.55 anchos de hombro de su hombro
+ *  más cercano (135 869 manos del dataset); más allá es de alguien más. */
+export const MAX_REACH = 1.9;
+/** Tamaño mínimo (lado mayor del recuadro de la mano, en anchos de hombro): las manos reales sin brazo cerca midieron
+ *  al menos 0.22; una mano del fondo se ve más chica porque está más lejos de la cámara. */
+export const MIN_EXTENT = 0.18;
+
+function extent(hand: Pt[], w: number, h: number): number {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of hand) {
+    x0 = Math.min(x0, p.x * w); x1 = Math.max(x1, p.x * w);
+    y0 = Math.min(y0, p.y * h); y1 = Math.max(y1, p.y * h);
+  }
+  return Math.max(x1 - x0, y1 - y0);
+}
+
 /**
- * Manos que sí son manos. Se descarta una detección si ningún punto de mano de la pose queda cerca y además:
- * - las dos muñecas de la pose se ven en otro lado (las dos manos reales ya están ubicadas), o
- * - cae dentro de la cara (la cara o el cuello confundidos con una mano).
- * Sin pose no se descarta nada: una mano real frente a la cara no tendría con qué confirmarse.
+ * Manos que sí son de la persona (máximo 2). Una detección con algún punto de mano de la pose cerca siempre se queda
+ * (también frente a la cara: las señas en la cara tienen la muñeca pegada). Sin brazo cerca se descarta si:
+ * - las dos muñecas de la pose se ven en otro lado (las dos manos reales ya están ubicadas),
+ * - cae dentro de la cara (la cara o el cuello confundidos con una mano),
+ * - está fuera del alcance de sus hombros, o
+ * - es demasiado chica para su tamaño (una mano de alguien atrás).
+ * Si quedan más de 2, se quedan las más cercanas a sus brazos. Sin pose no se descarta nada (solo se limita a 2).
  */
 export function realHands<H extends Pt[]>(hands: H[], pose: Pt[] | null, face: Pt[] | null, w: number, h: number): H[] {
-  if (!hands.length || !pose) return hands;
+  if (!hands.length || !pose) return hands.slice(0, MAX_HANDS);
   const shoulders = shoulderWidth(pose, face, w, h);
   const poseHand = POSE_HAND.flatMap((arm) => arm.filter((i) => visible(pose[i])).map((i) => px(pose[i], w, h)));
   const bothWrists = POSE_WRISTS.every((i) => visible(pose[i]));
+  const shoulderPts = SHOULDERS.every((i) => visible(pose[i])) ? SHOULDERS.map((i) => px(pose[i], w, h)) : [];
   const box = faceBox(face, w, h);
-  return hands.filter((hand) => {
+  const kept: { hand: H; gap: number; order: number }[] = [];
+  hands.forEach((hand, order) => {
     const wrist = px(hand[0], w, h);
     const center = palmCenter(hand, w, h);
-    if (shoulders !== null && poseHand.some((p) => Math.min(dist(p, wrist), dist(p, center)) <= NEAR_POSE * shoulders)) return true;
-    if (bothWrists && shoulders !== null) return false;
-    if (box && center.x >= box.x0 && center.x <= box.x1 && center.y >= box.y0 && center.y <= box.y1) return false;
-    return true;
+    const gap = Math.min(Infinity, ...poseHand.map((p) => Math.min(dist(p, wrist), dist(p, center))));
+    if (shoulders !== null && gap <= NEAR_POSE * shoulders) {
+      kept.push({ hand, gap, order });
+      return;
+    }
+    if (bothWrists && shoulders !== null) return;
+    if (box && center.x >= box.x0 && center.x <= box.x1 && center.y >= box.y0 && center.y <= box.y1) return;
+    if (shoulders !== null) {
+      if (shoulderPts.length && Math.min(...shoulderPts.map((q) => dist(q, center))) > MAX_REACH * shoulders) return;
+      if (extent(hand, w, h) < MIN_EXTENT * shoulders) return;
+    }
+    kept.push({ hand, gap, order });
   });
+  // Las más cercanas a sus brazos primero; con la misma distancia (p. ej. sin brazos a la vista), el orden de MediaPipe.
+  kept.sort((a, b) => a.gap - b.gap || a.order - b.order);
+  return kept.slice(0, MAX_HANDS).sort((a, b) => a.order - b.order).map((k) => k.hand);
 }
