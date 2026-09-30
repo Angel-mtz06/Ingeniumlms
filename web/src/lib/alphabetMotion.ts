@@ -399,8 +399,10 @@ function bend(points: number[][]): number {
  * El rasgo sin el cual la letra no está hecha, aunque la forma general se parezca: la curva final
  * de la J, el arco de Ñ/Q, los dos giros de la Z (la X ya exige ir y volver). Sin él el avance no
  * llega al 100 %; así se puede tolerar más la forma sin que una I que baja en línea recta sea J.
+ * Q: .07 (antes .08): la Q era la que menos salía, casi siempre por hacer el arco más plano. En arcos
+ * simulados con ruido pasa de 37 % a 47 % de aciertos; de 192 líneas rectas con temblor, 5 más salen Q.
  */
-export const KEY_BEND: Record<string, number> = { J: .15, "Ñ": .16, Q: .08, Z: .2 };
+export const KEY_BEND: Record<string, number> = { J: .15, "Ñ": .16, Q: .07, Z: .2 };
 export function keyFeature(letter: string, points: number[][]): boolean {
   if (letter === "X") return outAndBack(points) >= .95 && xStraight(points);
   // También se verifica en el avance en vivo: llegar al 100 % no debe saltarse este mínimo.
@@ -549,6 +551,8 @@ export interface FreeMotionState {
   ready: string[];
   /** Intento que llevaba al menos la mitad del recorrido y no se aprobó (p. ej. demasiado rápido). */
   failed: MotionResult | null;
+  /** Letras con un intento en curso: pose inicial lista o moviéndose (también la Q que espera a la X). */
+  active: string[];
 }
 
 /**
@@ -572,7 +576,7 @@ export class FreeMotion {
   reset() { for (const t of this.trackers.values()) t.reset(); this.progress.clear(); this.heldQ = null; }
   /** `score`: desempate cuando dos letras terminan en el mismo cuadro (p. ej. Ñ y Q, mismo arco). */
   push(frame: MotionFrame, startOk: Record<string, boolean>, score: Record<string, number> = {}): FreeMotionState {
-    const done: MotionResult[] = [], ready: string[] = [];
+    const done: MotionResult[] = [], ready: string[] = [], active: string[] = [];
     let moving = false, progress = 0, failed: {result: MotionResult; progress: number} | null = null;
     for (const [letter, tracker] of this.trackers) {
       const before = this.progress.get(letter) ?? 0;
@@ -586,6 +590,7 @@ export class FreeMotion {
       } else {
         this.progress.set(letter, st.phase === "moving" ? st.progress : 0);
         if (st.phase === "ready") ready.push(letter);
+        if (st.phase === "ready" || st.phase === "moving") active.push(letter);
         if (st.phase === "moving") {
           progress = Math.max(progress, st.progress);
           if (st.progress >= .25) moving = true;
@@ -596,18 +601,19 @@ export class FreeMotion {
     const x = done.find((r) => r.prediction![0] === "X");
     const finish = (r: MotionResult): FreeMotionState => {
       this.reset();
-      return {moving: false, progress: 1, result: {...r, reason: MESSAGES.ok}, ready: [], failed: null};
+      return {moving: false, progress: 1, result: {...r, reason: MESSAGES.ok}, ready: [], failed: null, active: []};
     };
+    const waitingQ = () => [...active.filter((l) => l !== "Q"), "Q"];
     if (this.heldQ) {
       if (x) return finish(x);
-      if (xGoing && frame.t < this.heldQ.until) return {moving: true, progress, result: null, ready, failed: null};
+      if (xGoing && frame.t < this.heldQ.until) return {moving: true, progress, result: null, ready, failed: null, active: waitingQ()};
       return finish(this.heldQ.result);
     }
-    if (!done.length) return {moving, progress, result: null, ready, failed: failed?.result ?? null};
+    if (!done.length) return {moving, progress, result: null, ready, failed: failed?.result ?? null, active};
     done.sort((a, b) => (score[b.prediction![0]] ?? 0)-(score[a.prediction![0]] ?? 0) || b.prediction![1]-a.prediction![1]);
     if (done[0].prediction![0] === "Q" && xGoing) {
       this.heldQ = {result: done[0], until: frame.t + X_OVER_Q_MS};
-      return {moving: true, progress, result: null, ready, failed: null};
+      return {moving: true, progress, result: null, ready, failed: null, active: waitingQ()};
     }
     return finish(done[0]);
   }

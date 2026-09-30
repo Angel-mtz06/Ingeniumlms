@@ -24,8 +24,10 @@ export type ClientMsg =
   /** Palabra deletreada con el alfabeto (letras separadas por guiones, p. ej. "M-A-R-I-O"). */
   | { type: "add_gloss"; gloss: string }
   /** Deletreo en Interpretación: al empezar, el servidor aparta las señas de esos cuadros; al terminar,
-   *  con `word` entra la palabra y se descartan; sin ella se regresan. */
-  | { type: "spelling"; active: boolean; word?: string | null }
+   *  con `word` entra la palabra y se descartan; sin ella se regresan. `lookback_s` (al empezar, opcional):
+   *  segundos hacia atrás de señas a apartar si son más que los de siempre (deletreo que empieza con Q o X).
+   *  `letter` (al terminar sin palabra): la Q o X que se hizo sola; las señas que se confunden con ella se quitan. */
+  | { type: "spelling"; active: boolean; word?: string | null; lookback_s?: number; letter?: string }
   | { type: "build_sentence" }
   | { type: "reset" }
   /** Preferencia de la conexión (sobrevive a hello y reset); el socket la reenvía tras `hello` al reconectar. */

@@ -215,7 +215,7 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
   };
   /** Igual que el hook: pose inicial de cada letra por clasificador o por verificación de la base. */
   function runFree(sampleLetter: string, path: number[][], t0: number, t1: number, sample = 0, fps = 30) {
-    const free=new FreeMotion(), hand=byLetter(sampleLetter)[sample], moving: boolean[]=[], ready=new Set<string>();
+    const free=new FreeMotion(), hand=byLetter(sampleLetter)[sample], moving: boolean[]=[], ready=new Set<string>(), active=new Set<string>();
     let failed: string | null = null;
     for (let t=0;t<=t1+1500;t+=1000/fps) {
       const [dx,dy]=along(path,Math.max(0,Math.min(1,(t-t0)/(t1-t0))));
@@ -227,11 +227,11 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
         score[l]=prediction.shares[samples.letters.indexOf(base)] ?? 0;
       }
       const st=free.push({t,hand:h,pose:prediction.pose,out:outOfFrame(h,640,480).out},startOk,score);
-      moving.push(st.moving); st.ready.forEach((l)=>ready.add(l));
+      moving.push(st.moving); st.ready.forEach((l)=>ready.add(l)); st.active.forEach((l)=>active.add(l));
       if (st.failed) failed=st.failed.issue;
-      if (st.result) return {letter: st.result.prediction?.[0] ?? null, t, moving, ready, failed};
+      if (st.result) return {letter: st.result.prediction?.[0] ?? null, t, moving, ready, failed, active, endActive: st.active};
     }
-    return {letter: null, t: Infinity, moving, ready, failed};
+    return {letter: null, t: Infinity, moving, ready, failed, active, endActive: null};
   }
   it.each([["J","J"],["Ñ","Ñ"],["Z","D"],["X","X"]])("reconoce la %s (hecha desde su pose inicial)", (letter, poseOf) => {
     const r=runFree(poseOf, PATHS[letter], 1200, 2400);
@@ -257,6 +257,19 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
     const got=[0,3,6,9,12,15].map((k)=>runFree("Q", [[0,0],[.25,.09],[.5,.12],[.75,.09],[1,0]], 1200, 2200, k, 15).letter);
     expect(got.filter((l)=>l==="Q").length).toBeGreaterThanOrEqual(4);
     expect(got.includes("X")).toBe(false);
+  });
+  it("una Q con el arco algo más plano también sale; una línea recta sigue sin ser Q", () => {
+    const flat=[[0,0],[.25,.06],[.5,.08],[.75,.06],[1,0]].map(([x,y])=>[x*.8,y*.8]);
+    const got=[0,2,4,6,8,10].map((k)=>runFree("Q", flat, 1200, 2100, k, 15).letter);
+    expect(got.filter((l)=>l==="Q").length).toBeGreaterThanOrEqual(5);
+    expect([0,2,4].map((k)=>runFree("Q", [[0,0],[.8,0]], 1200, 2100, k, 15).letter)).toEqual([null,null,null]);
+  });
+  it("avisa qué letra tiene un intento en curso (también la Q que espera a la X) y lo limpia al terminar", () => {
+    const q=runFree("Q", [[0,0],[.25,.09],[.5,.12],[.75,.09],[1,0]], 1200, 2200, 0, 15);
+    expect(q.letter).toBe("Q");
+    expect([...q.active]).toContain("Q");
+    expect(q.endActive).toEqual([]);
+    expect([...runFree("A", [[0,0],[0,0]], 1200, 2400).active]).toEqual([]);
   });
   it("un movimiento corto (0.7 s) también cuenta: ya no exige 2.2 s de grabación", () => {
     expect(runFree("Ñ", PATHS["Ñ"], 1200, 1900).letter).toBe("Ñ");

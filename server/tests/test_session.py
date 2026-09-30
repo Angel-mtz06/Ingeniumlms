@@ -157,9 +157,87 @@ def test_spelling_keeps_signs_the_person_already_validated():
     assert [p["gloss"] for p in s.pending] == ["HOLA", "ANA"]
 
 
+def test_spelling_that_starts_with_q_or_x_looks_further_back():
+    # La Q/X se confirma al terminar su movimiento, hasta ~2 s después de levantar la mano: la seña que el
+    # servidor leyó en ese intento ya quedó fuera de los 1.2 s de siempre; con lookback_s también se aparta.
+    before = sign_frames()[:35] + [frame((-1.0, 5.0))] * 45  # seña cerrada y 1.5 s más de reposo
+    s = _spell_session()
+    asyncio.run(run(s, before))
+    assert asyncio.run(run(s, [ON])) == []  # lo de siempre: no alcanza
+    assert [p["gloss"] for p in s.pending] == ["HOLA"]
+    s = _spell_session()
+    asyncio.run(run(s, before))
+    out = asyncio.run(run(s, [{"type": "spelling", "active": True, "lookback_s": 2.5}]))
+    assert out == [{"type": "pending", "glosses": [], "confirmed": []}]
+    asyncio.run(run(s, [off("Q-U")]))
+    assert [p["gloss"] for p in s.pending] == ["QU"]
+
+
+def test_spelling_lookback_never_shorter_than_the_default():
+    s = _spell_session()
+    asyncio.run(run(s, sign_frames()[:35]))
+    out = asyncio.run(run(s, [{"type": "spelling", "active": True, "lookback_s": 0.2}]))
+    assert out == [{"type": "pending", "glosses": [], "confirmed": []}]  # igual que sin lookback_s
+
+
+class ClfOf:
+    """Clasificador falso que responde siempre `gloss` (p. ej. lo que el modelo de señas lee en una Q)."""
+    def __init__(self, gloss):
+        self.gloss = gloss
+
+    def predict(self, norm, k=3):
+        return [(self.gloss, 0.85), ("NO", 0.02), ("SI", 0.01)][:k]
+
+
+def _spell_session_of(gloss):
+    s = Session(ClfOf(gloss), {}, SentenceBuilder(llm=None, provider="none"))
+    asyncio.run(s.handle({"type": "hello", "mode": "translate", "target": None}))
+    return s
+
+
+def lone(letter):
+    return {"type": "spelling", "active": False, "word": None, "letter": letter}
+
+
+def test_lone_q_drops_the_signs_it_is_confused_with():
+    # La Q sola: el ESTO que el modelo de señas leyó en esos cuadros no regresa (ni el que cierra después).
+    for gloss in ("ESTO", "OTRA_VEZ"):
+        s = _spell_session_of(gloss)
+        frames = sign_frames()
+        out = asyncio.run(run(s, [ON] + frames[:35] + [lone("Q")]))
+        assert [m for m in out if m["type"] == "sign"] == [] and s.pending == []
+        s = _spell_session_of(gloss)
+        out = asyncio.run(run(s, [ON] + frames[:25] + [lone("Q")] + frames[25:40]))  # cierra al bajar la mano
+        assert [m for m in out if m["type"] == "sign"] == [] and s.pending == []
+
+
+def test_lone_q_keeps_other_signs_and_other_letters_keep_everything():
+    s = _spell_session_of("HOLA")
+    out = asyncio.run(run(s, [ON] + sign_frames()[:35] + [lone("Q")]))
+    assert [m["gloss"] for m in out if m["type"] == "sign"] == ["HOLA"]  # HOLA no se confunde con Q
+    for letter in ("B", None):  # otra letra suelta (o sin decir cuál): lo de siempre, ESTO regresa
+        s = _spell_session_of("ESTO")
+        msg = lone(letter) if letter else off(None)
+        out = asyncio.run(run(s, [ON] + sign_frames()[:35] + [msg]))
+        assert [m["gloss"] for m in out if m["type"] == "sign"] == ["ESTO"]
+
+
+def test_lone_q_rule_does_not_outlive_the_next_spelling():
+    s = _spell_session_of("ESTO")
+    asyncio.run(run(s, [ON] + sign_frames()[:35] + [lone("Q")]))
+    asyncio.run(run(s, [ON, off(None)]))  # otro deletreo después: la regla de la Q ya no aplica
+    out = asyncio.run(run(s, sign_frames()[:35]))
+    assert [m["gloss"] for m in out if m["type"] == "sign"] == ["ESTO"]
+
+
 def test_malformed_spelling_is_error():
     s = _spell_session()
-    for bad in [{"type": "spelling"}, {"type": "spelling", "active": "sí"}, off(""), off(7)]:
+    for bad in [{"type": "spelling"}, {"type": "spelling", "active": "sí"}, off(""), off(7),
+                {"type": "spelling", "active": True, "lookback_s": "2"},
+                {"type": "spelling", "active": True, "lookback_s": -1},
+                {"type": "spelling", "active": True, "lookback_s": True},
+                {"type": "spelling", "active": False, "word": None, "letter": "QQ"},
+                {"type": "spelling", "active": False, "word": None, "letter": 7}]:
         out = asyncio.run(run(s, [bad]))
         assert len(out) == 1 and out[0]["type"] == "error"
 

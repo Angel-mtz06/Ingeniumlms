@@ -6,7 +6,7 @@ import { SentencePanel } from "../components/SentencePanel";
 import { TopicPicker } from "../components/TopicPicker";
 import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
 import { freeGauge } from "../lib/alphabetView";
-import { SpellingTracker, type SpellEvent } from "../lib/spelling";
+import { QXAttempt, qxInProgress, SpellingTracker, type SpellEvent } from "../lib/spelling";
 import { bestCandidate, lostMessage, NewSignDetector, type Pausing, pausingFraction, pausingText, pendingKeys, serverIndex, validation } from "../lib/translate";
 import type { FramePayload } from "../lib/protocol";
 import { LiveCamera } from "./LiveCamera";
@@ -145,6 +145,11 @@ export function Translate() {
   // salvo en los primeros LETTER_GRACE_MS (esa "seña" pudo ser la 1a letra) o si ya se está deletreando.
   const alpha = useAlphabetRecognition(null, "free", true);
   const speller = useRef(new SpellingTracker());
+  // Q y X no dejan letra mientras se forman (solo al terminar el movimiento): su intento en curso mantiene
+  // abiertas las letras y el deletreo, y si la palabra empieza con ellas el servidor aparta desde su inicio.
+  const qxActive = useRef("");
+  qxActive.current = alpha.freeActive;
+  const qxAttempt = useRef(new QXAttempt());
   const holdSince = useRef<number | null>(null);
   const newSign = useRef(new NewSignDetector());
   const held = useRef<FramePayload[]>([]);
@@ -164,7 +169,7 @@ export function Translate() {
     held.current = [];
   }, [holding]);
   const lettersOpen = () => !holdRef.current || holdSince.current === null || speller.current.active
-    || performance.now() - holdSince.current < LETTER_GRACE_MS;
+    || performance.now() - holdSince.current < LETTER_GRACE_MS || qxInProgress(qxActive.current);
   useFrameSink((f) => {
     if (correcting.current) return;
     if (!holdRef.current) session.send(f);
@@ -188,8 +193,14 @@ export function Translate() {
   const [spelling, setSpelling] = useState(false);
   const sessionRef = useRef(session);
   sessionRef.current = session;
-  const sendSpell = (ev: SpellEvent) => sessionRef.current.send(
-    ev.kind === "start" ? { type: "spelling", active: true } : { type: "spelling", active: false, word: ev.word });
+  const sendSpell = (ev: SpellEvent) => {
+    if (ev.kind === "end") {
+      sessionRef.current.send(ev.lone ? { type: "spelling", active: false, word: null, letter: ev.lone } : { type: "spelling", active: false, word: ev.word });
+      return;
+    }
+    const lookback = qxAttempt.current.lookback(performance.now(), speller.current.letters[0]);
+    sessionRef.current.send(lookback === undefined ? { type: "spelling", active: true } : { type: "spelling", active: true, lookback_s: lookback });
+  };
   const syncSpell = () => { setLetters(speller.current.letters); setSpelling(speller.current.active); };
   const sendSpellRef = useRef(sendSpell);
   sendSpellRef.current = sendSpell;
@@ -198,8 +209,11 @@ export function Translate() {
   useEffect(() => {
     const id = window.setInterval(() => {
       // Mientras se elige una seña (pasada la gracia) el reconocedor no recibe cuadros: su última letra no cuenta.
-      const l = lettersOpen() ? liveLetter.current : { stable: null, busy: false };
-      speller.current.push(performance.now(), l.stable, l.busy).forEach((ev) => sendSpellRef.current(ev));
+      const open = lettersOpen(), now = performance.now();
+      const l = open ? liveLetter.current : { stable: null, busy: false };
+      // Formando una Q o X (sin letra todavía) el deletreo tampoco termina.
+      const qx = qxAttempt.current.push(now, open ? qxActive.current : "");
+      speller.current.push(now, l.stable, l.busy || qx).forEach((ev) => sendSpellRef.current(ev));
       syncSpell();
     }, 100);
     return () => {
