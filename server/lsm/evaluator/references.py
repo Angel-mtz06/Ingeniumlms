@@ -99,6 +99,8 @@ class GlossRef:
     example_id: str
     example_hands: np.ndarray
     example_present: np.ndarray
+    # Margen extra por parámetro (p. ej. {"movimiento": 2.5}); divide el z de ese parámetro. None = sin margen.
+    tolerance: dict | None = None
 
 
 def build_reference(gloss: str, norms: list[NormSequence], preferred: tuple[str, ...] = ("g11", "g00")) -> GlossRef:

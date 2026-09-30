@@ -45,8 +45,13 @@ class Evaluation:
     issues: list
 
 
+def _tol(ref: GlossRef, param: str) -> float:
+    """Margen extra de la referencia para un parámetro (1.0 si no tiene): divide el z de ese parámetro."""
+    return float((ref.tolerance or {}).get(param, 1.0))
+
+
 def _flex_z(ref: GlossRef, flex_row: np.ndarray, s: int) -> np.ndarray:
-    return np.abs(flex_row - ref.flex_mean[s]) / np.maximum(np.nan_to_num(ref.flex_std[s]), FLEX_FLOOR)
+    return np.abs(flex_row - ref.flex_mean[s]) / np.maximum(np.nan_to_num(ref.flex_std[s]), FLEX_FLOOR) / _tol(ref, "configuracion")
 
 
 def finger_status(ref: GlossRef, flex: np.ndarray) -> np.ndarray:
@@ -102,16 +107,16 @@ def evaluate(ref: GlossRef, seq: NormSequence, glove_flex: np.ndarray | None = N
                 issues.append(Issue("contacto", 2.0, s, c + 1, {"expected": False}))
         per["configuracion"].append(max(conf, 0.0))
         d = st["loc"][s] - ref.loc_mean[s]
-        zl = float(np.linalg.norm(d) / max(float(np.linalg.norm(np.nan_to_num(ref.loc_std[s]))), LOC_FLOOR))
+        zl = float(np.linalg.norm(d) / max(float(np.linalg.norm(np.nan_to_num(ref.loc_std[s]))), LOC_FLOOR)) / _tol(ref, "ubicacion")
         per["ubicacion"].append(_score(zl))
         if _is_issue(zl):
             issues.append(Issue("ubicacion", zl, s, None, {"dx": float(d[0]), "dy": float(d[1])}))
         spread = ref.palm_spread[s]
-        zo = _angle(st["palm"][s], ref.palm_mean[s]) / max(0.0 if np.isnan(spread) else float(spread), PALM_FLOOR)
+        zo = _angle(st["palm"][s], ref.palm_mean[s]) / max(0.0 if np.isnan(spread) else float(spread), PALM_FLOOR) / _tol(ref, "orientacion")
         per["orientacion"].append(_score(zo))
         if _is_issue(zo):
             issues.append(Issue("orientacion", zo, s))
-    zm = dtw(st["traj"], ref.traj_mean) / max(ref.traj_scale, MOVE_FLOOR)
+    zm = dtw(st["traj"], ref.traj_mean) / max(ref.traj_scale, MOVE_FLOOR) / _tol(ref, "movimiento")
     per["movimiento"].append(0.0 if st["present_frac"][ref.dom] < 0.5 else _score(zm))
     if _is_issue(zm) and st["present_frac"][ref.dom] >= 0.5:
         issues.append(Issue("movimiento", zm, ref.dom, None,
