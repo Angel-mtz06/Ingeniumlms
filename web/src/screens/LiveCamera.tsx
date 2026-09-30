@@ -4,7 +4,9 @@ import { useApp } from "./shared";
 
 /**
  * Como `CameraStage` (shared.tsx), pero con los medidores de las pantallas de trabajo: FPS en la
- * esquina superior izquierda y, opcionalmente, algo en la superior derecha (el puntaje en Práctica).
+ * esquina superior izquierda y, opcionalmente, algo en la superior derecha (el puntaje en Práctica). Solo dibuja
+ * las manos: la cara y el torso se siguen detectando (filtran manos falsas y dan la zona de los consejos), pero
+ * solo se dibujan en Calibración.
  */
 export function LiveCamera({ corner, children }: { corner?: ReactNode; children?: ReactNode }) {
   const { camera, vision } = useApp();

@@ -27,6 +27,9 @@
   --color-bad: #a2191f;
   --color-border: #6c8068;      /* >= 3:1 sobre bg y surface */
   --color-purple: #d7e8d3;      /* boton "Elegir otra seña": pastilla menta */
+  /* Capa de cuerpo sobre la camara (paleta categorica de Carbon), distinta del acento de las manos: */
+  --color-face: #d02670;        /* Carbon magenta-60: puntos de la cara (4.9:1 sobre surface, WCAG 1.4.11) */
+  --color-torso: #007d79;       /* Carbon teal-60: cuello, hombros, brazos y torso (4.8:1 sobre surface) */
 
   /* ---------- Tipografia: Goga/Inter si estan instaladas; si no, fuentes del sistema (sin internet) ---------- */
   --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, "Helvetica Neue", Roboto, "Noto Sans", Arial, sans-serif;
@@ -106,6 +109,8 @@
     --color-bad: #ff8389;
     --color-border: #485346;
     --color-purple: #3e4a3c;      /* Pine 15 */
+    --color-face: #ff7eb6;        /* Carbon magenta-40 */
+    --color-torso: #08bdba;       /* Carbon teal-40 */
 
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.40), 0 4px 12px rgb(0 0 0 / 0.30);
     --shadow-2: 0 10px 15px -3px rgb(0 0 0 / 0.35), 0 4px 6px -4px rgb(0 0 0 / 0.35);

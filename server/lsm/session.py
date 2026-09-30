@@ -442,7 +442,7 @@ class Session:
             ev = evaluate(ref, seq, gflex, gcont)
             self._last_issues = [(i.param, round(float(i.z), 1), {k: round(float(v), 2) for k, v in i.detail.items() if isinstance(v, (int, float))}) for i in ev.issues[:4]]
             return [{"type": "evaluation", "target": self.target, "recognized": recognized, "scores": ev.scores,
-                     "total": ev.total, "tips": messages(ev, ref),
+                     "total": ev.total, "tips": messages(ev, ref, body=self.normalizer.body),
                      "fingers": finger_status(ref, ev.finger_flex).tolist(),
                      # False si una mano que la seña requiere no se vio (el puntaje no es comparable)
                      "evaluable": not any(i.param == "mano" for i in ev.issues)}]

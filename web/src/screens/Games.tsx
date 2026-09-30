@@ -1,0 +1,446 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LetterReference } from "../components/LetterReference";
+import { ReferencePlayer } from "../components/ReferencePlayer";
+import { ScoreGauge } from "../components/ScoreGauge";
+import {
+  availablePhrases, lettersOf, lettersPerMinute, pickOther, RACE_LEVEL_ORDER, RACE_LEVELS, readRecords, rivalFinishMs,
+  rivalProgress, saveRecord, SPELL_WORDS, standings, wordCorrect, type RaceLevel, type Racer,
+} from "../lib/games";
+import type { GaugeView } from "../lib/gauge";
+import type { Glosses } from "../lib/protocol";
+import { glossLabel } from "../lib/ui";
+import { GameHead, LetterStrip, letterGauge, letterNote, Note, useLetterRun } from "./gameParts";
+import { LiveCamera } from "./LiveCamera";
+import { SimonLetters, SimonSigns } from "./SimonGame";
+import { WordleLetters, WordleSigns } from "./WordleGame";
+import { ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
+
+type Game = "menu" | "letras" | "senas" | "carrera" | "wordle-letras" | "wordle-senas" | "simon-letras" | "simon-senas";
+
+/**
+ * Juegos: "Completa la palabra" (con letras del alfabeto o con señas de palabras), "Carrera" (deletrear
+ * un texto para que avance tu carro), "Wordle LSM" y "Simón dice" (ambos con letras o con señas). Las letras usan el mismo reconocedor que Alfabeto con la letra
+ * objetivo (el modo más preciso); las palabras, el servidor en modo Práctica (una seña por toma).
+ */
+export default function Games() {
+  const [game, setGame] = useState<Game>("menu");
+  const back = useCallback(() => { setGame("menu"); window.scrollTo({ top: 0 }); }, []);
+  if (game === "letras") return <SpellGame onBack={back} />;
+  if (game === "senas") return <SignGame onBack={back} />;
+  if (game === "carrera") return <RaceGame onBack={back} />;
+  if (game === "wordle-letras") return <WordleLetters onBack={back} />;
+  if (game === "wordle-senas") return <WordleSigns onBack={back} />;
+  if (game === "simon-letras") return <SimonLetters onBack={back} />;
+  if (game === "simon-senas") return <SimonSigns onBack={back} />;
+  const open = (g: Game) => { setGame(g); window.scrollTo({ top: 0 }); };
+  return (
+    <div className="screen">
+      <header className="screen__head">
+        <h2 className="screen__title">Juegos</h2>
+        <p className="screen__lead">Practica jugando con el alfabeto y con señas: forma palabras, gana carreras, adivina en Wordle y entrena tu memoria con Simón dice.</p>
+      </header>
+      <div className="game-menu">
+        <section className="sheet game-card" aria-labelledby="juego-completa">
+          <p className="game-card__icon" aria-hidden="true">🧩</p>
+          <h3 id="juego-completa" className="sheet__title">Completa la palabra</h3>
+          <p className="sheet__hint">La app te pide algo y tú lo formas frente a la cámara, paso por paso.</p>
+          <div className="game-card__actions">
+            <button type="button" className="btn btn--primary" onClick={() => open("letras")}>Con letras</button>
+            <button type="button" className="btn btn--secondary" onClick={() => open("senas")}>Con señas</button>
+          </div>
+          <ul className="game-card__list">
+            <li><strong>Con letras:</strong> deletrea una palabra (p. ej. CARRERA) letra por letra.</li>
+            <li><strong>Con señas:</strong> haz las señas de una frase (p. ej. HOLA MAMÁ), una tras otra.</li>
+          </ul>
+        </section>
+        <section className="sheet game-card" aria-labelledby="juego-carrera">
+          <p className="game-card__icon" aria-hidden="true">🏎️</p>
+          <h3 id="juego-carrera" className="sheet__title">Carrera de letras</h3>
+          <p className="sheet__hint">Deletrea el texto lo más rápido que puedas: cada letra correcta hace avanzar tu carro. Compite contra tres rivales.</p>
+          <div className="game-card__actions">
+            <button type="button" className="btn btn--primary" onClick={() => open("carrera")}>Jugar</button>
+          </div>
+        </section>
+        <section className="sheet game-card" aria-labelledby="juego-wordle">
+          <p className="game-card__icon" aria-hidden="true">🟩</p>
+          <h3 id="juego-wordle" className="sheet__title">Wordle LSM</h3>
+          <p className="sheet__hint">Adivina lo secreto en 6 intentos: verde está en su lugar, amarillo está en otro lugar, gris no está.</p>
+          <div className="game-card__actions">
+            <button type="button" className="btn btn--primary" onClick={() => open("wordle-letras")}>Con letras</button>
+            <button type="button" className="btn btn--secondary" onClick={() => open("wordle-senas")}>Con señas</button>
+          </div>
+          <ul className="game-card__list">
+            <li><strong>Con letras:</strong> una palabra de 5 letras que deletreas.</li>
+            <li><strong>Con señas:</strong> 3 señas secretas de un banco de 6, en orden.</li>
+          </ul>
+        </section>
+        <section className="sheet game-card" aria-labelledby="juego-simon">
+          <p className="game-card__icon" aria-hidden="true">🧠</p>
+          <h3 id="juego-simon" className="sheet__title">Simón dice</h3>
+          <p className="sheet__hint">Mira la secuencia y repítela de memoria. Cada ronda agrega una más; tienes 3 vidas.</p>
+          <div className="game-card__actions">
+            <button type="button" className="btn btn--primary" onClick={() => open("simon-letras")}>Con letras</button>
+            <button type="button" className="btn btn--secondary" onClick={() => open("simon-senas")}>Con señas</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+const LEVELS = ["fácil", "media", "difícil"] as const;
+
+function SpellGame({ onBack }: { onBack(): void }) {
+  const [level, setLevel] = useState<(typeof LEVELS)[number] | "todas">("todas");
+  const pool = useMemo(() => SPELL_WORDS.filter((w) => level === "todas" || w.level === level).map((w) => w.word), [level]);
+  const [word, setWord] = useState(() => pickOther(pool, null));
+  const letters = useMemo(() => lettersOf(word), [word]);
+  const run = useLetterRun(letters, true);
+  const [skipped, setSkipped] = useState<Set<number>>(new Set());
+  const [hint, setHint] = useState(false);
+  const started = useRef(performance.now());
+  const [elapsed, setElapsed] = useState<number | null>(null);
+  const [score, setScore] = useState({ words: 0, letters: 0 });
+
+  useEffect(() => {
+    if (!run.done || elapsed !== null) return;
+    setElapsed(performance.now() - started.current);
+    // La estrella se gana haciendo letras: una palabra saltada completa no cuenta.
+    if (skipped.size < letters.length) setScore((s) => ({ words: s.words + 1, letters: s.letters + letters.length - skipped.size }));
+  }, [run.done, elapsed, letters.length, skipped.size]);
+  useEffect(() => { setHint(false); }, [run.index]);
+
+  const next = useCallback((list = pool) => {
+    setWord((w) => pickOther(list, w));
+    run.reset();
+    setSkipped(new Set());
+    setElapsed(null);
+    started.current = performance.now();
+  }, [pool, run.reset]);
+  const skip = () => { setSkipped((s) => new Set(s).add(run.index)); run.skip(); };
+  const changeLevel = (l: typeof level) => {
+    setLevel(l);
+    next(SPELL_WORDS.filter((w) => l === "todas" || w.level === l).map((w) => w.word));
+  };
+
+  return (
+    <div className="screen">
+      <GameHead title="Completa la palabra · con letras" lead="Deletrea la palabra letra por letra. Cada letra correcta pasa sola a la siguiente." onBack={onBack}
+        right={<span className="game-score tabular" aria-label={`Palabras completas: ${score.words}`}>⭐ {score.words}</span>} />
+      <div className="game-levels" role="group" aria-label="Dificultad">
+        {(["todas", ...LEVELS] as const).map((l) => (
+          <button key={l} type="button" className={`btn btn--small ${level === l ? "btn--primary" : "btn--secondary"}`} aria-pressed={level === l} onClick={() => changeLevel(l)}>
+            {l === "todas" ? "Todas" : l[0].toUpperCase() + l.slice(1)}
+          </button>
+        ))}
+      </div>
+      <section className="sheet game-target" aria-label="Palabra a formar">
+        <p className="game-target__label">Forma la palabra</p>
+        <LetterStrip text={word} index={run.index} skipped={skipped} big />
+        <p className="sheet__hint tabular">{run.done ? `${letters.length} de ${letters.length} letras` : `Letra ${run.index + 1} de ${letters.length}`}</p>
+      </section>
+
+      {run.done ? (
+        <section className="sheet game-done" aria-live="polite">
+          <p className="game-done__title">🎉 ¡Formaste <span translate="no">{word}</span>!</p>
+          <p className="sheet__hint tabular">
+            {elapsed !== null ? `${(elapsed / 1000).toFixed(1)} s` : ""}{skipped.size ? ` · ${skipped.size} letra${skipped.size > 1 ? "s" : ""} saltada${skipped.size > 1 ? "s" : ""}` : " · sin saltar letras"}
+          </p>
+          <button type="button" className="btn btn--primary" onClick={() => next()} autoFocus>Otra palabra →</button>
+        </section>
+      ) : (
+        <div className="practice-stage">
+          <div className="practice-camera">
+            <LiveCamera corner={<ScoreGauge view={letterGauge(run)} />}>
+              <p className="overlay-pill game-now" role="status"><span>Letra</span><strong translate="no">{run.target}</strong></p>
+            </LiveCamera>
+            <Note note={letterNote(run)} />
+            <div className="sheet__actions">
+              <button type="button" className="btn btn--secondary" onClick={() => setHint((h) => !h)} aria-pressed={hint}>{hint ? "Ocultar pista" : "💡 Pista"}</button>
+              <button type="button" className="btn btn--secondary" onClick={skip}>Saltar letra →</button>
+              <button type="button" className="btn btn--quiet" onClick={() => next()}>Otra palabra</button>
+            </div>
+          </div>
+          <div className="practice-side">
+            <section className="sheet practice-ref" aria-labelledby="juego-pista">
+              <h3 id="juego-pista" className="practice-ref__title">Pista: <span translate="no">{run.target}</span></h3>
+              {hint && run.target ? <LetterReference letter={run.target} /> : (
+                <p className="sheet__hint">¿No recuerdas cómo se hace? Pulsa «Pista» para ver la foto de la letra.</p>
+              )}
+            </section>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ Señas (servidor, modo Práctica) ------------------------------ */
+
+function SignGame({ onBack }: { onBack(): void }) {
+  const { session, vocab } = useApp();
+  const phrases = useMemo(() => availablePhrases(vocab), [vocab]);
+  const [phrase, setPhrase] = useState<string[] | null>(null);
+  useEffect(() => { if (!phrase && phrases.length) setPhrase(pickOther(phrases, null)); }, [phrases, phrase]);
+  const [index, setIndex] = useState(0);
+  const target = phrase && index < phrase.length ? phrase[index] : null;
+  useSessionMode("practice", target, target !== null);
+  useFrameSink(target ? (f) => session.send(f) : null);
+  const { evaluation, live } = session.last;
+  const [attempt, setAttempt] = useState<{ ok: boolean; recognized: Glosses } | null>(null);
+  const [hint, setHint] = useState(false);
+  const [score, setScore] = useState(0);
+  const seen = useRef(evaluation);
+
+  // Cada toma (baja las manos al terminar) llega como `evaluation`; se juzga solo si es de la seña actual.
+  useEffect(() => {
+    if (!evaluation || evaluation === seen.current) return;
+    seen.current = evaluation;
+    if (!target || evaluation.target !== target) return;
+    setAttempt({ ok: wordCorrect(evaluation.recognized, target), recognized: evaluation.recognized });
+  }, [evaluation, target]);
+  useEffect(() => {
+    if (!attempt?.ok) return;
+    const id = window.setTimeout(() => { setIndex((i) => i + 1); setAttempt(null); setHint(false); }, 900);
+    return () => window.clearTimeout(id);
+  }, [attempt]);
+  const done = phrase !== null && index >= phrase.length;
+  useEffect(() => { if (done) setScore((s) => s + 1); }, [done]);
+
+  const next = () => { setPhrase((p) => pickOther(phrases, p)); setIndex(0); setAttempt(null); setHint(false); };
+  const skip = () => { setIndex((i) => i + 1); setAttempt(null); setHint(false); };
+
+  const signing = live?.segment === "active";
+  const top = attempt?.recognized[0]?.[0];
+  const gauge: GaugeView = attempt?.ok ? { kind: "score", value: 100, tone: "ok", word: "¡Bien!", label: "✓", detail: "Seña correcta", caption: "Correcta" }
+    : attempt ? { kind: "guide", label: "Otra vez", detail: top ? `Vi: ${glossLabel(top)}` : "No reconocí la seña" }
+      : { kind: "idle", label: signing ? "Leyendo…" : "Haz la seña…", detail: signing ? "Baja las manos al terminar" : "Luego baja las manos" };
+  const note = attempt?.ok ? { tone: "ok" as const, text: `¡Bien! ${glossLabel(target ?? "")}` }
+    : attempt ? { tone: "warn" as const, text: top ? `Reconocí «${glossLabel(top)}». Intenta otra vez ${glossLabel(target ?? "")}; puedes ver la pista.` : "No reconocí ninguna seña. Hazla completa y baja las manos." }
+      : { text: signing ? "Leyendo tu seña… baja las manos al terminar." : `Haz la seña ${glossLabel(target ?? "")} y baja las manos al terminar.` };
+
+  return (
+    <div className="screen">
+      <GameHead title="Completa la palabra · con señas" lead="Haz las señas de la frase una tras otra. Baja las manos al terminar cada seña." onBack={onBack}
+        right={<span className="game-score tabular" aria-label={`Frases completas: ${score}`}>⭐ {score}</span>} />
+      <ServerNotice />
+      {!phrase ? (
+        <section className="sheet"><p className="sheet__hint" role="status">{vocab ? "El modelo activo no tiene las señas de estas frases." : "Cargando el catálogo de señas… (el servidor debe estar encendido)."}</p></section>
+      ) : (
+        <>
+          <section className="sheet game-target" aria-label="Frase a formar">
+            <p className="game-target__label">Forma la frase</p>
+            <p className="game-phrase" translate="no">
+              {phrase.map((g, i) => (
+                <span key={i} className="game-phrase__word" data-state={i < index ? "done" : i === index ? "now" : "todo"}>{glossLabel(g)}</span>
+              ))}
+            </p>
+            <p className="sheet__hint tabular">{done ? `${phrase.length} de ${phrase.length} señas` : `Seña ${index + 1} de ${phrase.length}`}</p>
+          </section>
+          {done ? (
+            <section className="sheet game-done" aria-live="polite">
+              <p className="game-done__title">🎉 ¡Formaste «<span translate="no">{phrase.map(glossLabel).join(" ")}</span>»!</p>
+              <button type="button" className="btn btn--primary" onClick={next} autoFocus>Otra frase →</button>
+            </section>
+          ) : (
+            <div className="practice-stage">
+              <div className="practice-camera">
+                <LiveCamera corner={<ScoreGauge view={gauge} />}>
+                  {signing ? (
+                    <p className="overlay-pill" role="status"><span className="rec-mark" aria-hidden="true" /><span>Leyendo tu seña</span></p>
+                  ) : <p className="overlay-pill game-now" role="status"><span>Seña</span><strong translate="no">{glossLabel(target ?? "")}</strong></p>}
+                </LiveCamera>
+                <Note note={note} />
+                <div className="sheet__actions">
+                  <button type="button" className="btn btn--secondary" onClick={() => setHint((h) => !h)} aria-pressed={hint}>{hint ? "Ocultar pista" : "💡 Pista"}</button>
+                  <button type="button" className="btn btn--secondary" onClick={skip}>Saltar seña →</button>
+                  <button type="button" className="btn btn--quiet" onClick={next}>Otra frase</button>
+                </div>
+              </div>
+              <div className="practice-side">
+                <section className="sheet practice-ref" aria-labelledby="juego-pista-sena">
+                  <h3 id="juego-pista-sena" className="practice-ref__title">Pista: <span translate="no">{glossLabel(target ?? "")}</span></h3>
+                  {hint && target ? <ReferencePlayer gloss={target} /> : <p className="sheet__hint">Pulsa «Pista» para ver cómo se hace la seña.</p>}
+                </section>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ Carrera ------------------------------ */
+
+const CARS = ["🚗", "🚙", "🚕", "🚓"];
+const LEVEL_ICON: Record<RaceLevel, string> = { "fácil": "🐢", normal: "🐴", "difícil": "🐆", experto: "🚀" };
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
+
+function RaceGame({ onBack }: { onBack(): void }) {
+  const [level, setLevel] = useState<RaceLevel>("normal");
+  const cfg = RACE_LEVELS[level];
+  const [text, setText] = useState(() => pickOther(RACE_LEVELS.normal.texts, null));
+  const letters = useMemo(() => lettersOf(text), [text]);
+  const [phase, setPhase] = useState<"setup" | "countdown" | "racing" | "done">("setup");
+  const [count, setCount] = useState(3);
+  const startAt = useRef(0);
+  const [now, setNow] = useState(0);
+  const [youMs, setYouMs] = useState<number | null>(null);
+  const [skipped, setSkipped] = useState<Set<number>>(new Set());
+  const [records, setRecords] = useState(() => readRecords());
+  const [newRecord, setNewRecord] = useState(false);
+  const run = useLetterRun(letters, phase === "racing");
+
+  useEffect(() => {
+    if (phase !== "countdown") return;
+    if (count === 0) { startAt.current = performance.now(); setNow(startAt.current); setPhase("racing"); return; }
+    const id = window.setTimeout(() => setCount((c) => c - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [phase, count]);
+  useEffect(() => {
+    if (phase !== "racing") return;
+    const id = window.setInterval(() => setNow(performance.now()), 100);
+    return () => window.clearInterval(id);
+  }, [phase]);
+  useEffect(() => {
+    if (phase !== "racing" || !run.done) return;
+    const ms = performance.now() - startAt.current;
+    setYouMs(ms);
+    // Solo cuenta como récord si se deletreó al menos la mitad sin saltar.
+    const record = skipped.size * 2 <= letters.length && saveRecord(level, ms);
+    setNewRecord(record);
+    if (record) setRecords(readRecords());
+    setPhase("done");
+  }, [phase, run.done, level, skipped.size, letters.length]);
+
+  const elapsed = phase === "racing" ? Math.max(0, now - startAt.current) : 0;
+  const racers: Racer[] = [
+    { name: "Tú", you: true, progress: letters.length ? run.index / letters.length : 0, finishMs: youMs },
+    ...cfg.rivals.map((r) => {
+      const finish = rivalFinishMs(r.lpm, letters.length);
+      return phase === "done"
+        ? { name: r.name, progress: youMs !== null && youMs < finish ? rivalProgress(r.lpm, youMs, letters.length) : 1, finishMs: finish }
+        : { name: r.name, progress: rivalProgress(r.lpm, elapsed, letters.length), finishMs: elapsed >= finish ? finish : null };
+    }),
+  ];
+  const order = standings(racers);
+  const place = order.findIndex((r) => r.you) + 1;
+
+  const chooseLevel = (l: RaceLevel) => { setLevel(l); setText((t) => pickOther(RACE_LEVELS[l].texts, t)); };
+  const start = () => { run.reset(); setSkipped(new Set()); setYouMs(null); setNewRecord(false); setCount(3); setPhase("countdown"); };
+  const again = () => { setText((t) => pickOther(cfg.texts, t)); setPhase("setup"); };
+  const skip = () => { setSkipped((s) => new Set(s).add(run.index)); startAt.current -= cfg.skipPenalty * 1000; run.skip(); };
+  const best = records[level];
+
+  return (
+    <div className="screen">
+      <GameHead title="Carrera de letras" lead="Deletrea el texto: cada letra correcta avanza tu carro. Gana quien llegue primero a la meta." onBack={onBack}
+        right={phase === "racing" ? <span className="game-score tabular">⏱ {seconds(elapsed)}</span>
+          : <span className="game-score">{LEVEL_ICON[level]} {cfg.label}</span>} />
+
+      {phase === "setup" ? (
+        <section className="sheet race-levels" aria-labelledby="carrera-nivel">
+          <h3 id="carrera-nivel" className="sheet__title">Elige la dificultad</h3>
+          <div className="race-levels__grid" role="radiogroup" aria-label="Dificultad de la carrera">
+            {RACE_LEVEL_ORDER.map((l) => {
+              const c = RACE_LEVELS[l], rec = records[l];
+              return (
+                <button key={l} type="button" role="radio" aria-checked={level === l} className="race-level" onClick={() => chooseLevel(l)}>
+                  <span className="race-level__icon" aria-hidden="true">{LEVEL_ICON[l]}</span>
+                  <span className="race-level__name">{c.label}</span>
+                  <span className="race-level__text">{c.summary}</span>
+                  <span className="race-level__meta tabular">
+                    Rivales {c.rivals[0].lpm}–{c.rivals[c.rivals.length - 1].lpm} letras/min · saltar +{c.skipPenalty} s
+                  </span>
+                  <span className="race-level__meta tabular">{rec !== undefined ? `🏆 Récord: ${seconds(rec)}` : "Sin récord todavía"}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="sheet race" aria-label="Pista de carreras">
+        <div className="race-track">
+          {racers.map((r, i) => (
+            <div key={r.name} className="race-lane" data-you={r.you || undefined}>
+              <span className="race-lane__name">{r.name}{r.you ? "" : <small> · {cfg.rivals[i - 1].lpm} l/min</small>}</span>
+              <div className="race-lane__road">
+                <span className="race-car" style={{ left: `calc(1.2rem + (100% - 3rem) * ${r.progress.toFixed(4)})` }} aria-hidden="true">{CARS[i]}</span>
+                <span className="race-lane__goal" aria-hidden="true">🏁</span>
+              </div>
+              <span className="race-lane__pct tabular">{Math.round(r.progress * 100)} %</span>
+            </div>
+          ))}
+        </div>
+        <LetterStrip text={text} index={phase === "setup" || phase === "countdown" ? -1 : run.index} skipped={skipped} big />
+      </section>
+
+      {phase === "setup" ? (
+        <section className="sheet game-done">
+          <p className="sheet__hint">
+            {cfg.hint ? "Verás la foto de cada letra mientras corres." : "En este nivel no hay foto de ayuda: deletrea de memoria."}{" "}
+            Pon la mano frente a la cámara antes de arrancar.
+          </p>
+          <div className="sheet__actions">
+            <button type="button" className="btn btn--primary" onClick={start} autoFocus>¡Arrancar! 🏁</button>
+            <button type="button" className="btn btn--quiet" onClick={() => setText((t) => pickOther(cfg.texts, t))}>Otro texto</button>
+          </div>
+          {best !== undefined ? <p className="sheet__hint tabular">Tu récord en {cfg.label}: {seconds(best)}</p> : null}
+        </section>
+      ) : phase === "countdown" ? (
+        <section className="sheet game-done" aria-live="assertive">
+          <p className="race-count tabular">{count}</p>
+        </section>
+      ) : phase === "done" ? (
+        <section className="sheet game-done" aria-live="polite">
+          <p className="game-done__title">{place === 1 ? "🏆 ¡Ganaste!" : `Llegaste en ${place}.º lugar`}</p>
+          {newRecord ? <p className="race-record" role="status">⭐ ¡Nuevo récord en {cfg.label}!</p> : null}
+          <ol className="race-results">
+            {order.map((r) => (
+              <li key={r.name} data-you={r.you || undefined}>
+                <span>{r.name}</span>
+                <span className="tabular">{r.finishMs !== null ? seconds(r.finishMs) : "—"}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="sheet__hint tabular">
+            {youMs !== null ? `${lettersPerMinute(letters.length - skipped.size, youMs)} letras por minuto` : ""}
+            {skipped.size ? ` · ${skipped.size} saltada${skipped.size > 1 ? "s" : ""}` : ""}
+            {best !== undefined && !newRecord ? ` · récord: ${seconds(best)}` : ""}
+          </p>
+          <div className="sheet__actions">
+            <button type="button" className="btn btn--primary" onClick={again} autoFocus>Otra carrera →</button>
+            {level !== "experto" && place === 1 ? (
+              <button type="button" className="btn btn--secondary" onClick={() => { const next = RACE_LEVEL_ORDER[RACE_LEVEL_ORDER.indexOf(level) + 1]; chooseLevel(next); setPhase("setup"); }}>
+                Subir de nivel ↑
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : (
+        <div className="practice-stage">
+          <div className="practice-camera">
+            <LiveCamera corner={<ScoreGauge view={letterGauge(run)} />}>
+              <p className="overlay-pill game-now" role="status"><span>Letra</span><strong translate="no">{run.target}</strong></p>
+            </LiveCamera>
+            <Note note={letterNote(run)} />
+            <div className="sheet__actions">
+              <button type="button" className="btn btn--secondary" onClick={skip}>Saltar letra (+{cfg.skipPenalty} s)</button>
+              <button type="button" className="btn btn--quiet" onClick={() => setPhase("setup")}>Rendirse</button>
+            </div>
+          </div>
+          <div className="practice-side">
+            <section className="sheet practice-ref" aria-labelledby="carrera-letra">
+              <h3 id="carrera-letra" className="practice-ref__title">Ahora: <span translate="no">{run.target}</span></h3>
+              {cfg.hint && run.target ? <LetterReference letter={run.target} /> : (
+                <p className="sheet__hint">Nivel {cfg.label}: sin foto de ayuda. Si te atoras, salta la letra (+{cfg.skipPenalty} s).</p>
+              )}
+            </section>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
