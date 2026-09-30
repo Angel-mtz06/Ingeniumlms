@@ -852,3 +852,163 @@ body::after {
     transform: none;
   }
 }
+
+/* ---------- Estilo Modal (referencia: ~/Downloads/DESIGN (1).md; el anterior está en el tag ui-antes-verde) ----------
+   Terminal de fósforo con material Liquid Glass (Apple): colores Modal (claro "Mint Frost" y oscuro Void),
+   un solo "LED" de acento (pestaña activa, interruptores, íconos). El vidrio: desenfoque + saturación 180 %,
+   bisel (luz cenital inset arriba) y sombra volumétrica en tres capas (ver tokens.css). Tarjetas 8 px, botones 12 px. */
+body {
+  font-feature-settings: "cv11";
+  letter-spacing: -0.022em;
+}
+
+h1,
+h2,
+h3,
+h4,
+.entry__title {
+  color: var(--color-heading);
+  font-feature-settings: "ss01";
+  font-weight: 500;
+  letter-spacing: -0.012em;
+}
+
+/* Barra de navegación: Carbon Veil con desenfoque, filete inferior y la única sombra del sistema. */
+.app-header {
+  background: color-mix(in srgb, var(--color-surface-2) 62%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-strong);
+  backdrop-filter: var(--glass-blur-strong);
+  border-bottom: 1px solid var(--color-divider);
+  box-shadow: var(--shadow-2);
+}
+
+.brand__name {
+  color: var(--color-text-muted);
+}
+
+.tabs {
+  background: var(--glass-fill-subtle);
+  box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-edge);
+}
+
+.tab {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.tab:hover {
+  background: var(--glass-fill-strong);
+}
+
+/* Pestaña activa: la píldora lima (el LED de la página). */
+.tab[aria-selected="true"] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+/* Tarjetas: vidrio (relleno translúcido + desenfoque saturado), canto brillante, bisel y sombra volumétrica. */
+.sheet,
+.sentence,
+.entry,
+.panel {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-edge), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* Microinteracción: la tarjeta se eleva (más sombra, relleno más denso) y se hunde al presionar. */
+.entry {
+  transition: transform 300ms cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 300ms ease-out, background-color 300ms ease-out;
+}
+
+.entry:hover {
+  transform: translateY(-3px);
+  background: var(--glass-fill-strong);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-edge), var(--glass-shadow-float);
+}
+
+.entry:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.entry__icon {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.entry__go {
+  color: var(--color-link);
+}
+
+/* Botones: 12 px. Principal = Ground con borde fósforo ("grabado en lo oscuro"); secundario = contorno. */
+.btn {
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: color 300ms ease-out, background-color 300ms ease-out, border-color 300ms ease-out;
+}
+
+.btn--primary,
+.btn--primary:hover:not(:disabled) {
+  background: var(--glass-fill-strong);
+  color: var(--color-text);
+  box-shadow: var(--glass-highlight), inset 0 0 0 1px var(--color-text), var(--shadow-1);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--color-surface-2);
+  box-shadow: var(--glass-highlight), inset 0 0 0 1px var(--color-text), var(--shadow-2);
+}
+
+.btn--secondary {
+  background: var(--glass-fill-subtle);
+  color: var(--color-text);
+  box-shadow: var(--glass-highlight), inset 0 0 0 1px var(--color-hairline);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn--change {
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-hairline);
+}
+
+/* Etiquetas, pastillas y controles: vidrio fino (relleno tenue, canto con luz y filete). */
+.status-item,
+.chip,
+.option,
+.switch,
+.segmented,
+.notice,
+.gloves__item,
+.badge {
+  background: var(--glass-fill-subtle);
+  box-shadow: var(--glass-highlight), inset 0 0 0 1px var(--color-hairline);
+}
+
+.segmented {
+  background: var(--glass-fill-strong);
+  box-shadow: var(--glass-highlight);
+}
+
+/* Cámara y ejemplos: marco con filete y sombra volumétrica (flotan sobre el lienzo). */
+.camera,
+.ref__stage {
+  border-width: 1px;
+  border-color: var(--bezel-edge);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+}
+
+:focus-visible {
+  outline-color: var(--color-accent);
+}

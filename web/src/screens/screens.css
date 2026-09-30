@@ -710,9 +710,8 @@
   gap: var(--space-3);
 }
 
-/* Interpretación: usa el ancho de la ventana (hasta 1600 px) y títulos más chicos. */
-.app-main:has(> .screen-panel > .translate-screen),
-body:has(.translate-screen) .app-header__inner {
+/* Interpretación: usa el ancho de la ventana (hasta 1600 px) y títulos más chicos. El menú no cambia. */
+.app-main:has(> .screen-panel > .translate-screen) {
   max-width: 1600px;
 }
 
