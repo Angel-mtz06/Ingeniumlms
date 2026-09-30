@@ -17,8 +17,17 @@ export interface Sentence {
   glosses: string[];
 }
 
+export interface Pausing {
+  /** Segundos que faltan para formar la oración. */
+  remaining: number;
+  /** Pausa total en segundos (LSM_PAUSE_S del servidor). */
+  total: number;
+}
+
 export interface TranslateState {
   chips: ChipItem[];
+  /** Cuenta regresiva de la pausa de oración; null si no corre. */
+  pausing: Pausing | null;
   sentence: Sentence | null;
   /** "empty": se pidió formar la oración y no había señas pendientes. */
   notice: "empty" | null;
@@ -40,7 +49,7 @@ export type TranslateAction =
   | { kind: "clear" }
   | { kind: "dismissLost" };
 
-export const TRANSLATE_INITIAL: TranslateState = { chips: [], sentence: null, notice: null, awaitingBuild: false, lost: 0, awaitingReset: false };
+export const TRANSLATE_INITIAL: TranslateState = { chips: [], pausing: null, sentence: null, notice: null, awaitingBuild: false, lost: 0, awaitingReset: false };
 
 export function translateReducer(s: TranslateState, a: TranslateAction): TranslateState {
   switch (a.kind) {
@@ -68,7 +77,7 @@ function onMessage(s: TranslateState, m: ServerMsg): TranslateState {
       // hello o reset: el servidor vació las señas pendientes (el párrafo solo lo borra "reset").
       // Si había señas y no fue "Borrar todo", se perdieron: se avisa en Traducción.
       const lost = s.awaitingReset ? 0 : s.lost + s.chips.length;
-      return { ...s, chips: [], notice: null, awaitingBuild: false, lost, awaitingReset: false };
+      return { ...s, chips: [], pausing: null, notice: null, awaitingBuild: false, lost, awaitingReset: false };
     }
     case "sign": {
       const item: ChipItem = { gloss: m.gloss, top3: m.top3, confident: m.confident };
@@ -89,13 +98,27 @@ function onMessage(s: TranslateState, m: ServerMsg): TranslateState {
       return {
         ...s,
         chips: [],
+        pausing: null,
         sentence: { text: m.text, paragraph: m.paragraph, source: m.source, glosses: m.glosses },
         notice: null,
         awaitingBuild: false,
       };
+    case "pausing":
+      return { ...s, pausing: m.remaining === null ? null : { remaining: m.remaining, total: m.total } };
     default:
       return s;
   }
+}
+
+/** Texto visible del indicador de pausa ("Formando oración en 3 s… sube las manos para seguir"). */
+export function pausingText(remaining: number): string {
+  return `Formando oración en ${Math.max(1, Math.ceil(remaining))} s… sube las manos para seguir`;
+}
+
+/** Parte de la pausa que falta (1 = recién empieza, 0 = se forma ya), acotada a 0..1. */
+export function pausingFraction(p: Pausing): number {
+  if (!(p.total > 0)) return 0;
+  return Math.min(1, Math.max(0, p.remaining / p.total));
 }
 
 /**

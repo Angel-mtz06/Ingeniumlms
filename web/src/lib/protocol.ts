@@ -33,4 +33,7 @@ export type ServerMsg =
   | { type: "sentence"; glosses: string[]; text: string; paragraph: string; source: "llm" | "template" }
   | { type: "calibration"; step: string; status?: string; sides?: { L: boolean; R: boolean } }
   | { type: "warning"; code: string; message: string }
+  /** Cuenta regresiva de la pausa de oración (cada ~0.5 s); `remaining: null` la cancela (subió las manos). */
+  | { type: "pausing"; remaining: number; total: number }
+  | { type: "pausing"; remaining: null; total?: number }
   | { type: "error"; message: string };

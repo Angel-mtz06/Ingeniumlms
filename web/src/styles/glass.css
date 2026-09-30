@@ -322,6 +322,17 @@ body::after {
   background: color-mix(in srgb, var(--color-warn) 16%, var(--glass-fill-strong));
 }
 
+/* Cuenta regresiva de la pausa de oración (Interpretación): pista en cápsula dentro del aviso */
+.pause-meter {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.pause-meter__fill {
+  border-radius: inherit;
+}
+
 .rec-mark {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-bad) 25%, transparent), 0 0 12px var(--color-bad);
   animation: rec-pulse 1.4s ease-in-out infinite;

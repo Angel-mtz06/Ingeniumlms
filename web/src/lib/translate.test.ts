@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ServerMsg } from "./protocol";
-import { newEvents, TRANSLATE_INITIAL, translateReducer, type TranslateState, lostMessage } from "./translate";
+import { lostMessage, newEvents, pausingFraction, pausingText, TRANSLATE_INITIAL, translateReducer, type TranslateState } from "./translate";
 
 const sign = (index: number, gloss: string, confident = true): ServerMsg => ({
   type: "sign",
@@ -91,5 +91,34 @@ describe("lostMessage", () => {
     expect(lostMessage(0)).toBe("");
     expect(lostMessage(1)).toBe("Se borró 1 seña sin formar oración al cambiar de modo o al reiniciarse la conexión. Vuelve a hacerla si la necesitas.");
     expect(lostMessage(3)).toBe("Se borraron 3 señas sin formar oración al cambiar de modo o al reiniciarse la conexión. Vuelve a hacerlas si las necesitas.");
+  });
+});
+
+describe("pausa de oración (pausing)", () => {
+  const pausing = (remaining: number | null, total = 3.5): ServerMsg =>
+    remaining === null ? { type: "pausing", remaining: null } : { type: "pausing", remaining, total };
+
+  it("guarda la cuenta regresiva y la cancela con remaining null", () => {
+    let s = run(TRANSLATE_INITIAL, sign(0, "HOLA"), pausing(3.3));
+    expect(s.pausing).toEqual({ remaining: 3.3, total: 3.5 });
+    s = run(s, pausing(2.8));
+    expect(s.pausing).toEqual({ remaining: 2.8, total: 3.5 });
+    s = run(s, pausing(null));
+    expect(s.pausing).toBeNull();
+  });
+
+  it("la oración, un ready y Borrar todo quitan el aviso", () => {
+    const withPause = run(TRANSLATE_INITIAL, sign(0, "HOLA"), pausing(1.2));
+    expect(run(withPause, { type: "sentence", glosses: ["HOLA"], text: "Hola.", paragraph: "Hola.", source: "template" }).pausing).toBeNull();
+    expect(run(withPause, { type: "ready", mode: "translate", target: null, has_reference: false }).pausing).toBeNull();
+    expect(translateReducer(withPause, { kind: "clear" }).pausing).toBeNull();
+  });
+
+  it("texto y fracción del indicador", () => {
+    expect(pausingText(3.3)).toBe("Formando oración en 4 s… sube las manos para seguir");
+    expect(pausingText(0.2)).toBe("Formando oración en 1 s… sube las manos para seguir");
+    expect(pausingFraction({ remaining: 1.75, total: 3.5 })).toBe(0.5);
+    expect(pausingFraction({ remaining: 9, total: 3.5 })).toBe(1);
+    expect(pausingFraction({ remaining: 1, total: 0 })).toBe(0);
   });
 });

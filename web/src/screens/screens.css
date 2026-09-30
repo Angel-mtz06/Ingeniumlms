@@ -388,6 +388,28 @@
   background: var(--color-bad);
 }
 
+/* Pausa de oración: la barra se vacía hasta formar la oración (Interpretación). */
+.overlay-pill--pause {
+  flex-wrap: wrap;
+}
+
+.pause-meter {
+  display: block;
+  flex-basis: 100%;
+  height: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+
+.pause-meter__fill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  transform-origin: left center;
+  transition: transform 500ms linear;
+}
+
 /* ---------- Práctica ---------- */
 /* Primera pantalla (sin bajar, también en 1366×768): la cámara es lo más grande, con el puntaje
    encima y el primer consejo debajo; al lado, los dedos en vivo y el ejemplo compacto y plegable.
@@ -1239,7 +1261,8 @@
 @media (prefers-reduced-motion: reduce) {
   .entry,
   .switch__track,
-  .switch__thumb {
+  .switch__thumb,
+  .pause-meter__fill {
     transition: none;
   }
 

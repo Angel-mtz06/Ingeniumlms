@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { GlossChips } from "../components/GlossChips";
 import { IconSpeaker, IconWarning } from "../components/icons";
 import { SentencePanel } from "../components/SentencePanel";
-import { lostMessage } from "../lib/translate";
+import { lostMessage, type Pausing, pausingFraction, pausingText } from "../lib/translate";
 import { LiveCamera } from "./LiveCamera";
 import { ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
@@ -29,6 +29,21 @@ function speak(text: string) {
   const voice = voices.find((v) => v.lang.toLowerCase() === "es-mx") ?? voices.find((v) => v.lang.toLowerCase().startsWith("es"));
   if (voice) u.voice = voice;
   synth.speak(u);
+}
+
+/**
+ * Cuenta regresiva de la pausa de oración, sobre el video: texto y una barra que se vacía. Solo visual;
+ * el anuncio accesible es una región viva aparte que se escribe una vez al empezar (no cada 0.5 s).
+ */
+function PauseIndicator({ pausing }: { pausing: Pausing }) {
+  return (
+    <div className="overlay-pill overlay-pill--pause" aria-hidden="true">
+      <span className="tabular">{pausingText(pausing.remaining)}</span>
+      <span className="pause-meter">
+        <span className="pause-meter__fill" style={{ transform: `scaleX(${pausingFraction(pausing)})` }} />
+      </span>
+    </div>
+  );
 }
 
 /**
@@ -59,6 +74,15 @@ export function Translate() {
     const id = window.setTimeout(() => setLostAnnounce(text), 150);
     return () => window.clearTimeout(id);
   }, [translate.lost]);
+
+  // Anuncio de la pausa: al empezar la cuenta regresiva (no en cada aviso) y vacío al cancelarse.
+  const [pauseAnnounce, setPauseAnnounce] = useState("");
+  const pauseStartS = translate.pausing ? Math.max(1, Math.ceil(translate.pausing.remaining)) : 0;
+  const pauseRunning = pauseStartS > 0;
+  useEffect(() => {
+    // Solo depende de si corre: los avisos siguientes (cada 0.5 s) no vuelven a escribir la región.
+    setPauseAnnounce(pauseRunning ? `Formando oración en ${pauseStartS} segundos. Sube las manos para seguir.` : "");
+  }, [pauseRunning]);
 
   useSessionMode("translate", null);
   // Mientras se corrige una seña dudosa no se mandan cuadros: así el contador de quietud del
@@ -111,13 +135,16 @@ export function Translate() {
     <div className="screen">
       <header className="screen__head">
         <h2 className="screen__title">Interpretación en vivo</h2>
-        <p className="screen__lead">Haz las señas una tras otra. Cuando haces una pausa, la app forma la oración en español.</p>
+        <p className="screen__lead">Haz las señas una tras otra. Cuando bajas las manos unos segundos, la app forma la oración en español.</p>
       </header>
 
       <ServerNotice />
       {/* Región viva siempre montada (vacía al montar) y rellenada después: así sí se anuncia. */}
       <p className="visually-hidden" role="status">
         {lostAnnounce}
+      </p>
+      <p className="visually-hidden" role="status">
+        {pauseAnnounce}
       </p>
       {translate.lost > 0 ? (
         <div className="notice notice--warn notice--action">
@@ -130,7 +157,7 @@ export function Translate() {
       ) : null}
 
       <div className="translate-grid">
-        <LiveCamera />
+        <LiveCamera>{translate.pausing ? <PauseIndicator pausing={translate.pausing} /> : null}</LiveCamera>
         <section className="sheet" aria-labelledby="traduccion-senas">
           <h3 id="traduccion-senas" className="sheet__title" tabIndex={-1}>
             Señas reconocidas
