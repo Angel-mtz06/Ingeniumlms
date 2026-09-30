@@ -145,6 +145,17 @@ describe("live tracking (no countdown, no fixed window)", () => {
     const r=run("J",1200,3200,{path:after});
     expect(r.result?.issue).toBe("ok");
   });
+  it("if the live progress reached 100 %, a lost hand shape during the movement does not reject it", () => {
+    const live=new LiveMotion("J"), base=byLetter("J")[0]; let last=null as ReturnType<LiveMotion["push"]> | null;
+    for (let t=0;t<=4000 && last?.phase!=="result";t+=1000/30) {
+      const [dx,dy]=along(J,Math.max(0,Math.min(1,(t-1200)/1500)));
+      const h=base.map(p=>[p[0]*110+320+dx*110,p[1]*110+230+dy*110,p[2]*110]);
+      // Al girar la mano el clasificador deja de ver la pose (como pasa con la cámara real).
+      const lost = t>1500;
+      last=live.push({t,hand:h,pose:lost ? null : predictAlphabet(h).pose,out:false, startOk: lost ? false : undefined});
+    }
+    expect(last?.result?.issue).toBe("ok");
+  });
   it("never leaves 'pose' with a wrong hand shape", () => {
     expect(run("A",1200,2700,{end:3000}).phases).toEqual(["pose"]);
   });

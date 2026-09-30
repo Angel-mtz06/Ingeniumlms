@@ -321,6 +321,8 @@ export function trajectoryProgress(frames: MotionFrame[], target: string): numbe
   return best.error <= SHAPE_ERROR ? best.f : 0;
 }
 
+const KEEP_WHEN_DONE = new Set<MotionIssue>(["capture_short", "camera_pause", "hand_lost", "out_of_frame", "too_fast"]);
+
 export type LivePhase = "pose" | "ready" | "moving" | "result";
 export interface LiveMotionState {
   phase: LivePhase;
@@ -395,7 +397,13 @@ export class LiveMotion {
     if (missing || timedOut || movementEnded(this.frames, rule.tip)) {
       // Lo que la mano hace DESPUÉS de completar el recorrido (bajar, acomodarse) no cuenta.
       const judged = this.doneAt !== null && !missing ? this.frames.slice(0, this.doneAt+3) : this.frames;
-      this.result = analyzeMotionFor(judged, this.target, {live: true, timedOut: timedOut && this.doneAt === null});
+      const r = analyzeMotionFor(judged, this.target, {live: true, timedOut: timedOut && this.doneAt === null});
+      // Si el avance en vivo llegó al recorrido completo (con la pose inicial ya verificada), el
+      // juicio final no puede contradecirlo por reglas que el medidor no muestra. Solo se mantienen
+      // los problemas de captura y "demasiado rápido para observarlo".
+      this.result = this.doneAt !== null && !missing && !KEEP_WHEN_DONE.has(r.issue)
+        ? {...r, issue: "ok", reason: MESSAGES.ok, prediction: [this.target, Math.max(CONF_THRESHOLD, this.progress)]}
+        : r;
       this.phase = "result"; this.since = t;
     }
     return this.state(t);
