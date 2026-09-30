@@ -152,3 +152,11 @@ def test_one_hand_sign_in_the_other_slot_is_still_evaluated():
     assert a.scores == b.scores and not any(i.param == "mano" for i in a.issues)
     # si la mano ya está en su lado no cambia nada
     assert align_one_hand(REF, s)[0] is s
+
+
+def test_one_hand_sign_made_with_the_other_hand_scores_the_same():
+    from lsm.evaluator.scoring import evaluate_either_hand
+    from lsm.normalize import mirror
+    s = seq()
+    assert evaluate_either_hand(REF, mirror(s)).total == evaluate(REF, s).total  # como persona zurda
+    assert evaluate_either_hand(REF, s).total == evaluate(REF, s).total

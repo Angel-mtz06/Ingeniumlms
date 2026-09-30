@@ -103,6 +103,8 @@ def main():
                     help="las tomas propias (datasets/own) están en espejo (cámara frontal del celular): se reflejan antes de usarlas")
     ap.add_argument("--min-hands", type=float, default=MIN_HAND_RATIO)
     ap.add_argument("--dry-run", action="store_true", help="solo evalúa; no escribe nada")
+    ap.add_argument("--pos-aug", type=int, default=K_AUG, help="variantes aumentadas por toma positiva (muchas tomas → menos)")
+    ap.add_argument("--max-folds", type=int, default=0, help="rondas de evaluación dejando fuera a una persona (0 = todas)")
     args = ap.parse_args()
     gloss = canonical(args.gloss)
     out = MODELS / f"{args.out}.pt"
@@ -135,7 +137,8 @@ def main():
     rng = np.random.default_rng(0)
     neg_aug_seqs = augmented(train_seqs, rng, NEG_AUG)
     signers = sorted(by_signer)
-    fold_p = {h: [] for h in signers}  # probabilidades de cada miembro sobre la persona dejada fuera
+    eval_signers = signers[:args.max_folds] if args.max_folds else signers
+    fold_p = {h: [] for h in eval_signers}  # probabilidades de cada miembro sobre la persona dejada fuera
     base_p = {s: [] for s in held}
     new_p = {s: [] for s in held}
     rows_new = []
@@ -144,13 +147,13 @@ def main():
         mean, std = np.asarray(ck["feat_mean"]), np.asarray(ck["feat_std"])
         neg = torch.cat([embed(model, train_seqs, mean, std), embed(model, neg_aug_seqs, mean, std)])
         neg_y = torch.cat([train_y, train_y.repeat_interleave(NEG_AUG)])
-        for h in signers:
+        for h in eval_signers:
             tr = [s for k, v in by_signer.items() if k != h for s in v]
-            pos = embed(model, augmented(tr, rng, K_AUG), mean, std)
+            pos = embed(model, augmented(tr, rng, args.pos_aug), mean, std)
             w, b = fit_row(model.head, pos, neg, neg_y)
             fold_p[h].append(full_probs(model.head, w, b, embed(model, by_signer[h], mean, std)))
         all_pos = [s for v in by_signer.values() for s in v]
-        w, b = fit_row(model.head, embed(model, augmented(all_pos, rng, K_AUG), mean, std), neg, neg_y)
+        w, b = fit_row(model.head, embed(model, augmented(all_pos, rng, args.pos_aug), mean, std), neg, neg_y)
         rows_new.append((w, b))
         for s in held:
             e = embed(model, held_seqs[s], mean, std)
@@ -161,7 +164,7 @@ def main():
     report = {"base": args.base, "added": gloss, "n_pos": n_pos, "personas": {k: len(v) for k, v in by_signer.items()},
               "negativos": f"{len(train)} de entrenamiento + {NEG_AUG} aumentadas c/u", "none_min": NONE_MIN}
     folds = {}
-    for h in signers:
+    for h in eval_signers:
         P = np.mean(fold_p[h], 0)
         folds[h] = {"n": len(P), "top1": float((P.argmax(1) == new).mean()),
                     "top3": float((np.argsort(-P, 1)[:, :3] == new).any(1).mean()), "p_media": float(P[:, new].mean())}

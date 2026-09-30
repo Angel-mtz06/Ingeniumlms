@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from lsm.evaluator.references import GlossRef, dtw, sample_stats
-from lsm.normalize import NormSequence
+from lsm.normalize import NormSequence, mirror
 
 FLEX_FLOOR, LOC_FLOOR, MOVE_FLOOR, PALM_FLOOR = 12.0, 0.35, 0.15, 20.0
 Z_MARGIN = 1.0  # hasta 1 z es variación normal entre signantes: no resta puntos
@@ -84,6 +84,19 @@ def align_one_hand(ref: GlossRef, seq: NormSequence, glove_flex: np.ndarray | No
     swapped = NormSequence(seq.hands[:, ::-1].copy(), seq.present[:, ::-1].copy(), seq.sample_id, seq.signer)
     flip = lambda a: None if a is None else np.asarray(a)[::-1].copy()  # noqa: E731
     return swapped, flip(glove_flex), flip(glove_contacts)
+
+
+def evaluate_either_hand(ref: GlossRef, seq: NormSequence, glove_flex: np.ndarray | None = None,
+                        glove_contacts: np.ndarray | None = None) -> Evaluation:
+    """Seña de UNA mano: se califica tal cual y también reflejada (hecha con la otra mano, como la haría una persona
+    zurda) y se queda la mejor. Así una seña al centro de la cara no depende de qué lado le tocó a la mano ni de
+    si las tomas de la referencia se grabaron en espejo. Con dos manos: `evaluate` normal."""
+    first = evaluate(ref, *align_one_hand(ref, seq, glove_flex, glove_contacts))
+    if int(np.asarray(ref.slots_used, bool).sum()) != 1:
+        return first
+    flip = lambda a: None if a is None else np.asarray(a)[::-1].copy()  # noqa: E731
+    other = evaluate(ref, *align_one_hand(ref, mirror(seq), flip(glove_flex), flip(glove_contacts)))
+    return other if other.total > first.total else first
 
 
 def live_flex_for(ref: GlossRef, flex: np.ndarray, present: np.ndarray) -> np.ndarray:
