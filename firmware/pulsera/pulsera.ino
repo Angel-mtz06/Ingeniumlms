@@ -11,6 +11,10 @@
 // CAL,<L|R>,error,<movimiento|no_responde>,<imu>. Al encender se mide de nuevo solo si la mano está quieta;
 // si no, se usa el sesgo guardado.
 //
+// Modo de prueba: el comando PRUEBA (monitor serie) activa/desactiva un resumen legible cada 0.5 s (Hz, WiFi,
+// clientes, estado y ángulos de cada IMU, flexión de cada dedo respecto al dorso). Mientras está activo no se
+// imprimen las líneas D por USB (por WiFi se siguen mandando). Los cambios de WiFi se avisan siempre con #.
+//
 // Montaje de cada MPU-6050: eje X hacia la punta del dedo, eje Z saliendo de la uña (o del dorso).
 // Así "p" (inclinación) gira al doblar el dedo y cubre −180…180°; "r" es el giro lateral.
 
@@ -52,6 +56,10 @@ bool mdnsListo = false;
 String entradaSerie;
 Preferences memoria;
 bool calPendiente = false;  // se pidió CAL (se atiende en loop, fuera del callback del WebSocket)
+bool modoPrueba = false;    // PRUEBA: resumen legible en el monitor serie en vez de las líneas D
+uint32_t proximaPrueba = 0;
+uint32_t lecturasSeg = 0, contadorHz = 0, inicioHz = 0;
+int ultimoWifi = -1;
 
 const char* nombreRed() { return LADO == 'R' ? NOMBRE_DER : NOMBRE_IZQ; }
 
@@ -246,9 +254,62 @@ void leerSerie() {
       entradaSerie.trim();
       if (entradaSerie == "ID?") Serial.println(lineaId());
       else if (entradaSerie == "CAL") calPendiente = true;
+      else if (entradaSerie == "PRUEBA") {
+        modoPrueba = !modoPrueba;
+        Serial.println(modoPrueba ? "# Modo de prueba ACTIVADO (escribe PRUEBA para salir)" : "# Modo de prueba desactivado");
+      } else if (entradaSerie.length()) {
+        Serial.println("# Comando desconocido. Usa: ID?  CAL  PRUEBA");
+      }
       entradaSerie = "";
     } else if (entradaSerie.length() < 32) {
       entradaSerie += c;
+    }
+  }
+}
+
+// ---------------------------------------------------------------- Pruebas
+const char* NOMBRES_IMU[N_IMU] = {"dorso  ", "pulgar ", "indice ", "medio  ", "anular ", "menique"};
+
+String textoWifi() {
+#if MODO_WIFI == WIFI_PUNTO_ACCESO
+  return String("red propia ") + WIFI_SSID + " IP " + WiFi.softAPIP().toString() + " equipos " + WiFi.softAPgetStationNum();
+#else
+  switch (WiFi.status()) {
+    case WL_CONNECTED: return String("conectado a ") + WIFI_SSID + " IP " + WiFi.localIP().toString() + " (" + nombreRed() + ".local)";
+    case WL_NO_SSID_AVAIL: return String("no encuentra la red ") + WIFI_SSID + " (revisa el nombre y que sea 2.4 GHz)";
+    case WL_CONNECT_FAILED: return String("no pudo entrar a ") + WIFI_SSID + " (revisa la contrasena en secrets.h)";
+    case WL_CONNECTION_LOST: return "se perdio la conexion, reintentando";
+    case WL_DISCONNECTED: return String("conectando a ") + WIFI_SSID + "...";
+    default: return String("estado ") + (int)WiFi.status();
+  }
+#endif
+}
+
+// Avisa por el monitor cada vez que cambia el estado del WiFi (siempre, con o sin modo de prueba).
+void avisarWifi() {
+#if MODO_WIFI != WIFI_PUNTO_ACCESO
+  int st = WiFi.status();
+  if (st == ultimoWifi) return;
+  ultimoWifi = st;
+  Serial.println(String("# WiFi: ") + textoWifi());
+#endif
+}
+
+void imprimirPrueba() {
+  Serial.printf("# ---- t=%.1f s | %lu Hz | WiFi: %s | app por WiFi: %u\n", millis() / 1000.0f, (unsigned long)lecturasSeg,
+                textoWifi().c_str(), (unsigned)ws.connectedClients());
+  for (int i = 0; i < N_IMU; i++) {
+    const Imu& m = imus[i];
+    if (!m.ok) {
+      Serial.printf("#  %s canal %d  NO RESPONDE (revisa el cable)\n", NOMBRES_IMU[i], CANAL_IMU[i]);
+      continue;
+    }
+    if (i == 0) {
+      Serial.printf("#  %s canal %d  ok   p=%7.1f  r=%7.1f  giro=%6.1f %6.1f %6.1f\n", NOMBRES_IMU[i], CANAL_IMU[i], m.p, m.r,
+                    m.gx, m.gy, m.gz);
+    } else {
+      float flex = imus[0].ok ? envolver(m.p - imus[0].p) : NAN;
+      Serial.printf("#  %s canal %d  ok   p=%7.1f  r=%7.1f  flexion=%7.1f\n", NOMBRES_IMU[i], CANAL_IMU[i], m.p, m.r, flex);
     }
   }
 }
@@ -299,6 +360,7 @@ void setup() {
   ws.begin();
   ws.onEvent(alRecibirWs);
   Serial.println(lineaId());
+  Serial.println("# Comandos: ID?  CAL (calibrar giroscopios, mano quieta)  PRUEBA (resumen legible)");
   ultimoMicros = micros();
   proximo = millis();
 }
@@ -307,6 +369,7 @@ void loop() {
   ws.loop();
   leerSerie();
   revisarMdns();
+  avisarWifi();
   if (calPendiente) {
     calPendiente = false;
     calibrarGiroscopios();
@@ -326,7 +389,20 @@ void loop() {
   static char buf[200];
   int n = lineaDatos(buf, sizeof(buf));
   seq++;
-  Serial.write((const uint8_t*)buf, n);
-  Serial.write('\n');
+  if (!modoPrueba) {
+    Serial.write((const uint8_t*)buf, n);
+    Serial.write('\n');
+  }
   ws.broadcastTXT(buf, n);
+
+  contadorHz++;
+  if (ahora - inicioHz >= 1000) {
+    lecturasSeg = contadorHz;
+    contadorHz = 0;
+    inicioHz = ahora;
+  }
+  if (modoPrueba && (int32_t)(ahora - proximaPrueba) >= 0) {
+    proximaPrueba = ahora + 500;
+    imprimirPrueba();
+  }
 }

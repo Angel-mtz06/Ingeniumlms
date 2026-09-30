@@ -27,7 +27,22 @@ Lee 6 MPU-6050 (dorso + 5 dedales) por un multiplexor TCA9548A y envía las lect
 Eje **X** hacia la punta del dedo y eje **Z** saliendo de la uña (en el dorso, saliendo de la mano). Con la mano
 quieta ~0.2 s al encender, cada IMU mide el sesgo de su giroscopio.
 
-## Monitor serie
+## Monitor serie (115200 o cualquier velocidad: el ESP32-C3 usa USB nativo)
 
-Las líneas que empiezan con `#` son mensajes de estado (IMU que responden, red, IP). Enviar `ID?` responde la
-identificación de la pulsera; cada 20 ms sale una línea `D,…`.
+Las líneas que empiezan con `#` son mensajes de estado (IMU que responden, cambios de WiFi con su IP). Comandos
+(escríbelos y Enter):
+
+| Comando | Qué hace |
+|---|---|
+| `ID?` | Responde la identificación de la pulsera (`ID,R,fw=1.1,…`). |
+| `CAL` | Calibra los giroscopios: mano apoyada y quieta 2 s. Responde `CAL,R,ok,…` o qué sensor se movió. Se guarda en el ESP32. |
+| `PRUEBA` | Activa/desactiva el modo de prueba: cada 0.5 s un resumen legible (Hz, WiFi e IP, app conectada, cada IMU ok o NO RESPONDE, ángulos y flexión de cada dedo respecto al dorso). Mientras está activo no salen las líneas `D,…` por USB. |
+
+Fuera del modo de prueba, cada 20 ms sale una línea `D,…` (la que lee la app).
+
+## WiFi (zona con cobertura de la laptop)
+
+1. Windows → Configuración → Red e Internet → **Zona con cobertura inalámbrica móvil**: nombre `LSM-Dedales`,
+   banda **2.4 GHz** (el ESP32-C3 no ve 5 GHz), contraseña a tu elección; desactiva el ahorro de energía.
+2. Copia `secrets.example.h` como `secrets.h` (en esta misma carpeta) y escribe ahí el nombre y la contraseña.
+3. Compila y carga. En el monitor serie debe salir `# WiFi: conectado a LSM-Dedales IP …`.
