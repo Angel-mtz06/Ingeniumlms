@@ -167,7 +167,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
       // Letra estática: solo con la mano quieta y sin una letra con movimiento en curso; I/N/D esperan
       // un poco más por si viene su movimiento (StaticGate). Perder la mano un instante no la reinicia.
       const { still, present } = staticGate.current.observe(frame);
-      const steady = stabilizer.current.push(t, still && motion.progress === 0 ? prediction.static : null, present);
+      const steady = stabilizer.current.push(t, still && !motion.moving ? prediction.static : null, present);
       const shown = staticGate.current.gate(t, steady);
       setStable(shown);
       // Libre: sin objetivo, los dedos se comparan con la letra que la app YA reconoció (verde = coincide).

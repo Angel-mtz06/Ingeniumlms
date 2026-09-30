@@ -10,6 +10,7 @@ from collections import deque
 
 import numpy as np
 
+from lsm.classifier.disambiguate import distinguish_hola_no
 from lsm.context import LOCK_P, MIN_P, START, ContextModel, rerank, token
 from lsm.context import context_weight as env_context_weight
 from lsm.evaluator.feedback import messages
@@ -425,6 +426,7 @@ class Session:
         seq = NormSequence(np.stack(self.hands[a:b + 1]), np.stack(self.present[a:b + 1]))
         # k=5: NINGUNA nunca se muestra como alternativa; quitándola quedan ≥4 para el contexto
         top = [[g, round(float(p), 3)] for g, p in self.classifier.predict(seq, k=TOP_K)] if self.classifier else []
+        top = distinguish_hola_no(top, seq, self.references)
         self._last_top = top  # para el registro (incluye NINGUNA si salió)
         none_top1 = bool(top) and top[0][0] == NONE_GLOSS
         cands = [t for t in top if t[0] != NONE_GLOSS]

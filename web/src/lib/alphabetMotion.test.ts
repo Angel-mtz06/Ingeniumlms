@@ -16,6 +16,21 @@ function sequence(letter: string, path: number[][], scale=100, offset=[320,240])
 }
 
 describe("dynamic sequence evidence (synthetic geometry, not linguistic accuracy)", () => {
+  it("Ñ exige amplitud real aunque un arco pequeño tenga la forma correcta", () => {
+    const small = sequence("Ñ", [[0,0],[.125,.08],[.25,.11],[.375,.08],[.5,0]]);
+    expect(trajectoryProgress(small, "Ñ")).toBeLessThan(.9);
+    expect(analyzeMotionFor(small, "Ñ").issue).toBe("too_small");
+    expect(analyzeMotion(small).prediction).toBeNull();
+  });
+  it("Q acepta un arco suave sin aceptar una línea recta", () => {
+    const arc = sequence("Q", [[0,0],[.25,.07],[.5,.1],[.75,.07],[1,0]]);
+    expect(trajectoryProgress(arc, "Q")).toBeGreaterThanOrEqual(.9);
+    expect(trajectoryProgress(sequence("Q", [[0,0],[1,0]]), "Q")).toBeLessThan(.9);
+  });
+  it("X acepta una ida y vuelta corta, pero exige el regreso", () => {
+    expect(trajectoryProgress(sequence("X", [[0,0],[.35,0],[0,0]]), "X")).toBeGreaterThanOrEqual(.9);
+    expect(trajectoryProgress(sequence("X", [[0,0],[.35,0]]), "X")).toBeLessThan(.9);
+  });
   it("allows preparation and a full 2.5 second capture", () => {
     expect(PREPARE_MS).toBe(3000); expect(CAPTURE_MS).toBe(2500);
   });
@@ -226,6 +241,11 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
   it("un movimiento corto (0.7 s) también cuenta: ya no exige 2.2 s de grabación", () => {
     expect(runFree("Ñ", PATHS["Ñ"], 1200, 1900).letter).toBe("Ñ");
   });
+  it.each([15, 30])("N con un arco pequeño no se convierte en Ñ a %s cuadros/s", (fps) => {
+    const small = PATHS["Ñ"].map(([x,y])=>[x*.5,y*.5]);
+    expect(runFree("Ñ", small, 1200, 2000, 0, fps).letter).toBeNull();
+    expect(runFree("Ñ", PATHS["Ñ"], 1200, 2000, 0, fps).letter).toBe("Ñ");
+  });
   it.each(["J","Ñ","Q","Z","X"])("cámara a 15 cuadros/s: la %s hecha en 0.45 s se reconoce", (letter) => {
     const pose={J:"J","Ñ":"Ñ",Q:"Q",Z:"D",X:"X"}[letter]!;
     expect(runFree(pose, PATHS[letter] ?? PATHS["Ñ"], 1200, 1650, 0, 15).letter).toBe(letter);
@@ -286,14 +306,16 @@ describe("Libre: cuándo se da por hecha una letra estática (StaticGate)", () =
     for (let t=666;t<=1200;t+=66) still=g.observe({t,hand:at(a,(t-666)/300),pose:null}).still;
     expect(still).toBe(false);
   });
-  it("I, N y D esperan más que las demás (puede venir J, Ñ o Z)", () => {
-    expect(MOTION_START_POSES).toEqual(new Set(["I","N","D"]));
+  it("N se reconoce sin esperar a Ñ; I y D conservan su espera adicional", () => {
+    expect(MOTION_START_POSES).toEqual(new Set(["I","D"]));
     const g=new StaticGate();
     expect(g.gate(0, ["A",.9])).toBeNull();
     expect(g.gate(STATIC_EXTRA_MS, ["A",.9])?.[0]).toBe("A");
     expect(g.gate(STATIC_EXTRA_MS+10, ["I",.9])).toBeNull();
     expect(g.gate(STATIC_EXTRA_MS+10+STATIC_EXTRA_MS, ["I",.9])).toBeNull();
     expect(g.gate(STATIC_EXTRA_MS+10+BASE_EXTRA_MS, ["I",.9])?.[0]).toBe("I");
+    expect(g.gate(1000, ["N",.9])).toBeNull();
+    expect(g.gate(1000+STATIC_EXTRA_MS, ["N",.9])?.[0]).toBe("N");
   });
   it("perder la mano un instante no cuenta como que se fue", () => {
     const g=new StaticGate(), a=byLetter("A")[0];

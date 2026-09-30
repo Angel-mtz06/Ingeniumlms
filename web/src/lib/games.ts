@@ -73,39 +73,37 @@ export interface RaceLevelConfig {
   rivals: { name: string; lpm: number }[];
   /** Segundos que cuesta saltar una letra. */
   skipPenalty: number;
-  /** ¿Se muestra la foto de la letra actual durante la carrera? */
-  hint: boolean;
 }
 
 /**
  * Niveles de la carrera. Una persona que empieza deletrea ~10–15 letras por minuto frente a la cámara
  * (cada letra se sostiene ~0.8 s y hay que cambiar de forma). Subir de nivel alarga el texto, agrega
- * letras con movimiento (J, Ñ, Q, X, Z), acelera a los rivales, encarece saltar y quita la foto de ayuda.
+ * letras con movimiento (J, Ñ, Q, X, Z), acelera a los rivales y encarece saltar.
  */
 export const RACE_LEVELS: Record<RaceLevel, RaceLevelConfig> = {
   "fácil": {
-    label: "Fácil", summary: "Palabras cortas sin movimiento · rivales lentos · con foto de ayuda",
+    label: "Fácil", summary: "Palabras cortas sin movimiento · rivales lentos",
     texts: ["SOL", "MAMA", "CASA", "LUNA", "GATO", "HOLA", "MESA", "AGUA", "PAPA", "OSO"],
     rivals: [{ name: "Tortuga", lpm: 5 }, { name: "Caracol", lpm: 7 }, { name: "Koala", lpm: 9 }],
-    skipPenalty: 2, hint: true,
+    skipPenalty: 2,
   },
   normal: {
-    label: "Normal", summary: "Dos palabras · rivales a tu ritmo · con foto de ayuda",
+    label: "Normal", summary: "Dos palabras · rivales a tu ritmo",
     texts: ["HOLA AMIGO", "EL SOL SALE", "MI CASA", "LA LUNA", "UN GATO", "BUEN DIA", "LA MESA", "EL PERRO", "MI FAMILIA", "UNA FLOR"],
     rivals: [{ name: "Burro", lpm: 10 }, { name: "Perro", lpm: 13 }, { name: "Caballo", lpm: 16 }],
-    skipPenalty: 3, hint: true,
+    skipPenalty: 3,
   },
   "difícil": {
-    label: "Difícil", summary: "Con letras de movimiento (J, Ñ, Q, X, Z) · rivales rápidos · sin foto",
+    label: "Difícil", summary: "Con letras de movimiento (J, Ñ, Q, X, Z) · rivales rápidos",
     texts: ["JUGO DE UVA", "EL NIÑO", "QUESO RICO", "ZAPATO AZUL", "MEXICO LINDO", "LA PIZZA", "JUAN Y ANA", "QUE BONITO", "TAXI ROJO", "MAÑANA"],
     rivals: [{ name: "Liebre", lpm: 14 }, { name: "Zorro", lpm: 18 }, { name: "Guepardo", lpm: 22 }],
-    skipPenalty: 4, hint: false,
+    skipPenalty: 4,
   },
   experto: {
-    label: "Experto", summary: "Frases largas con movimiento · rivales muy rápidos · sin foto",
+    label: "Experto", summary: "Frases largas con movimiento · rivales muy rápidos",
     texts: ["EL NIÑO COME QUESO", "JUGO DE MANZANA", "MEXICO ES BONITO", "LA PIZZA ESTA RICA", "ZAPATOS Y JUGUETES", "QUIERO UN TAXI", "LA JIRAFA Y EL ZORRO", "EXAMEN DE MAÑANA"],
     rivals: [{ name: "Halcón", lpm: 20 }, { name: "Cohete", lpm: 25 }, { name: "Rayo", lpm: 30 }],
-    skipPenalty: 6, hint: false,
+    skipPenalty: 6,
   },
 };
 

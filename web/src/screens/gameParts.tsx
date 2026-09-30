@@ -3,15 +3,20 @@
  * del alfabeto, medidor, nota bajo la cámara y la tira de letras).
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { HandDiagram } from "../components/HandDiagram";
 import { IconWarning, ToneIcon } from "../components/icons";
+import { LetterReference, LetterTutorial, TUTORIAL } from "../components/LetterReference";
+import { ReferencePlayer } from "../components/ReferencePlayer";
 import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
 import { MOTION_LETTERS } from "../lib/alphabet";
 import { motionGauge, staticGauge } from "../lib/alphabetView";
 import { lettersOf, spellable } from "../lib/games";
 import type { GaugeView } from "../lib/gauge";
+import type { ServerMsg } from "../lib/protocol";
+import { glossLabel } from "../lib/ui";
 import { useApp, useFrameSink } from "./shared";
 
-export function GameHead({ title, lead, onBack, right }: { title: string; lead: string; onBack(): void; right?: ReactNode }) {
+export function GameHead({ title, lead, onBack, right, assist }: { title: string; lead: string; onBack(): void; right?: ReactNode; assist?: Assist }) {
   return (
     <header className="screen__head screen__head--row screen__head--compact">
       <div className="screen__head-text">
@@ -20,6 +25,7 @@ export function GameHead({ title, lead, onBack, right }: { title: string; lead: 
       </div>
       <div className="game-head__right">
         {right}
+        {assist ? <AssistToggle assist={assist} /> : null}
         <button type="button" className="btn btn--change btn--small" onClick={onBack}>← Juegos</button>
       </div>
     </header>
@@ -109,5 +115,115 @@ export function Note({ note }: { note: { tone?: "ok" | "warn"; text: string } })
         <span>{note.text}</span>
       </p>
     </div>
+  );
+}
+
+/* ------------------------------ Asistencia y pistas ------------------------------ */
+
+/**
+ * Asistencia: habilita fotos, videos y ejemplos. En Simón dice solo se muestran
+ * al presentar la secuencia; los demás juegos los muestran durante el turno.
+ * Las pistas de memoria revelan texto. Con asistencia no se guardan récords.
+ * Se recuerda en este navegador para todos los juegos.
+ */
+const ASSIST_KEY = "lsm.games.assist";
+export interface Assist { on: boolean; toggle(): void }
+export function useAssist(): Assist {
+  const [on, setOn] = useState(() => {
+    try { return window.localStorage.getItem(ASSIST_KEY) === "1"; } catch { return false; }
+  });
+  const toggle = useCallback(() => setOn((v) => {
+    try { window.localStorage.setItem(ASSIST_KEY, v ? "0" : "1"); } catch { /* solo esta visita */ }
+    return !v;
+  }), []);
+  return { on, toggle };
+}
+
+/** ¿Se usó la asistencia en algún momento de la partida (`active`)? Con asistencia no hay récord. */
+export function useAssistUsed(on: boolean, active: boolean) {
+  const [used, setUsed] = useState(false);
+  useEffect(() => { if (on && active) setUsed(true); }, [on, active]);
+  const reset = useCallback(() => setUsed(false), []);
+  return { used: used || (on && active), reset };
+}
+
+export function AssistToggle({ assist }: { assist: Assist }) {
+  return (
+    <button type="button" role="switch" aria-checked={assist.on} className="switch game-assist-toggle" onClick={assist.toggle}
+      title="Muestra fotos y ejemplos; en Simón dice, solo al presentar la secuencia">
+      <span className="switch__track" aria-hidden="true"><span className="switch__thumb" /></span>
+      <span className="switch__label">🧑‍🏫 Asistencia</span>
+    </button>
+  );
+}
+
+/**
+ * Acomodo de los juegos: a la izquierda la cámara (su alto sale del alto de la ventana) con la nota y
+ * los botones; a la derecha lo del juego (palabra, tablero, pista, asistencia). Todo cabe sin bajar.
+ */
+export function GameStage({ camera, side, wide }: { camera: ReactNode; side: ReactNode; wide?: boolean }) {
+  // `wide`: con asistencia la cámara se achica un poco y la columna del juego gana espacio.
+  return (
+    <div className="game-stage" data-wide={wide ? "" : undefined}>
+      <div className="game-stage__cam">{camera}</div>
+      <div className="game-stage__side">{side}</div>
+    </div>
+  );
+}
+
+type Recognition = ReturnType<typeof useAlphabetRecognition>;
+
+/** Asistencia para una letra: foto (o video si lleva movimiento), tus dedos en vivo y qué corregir. */
+export function LetterAssist({ letter, rec, showFingers = true }: { letter: string; rec?: Recognition; showFingers?: boolean }) {
+  const hasVideo = !!TUTORIAL[letter];
+  const [video, setVideo] = useState(hasVideo && MOTION_LETTERS.has(letter));
+  useEffect(() => { setVideo(!!TUTORIAL[letter] && MOTION_LETTERS.has(letter)); }, [letter]);
+  const fb = rec?.feedback;
+  return (
+    <section className="sheet game-assist" aria-label={`Asistencia: cómo se hace la letra ${letter}`}>
+      <div className="game-assist__head">
+        <h3 className="game-assist__title">🧑‍🏫 Así se hace la <span translate="no">{letter}</span></h3>
+        {hasVideo ? (
+          <button type="button" className="btn btn--quiet btn--small" onClick={() => setVideo((v) => !v)}>{video ? "Ver foto" : "▶ Ver video"}</button>
+        ) : null}
+      </div>
+      <div className="game-assist__body">
+        <div className="game-assist__ref">{video ? <LetterTutorial letter={letter} /> : <LetterReference letter={letter} />}</div>
+        {showFingers && rec ? (
+          <div className="game-assist__hand">
+            <HandDiagram side={rec.side ?? "derecha"} fingers={rec.fingers} caption="Tus dedos" />
+          </div>
+        ) : null}
+      </div>
+      {fb && !fb.correct && fb.issue !== "no_hand" ? (
+        <p className="game-assist__tip"><IconWarning /><span>{fb.message}</span></p>
+      ) : null}
+    </section>
+  );
+}
+
+type LiveMsg = Extract<ServerMsg, { type: "live" }>;
+
+/** Asistencia para una seña: la animación de referencia, tus dedos en vivo y el primer consejo de la toma. */
+export function SignAssist({ gloss, live, tip, picker, hands = true }: {
+  gloss: string; live?: LiveMsg; tip?: string | null; picker?: ReactNode; hands?: boolean;
+}) {
+  return (
+    <section className="sheet game-assist" aria-label={`Asistencia: cómo se hace la seña ${glossLabel(gloss)}`}>
+      <div className="game-assist__head">
+        <h3 className="game-assist__title">🧑‍🏫 Así se hace «<span translate="no">{glossLabel(gloss)}</span>»</h3>
+      </div>
+      {picker}
+      <div className="game-assist__body" data-single={hands ? undefined : ""}>
+        <div className="game-assist__ref game-assist__ref--sign"><ReferencePlayer gloss={gloss} /></div>
+        {hands ? (
+          <div className="game-assist__hand game-assist__hand--pair">
+            <HandDiagram side="izquierda" fingers={live?.fingers[1] ?? []} />
+            <HandDiagram side="derecha" fingers={live?.fingers[0] ?? []} />
+          </div>
+        ) : null}
+      </div>
+      {tip ? <p className="game-assist__tip"><IconWarning /><span>{tip}</span></p> : null}
+    </section>
   );
 }
