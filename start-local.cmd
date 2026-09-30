@@ -18,8 +18,11 @@ if not exist ".venv\Scripts\python.exe" (
   exit /b 1
 )
 
-rem Compila la web si falta (requiere Node.js y npm install previo)
-if not exist "web\dist\index.html" (
+rem Compila la web si falta o si web\src cambio despues de la ultima compilacion (requiere npm install previo)
+set "REBUILD="
+if not exist "web\dist\index.html" set "REBUILD=1"
+if not defined REBUILD for /f %%i in ('powershell -NoProfile -Command "$d=(Get-Item web\dist\index.html).LastWriteTime; if (Get-ChildItem web\src,web\index.html -Recurse -File | Where-Object { $_.LastWriteTime -gt $d } | Select-Object -First 1) { '1' }"') do set "REBUILD=%%i"
+if defined REBUILD (
   if exist "web\node_modules" (
     echo == Compilando la web...
     pushd web
