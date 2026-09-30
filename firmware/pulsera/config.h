@@ -12,6 +12,9 @@
 #define WIFI_PUNTO_ACCESO 2
 #define MODO_WIFI WIFI_ESTACION
 // El nombre y la contraseña de la red van en secrets.h (no se sube a git; copia secrets.example.h).
+// 1 = no se inician ni se leen los sensores hasta estar conectada a la red (solo en WIFI_ESTACION).
+// 0 = empieza a leer de inmediato (útil para probar solo por USB, sin la zona con cobertura).
+#define ESPERAR_WIFI 1
 
 #define PUERTO_WEBSOCKET 81
 // Nombre en la red (mDNS): pulsera-der.local / pulsera-izq.local

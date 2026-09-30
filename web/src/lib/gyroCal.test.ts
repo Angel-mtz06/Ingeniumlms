@@ -14,6 +14,12 @@ describe("parseCalLine", () => {
     expect(parseCalLine("CAL,X,ok,1")).toBeNull();
   });
 
+  it("avisa si el guante aún espera el WiFi", () => {
+    const r = parseCalLine("CAL,R,error,sin_iniciar,0");
+    expect(r?.cal).toEqual({ phase: "error", reason: "sin_iniciar", imu: 0 });
+    expect(gyroCalText(r!.cal)).toContain("espera el WiFi");
+  });
+
   it("dice qué sensor falló", () => {
     expect(gyroCalText({ phase: "error", reason: "movimiento", imu: 2 })).toContain("el índice");
     expect(gyroCalText({ phase: "ok", spread: 0.42 })).toContain("0.4 °/s");

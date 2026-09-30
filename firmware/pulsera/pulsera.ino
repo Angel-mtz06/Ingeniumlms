@@ -15,6 +15,9 @@
 // clientes, estado y ángulos de cada IMU, flexión de cada dedo respecto al dorso). Mientras está activo no se
 // imprimen las líneas D por USB (por WiFi se siguen mandando). Los cambios de WiFi se avisan siempre con #.
 //
+// Con ESPERAR_WIFI (config.h) los sensores se inician y se empiezan a leer solo cuando la pulsera ya está
+// conectada a la red; mientras tanto el monitor dice cada 2 s que está esperando.
+//
 // Montaje de cada MPU-6050: eje X hacia la punta del dedo, eje Z saliendo de la uña (o del dorso).
 // Así "p" (inclinación) gira al doblar el dedo y cubre −180…180°; "r" es el giro lateral.
 
@@ -60,6 +63,8 @@ bool modoPrueba = false;    // PRUEBA: resumen legible en el monitor serie en ve
 uint32_t proximaPrueba = 0;
 uint32_t lecturasSeg = 0, contadorHz = 0, inicioHz = 0;
 int ultimoWifi = -1;
+bool sensoresListos = false;  // IMU iniciadas y lecturas en marcha
+uint32_t proximoAvisoEspera = 0;
 
 const char* nombreRed() { return LADO == 'R' ? NOMBRE_DER : NOMBRE_IZQ; }
 
@@ -156,6 +161,10 @@ void responder(String linea) {
 // nada. Mientras dura no se mandan datos (la app hace la cuenta regresiva y espera la respuesta).
 void calibrarGiroscopios() {
   String pre = String("CAL,") + LADO + ",";
+  if (!sensoresListos) {
+    responder(pre + "error,sin_iniciar,0");  // aún esperando el WiFi: las IMU no están configuradas
+    return;
+  }
   responder(pre + "midiendo," + CAL_MS);
   double s[N_IMU][3] = {}, q[N_IMU][3] = {};
   int n[N_IMU] = {};
@@ -352,17 +361,33 @@ void setup() {
   memoria.begin("pulsera", false);  // sesgo de los giroscopios guardado por CAL
   delay(200);
   Serial.printf("# Pulsera %c · firmware %s\n", LADO, FIRMWARE);
-  for (int i = 0; i < N_IMU; i++) {
-    bool ok = iniciarImu(i);
-    Serial.printf("# IMU %d (canal %d): %s\n", i, CANAL_IMU[i], ok ? "ok" : "NO RESPONDE");
-  }
   iniciarWifi();
   ws.begin();
   ws.onEvent(alRecibirWs);
   Serial.println(lineaId());
   Serial.println("# Comandos: ID?  CAL (calibrar giroscopios, mano quieta)  PRUEBA (resumen legible)");
+  if (!debeEsperarWifi()) iniciarSensores();
+}
+
+// Con ESPERAR_WIFI en modo estación, los sensores esperan a que la pulsera se conecte a la red.
+bool debeEsperarWifi() {
+#if ESPERAR_WIFI && MODO_WIFI == WIFI_ESTACION
+  return true;
+#else
+  return false;
+#endif
+}
+
+void iniciarSensores() {
+  Serial.println("# Iniciando sensores: mano quieta un momento (se mide el sesgo de los giroscopios)");
+  for (int i = 0; i < N_IMU; i++) {
+    bool ok = iniciarImu(i);
+    Serial.printf("# IMU %d (canal %d): %s\n", i, CANAL_IMU[i], ok ? "ok" : "NO RESPONDE");
+  }
+  sensoresListos = true;
   ultimoMicros = micros();
   proximo = millis();
+  Serial.println("# Lecturas en marcha");
 }
 
 void loop() {
@@ -370,6 +395,21 @@ void loop() {
   leerSerie();
   revisarMdns();
   avisarWifi();
+  if (!sensoresListos) {
+    if (WiFi.status() == WL_CONNECTED) {
+      iniciarSensores();
+    } else {
+      if ((int32_t)(millis() - proximoAvisoEspera) >= 0) {
+        proximoAvisoEspera = millis() + 2000;
+        Serial.println(String("# Esperando WiFi para empezar las lecturas: ") + textoWifi());
+      }
+      if (calPendiente) {
+        calPendiente = false;
+        calibrarGiroscopios();  // responde que aún no hay sensores
+      }
+      return;
+    }
+  }
   if (calPendiente) {
     calPendiente = false;
     calibrarGiroscopios();

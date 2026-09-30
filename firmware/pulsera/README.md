@@ -46,3 +46,7 @@ Fuera del modo de prueba, cada 20 ms sale una línea `D,…` (la que lee la app)
    banda **2.4 GHz** (el ESP32-C3 no ve 5 GHz), contraseña a tu elección; desactiva el ahorro de energía.
 2. Copia `secrets.example.h` como `secrets.h` (en esta misma carpeta) y escribe ahí el nombre y la contraseña.
 3. Compila y carga. En el monitor serie debe salir `# WiFi: conectado a LSM-Dedales IP …`.
+
+Con `ESPERAR_WIFI 1` (config.h) los sensores arrancan hasta que la pulsera se conecta: el monitor dice cada 2 s
+«Esperando WiFi…» y luego «Iniciando sensores… Lecturas en marcha». Para probar solo por USB, sin la zona
+con cobertura, pon `ESPERAR_WIFI 0`.

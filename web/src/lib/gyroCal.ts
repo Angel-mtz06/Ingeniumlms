@@ -9,7 +9,7 @@ export type GyroCal =
   | { phase: "waiting" }
   | { phase: "measuring"; ms: number }
   | { phase: "ok"; spread: number }
-  | { phase: "error"; reason: "movimiento" | "no_responde" | "sin_respuesta" | "otro"; imu: number | null };
+  | { phase: "error"; reason: "movimiento" | "no_responde" | "sin_iniciar" | "sin_respuesta" | "otro"; imu: number | null };
 
 /** IMU del protocolo: 0 = dorso, 1–5 = pulgar→meñique. */
 export const IMU_NAMES = ["el dorso", "el pulgar", "el índice", "el medio", "el anular", "el meñique"] as const;
@@ -22,7 +22,7 @@ export function parseCalLine(line: string): { side: Side; cal: GyroCal } | null 
   if (p[2] === "midiendo") return { side, cal: { phase: "measuring", ms: Number(p[3]) || 2000 } };
   if (p[2] === "ok") return { side, cal: { phase: "ok", spread: Number(p[3]) || 0 } };
   if (p[2] === "error") {
-    const reason = p[3] === "movimiento" || p[3] === "no_responde" ? p[3] : "otro";
+    const reason = p[3] === "movimiento" || p[3] === "no_responde" || p[3] === "sin_iniciar" ? p[3] : "otro";
     const imu = Number.isInteger(Number(p[4])) && p[4] !== undefined && p[4] !== "" ? Number(p[4]) : null;
     return { side, cal: { phase: "error", reason, imu } };
   }
@@ -40,6 +40,7 @@ export function gyroCalText(cal: GyroCal): string {
       const where = cal.imu !== null && IMU_NAMES[cal.imu] ? ` (${IMU_NAMES[cal.imu]})` : "";
       if (cal.reason === "movimiento") return `Se movió un sensor${where}: apoya la mano y repite sin moverla.`;
       if (cal.reason === "no_responde") return `Un sensor no responde${where}: revisa su cable y repite.`;
+      if (cal.reason === "sin_iniciar") return "El guante todavía espera el WiFi: sus sensores aún no arrancan.";
       if (cal.reason === "sin_respuesta") return "El guante no respondió: carga el firmware 1.1 o más nuevo.";
       return "No se pudo calibrar: repite.";
     }
