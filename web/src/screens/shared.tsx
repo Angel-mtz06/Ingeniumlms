@@ -88,13 +88,14 @@ export function useSessionMode(mode: Mode, target: string | null, enabled = true
   }, [mode, target, enabled, setSessionMode]);
 }
 
-/** La cámara compartida, con avisos superpuestos (cuenta regresiva, "no veo tus manos"). */
-export function CameraStage({ children }: { children?: ReactNode }) {
+/** La cámara compartida, con avisos superpuestos (cuenta regresiva, "no veo tus manos"). `body`: dibuja cara y torso. */
+export function CameraStage({ children, body = false }: { children?: ReactNode; body?: boolean }) {
   const { camera, vision } = useApp();
   return (
     <CameraView
       videoRef={camera.videoRef}
       hands={vision.lastHands}
+      body={body ? vision.lastBody : undefined}
       loading={!camera.error && !vision.error && (!camera.ready || vision.loading)}
       error={camera.error ?? vision.error}
     >
