@@ -41,3 +41,18 @@
   Solo afecta la segmentación en vivo, no al modelo. Alternativa sin tocar nada: bajar las manos al regazo.
 - FPS de la cámara: el servidor ajusta sus umbrales a la tasa real (`fps=` en el registro); a 15 fps la
   evaluación llega ~0.27 s después de bajar las manos.
+
+## Contexto de glosas (si el contexto elige mal)
+- En Interpretación la seña anterior ayuda a elegir entre las candidatas del modelo (tras HOLA se prefiere YO, COMO
+  o AMIGO a BOMBEROS). Las señas elegidas así dicen "por contexto"; al formar la oración, las que el LLM (o, sin
+  internet, el modelo de bigramas) cambió dicen "corregida por contexto" bajo "Señas usadas".
+- Nunca cambia una seña con probabilidad ≥ 70 % ni elige una alternativa < 5 %, ni una seña confirmada a mano.
+  En `logs\lsm.log`: `contexto top1 A->B previa=X` y `oración corregida por contexto ... cambios=`.
+- Ajustar el peso: `LSM_CONTEXT_WEIGHT=<0–3>` en `.env` (por defecto 0.5; más alto = más contexto) y reiniciar el
+  servidor. **Desactivar todo el contexto: `LSM_CONTEXT_WEIGHT=0`** (vuelve al top-1 del clasificador; al arrancar
+  imprime "contexto de glosas: desactivado").
+- Solo quitar las candidatas del LLM (sigue el reordenamiento en vivo): `LSM_CONTEXT_LLM=0`.
+- El LLM por defecto es `gpt-4o` (`SENTENCES_MODEL=gpt-4o-mini` en `.env` para volver al anterior).
+- Para enseñarle frases nuevas: agregar oraciones en glosas a `server/lsm/data/corpus_glosas.txt` (una por línea,
+  solo glosas del vocabulario y `<NOMBRE>`) y reiniciar el servidor; `pytest server/tests/test_context.py` valida
+  que todas existan.
