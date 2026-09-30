@@ -121,4 +121,4 @@ def test_parse_choice_rejects_non_string_sentence():
 def test_prompt_prioritizes_coherence_and_conjugates():
     assert "menos de 0.5" in CHOOSE_PROMPT and "coherencia" in CHOOSE_PROMPT
     assert "conjúgalos" in CHOOSE_PROMPT and "HOLA YO <nombre>" in CHOOSE_PROMPT
-    assert "No inventes glosas" in CHOOSE_PROMPT
+    assert "No inventes glosas" in CHOOSE_PROMPT and "Tema de la conversación" in CHOOSE_PROMPT

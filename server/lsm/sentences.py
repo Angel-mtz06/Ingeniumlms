@@ -39,6 +39,7 @@ Paso 1: elige UNA candidata por posición. Las probabilidades bajas (menos de 0.
 la coherencia pesa más que la probabilidad. Si la primera no encaja con el resto de la oración o con el contexto (por
 ejemplo, HOLA BOMBEROS <nombre> no tiene sentido; HOLA YO <nombre> sí), elige la alternativa que forme la oración
 más natural, aunque tenga menor probabilidad. Solo conserva una candidata incoherente si ninguna alternativa encaja.
+Si se indica "Tema de la conversación" (saludos, salud o emergencias), úsalo para desempatar entre candidatas.
 No inventes glosas, no cambies el orden ni omitas posiciones. Las posiciones marcadas "(deletreo)" se eligen tal cual.
 Paso 2: escribe la oración en español con las glosas elegidas.
 {_RULES}
@@ -131,11 +132,13 @@ class SentenceBuilder:
         return template_sentence(glosses, spelled), "template"
 
     async def choose(self, positions: Sequence[dict], context: list[str], prior: ContextModel | None = None,
-                     weight: float = 0.0) -> tuple[list[str], str, str]:
+                     weight: float = 0.0, topic: str | None = None, favored: frozenset | set = frozenset(),
+                     boost: float = 1.0) -> tuple[list[str], str, str]:
         """Desambigua y redacta. `positions`: una por seña, `{"candidates": [(glosa, p)…], "spelled": bool}`; la
         primera candidata es la que se mostró. El LLM elige una candidata por posición y escribe la oración (JSON).
         Sin LLM, o si su respuesta no sirve, elige Viterbi con el prior de bigramas y redacta la plantilla.
-        Devuelve (glosas elegidas, oración, "llm"|"template")."""
+        `topic`: tema de la conversación elegido en la web (se le dice al LLM); `favored`/`boost`: su empujón en
+        Viterbi. Devuelve (glosas elegidas, oración, "llm"|"template")."""
         spelled_idx = {i for i, pos in enumerate(positions) if pos.get("spelled")}
         spelled = [g for g in dict.fromkeys(pos["candidates"][0][0] for i, pos in enumerate(positions)
                                             if i in spelled_idx)]
@@ -144,6 +147,8 @@ class SentenceBuilder:
                     + "\nPosiciones:\n" + format_positions(positions))
             if spelled:
                 user += "\nDeletreadas: " + " ".join(spelled)
+            if topic:
+                user += f"\nTema de la conversación: {topic}"
             try:
                 call = (self.llm(CHOOSE_PROMPT, user, json_mode=True) if self.native
                         else self.llm(CHOOSE_PROMPT, user))
@@ -153,7 +158,8 @@ class SentenceBuilder:
                 log.warning("el LLM no devolvió un JSON válido; uso Viterbi y plantilla")
             except Exception as e:
                 log.warning("LLM no disponible (%s); uso Viterbi y plantilla", type(e).__name__)
-        chosen = viterbi([pos["candidates"] for pos in positions], prior, weight, spelled=spelled_idx)
+        chosen = viterbi([pos["candidates"] for pos in positions], prior, weight, spelled=spelled_idx,
+                         favored=favored, boost=boost)
         return chosen, template_sentence(chosen, spelled), "template"
 
 

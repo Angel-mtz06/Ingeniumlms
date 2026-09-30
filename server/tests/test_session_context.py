@@ -172,3 +172,69 @@ def test_practice_mode_is_not_reranked(weight):
     asyncio.run(s.handle({"type": "hello", "mode": "practice", "target": "HOLA"}))
     ev = next(m for m in asyncio.run(run(s, one_sign(rest=30))) if m["type"] == "evaluation")
     assert [g for g, _ in ev["recognized"]] == ["BOMBEROS", "YO", "NO"]
+
+
+# --- tema de conversación ({"type": "topic"}) ---
+
+AMIGO_DOLOR = [("AMIGO", 0.40), ("DOLOR", 0.30), ("HOLA", 0.10)]
+
+
+def test_topic_message_acks_and_survives_hello_and_reset():
+    s = session(SeqClassifier())
+    assert s.topic == "todo"
+    assert asyncio.run(s.handle({"type": "topic", "topic": "salud"})) == [{"type": "topic", "topic": "salud"}]
+    asyncio.run(s.handle({"type": "hello", "mode": "practice", "target": "HOLA"}))
+    asyncio.run(s.handle({"type": "reset"}))
+    assert s.topic == "salud"
+    for bad in ({"type": "topic", "topic": "cocina"}, {"type": "topic"}, {"type": "topic", "topic": 3}):
+        assert asyncio.run(s.handle(bad))[0]["type"] == "error"
+    assert s.topic == "salud"
+
+
+def test_topic_boosts_within_top_k_without_context():
+    s = session(SeqClassifier(AMIGO_DOLOR, AMIGO_DOLOR), weight=0.0)
+    first = signs(asyncio.run(run(s, one_sign())))[0]
+    assert first["gloss"] == "AMIGO" and "reranked" not in first
+    asyncio.run(s.handle({"type": "topic", "topic": "salud"}))
+    second = signs(asyncio.run(run(s, one_sign())))[0]
+    assert second["gloss"] == "DOLOR" and second["reranked"] is True
+    assert second["top3"] == [["DOLOR", 0.3], ["AMIGO", 0.4], ["HOLA", 0.1]]
+
+
+def test_topic_todo_and_boost_one_change_nothing(monkeypatch):
+    s = session(SeqClassifier(AMIGO_DOLOR), weight=0.0)
+    asyncio.run(s.handle({"type": "topic", "topic": "todo"}))
+    assert signs(asyncio.run(run(s, one_sign())))[0]["gloss"] == "AMIGO"
+    monkeypatch.setenv("LSM_TOPIC_BOOST", "1")
+    s = session(SeqClassifier(AMIGO_DOLOR), weight=0.0)
+    asyncio.run(s.handle({"type": "topic", "topic": "salud"}))
+    assert signs(asyncio.run(run(s, one_sign())))[0]["gloss"] == "AMIGO"
+
+
+def test_topic_never_changes_confident_top1():
+    s = session(SeqClassifier([("AMIGO", 0.7), ("DOLOR", 0.29)]), weight=0.0)
+    asyncio.run(s.handle({"type": "topic", "topic": "salud"}))
+    assert signs(asyncio.run(run(s, one_sign())))[0]["gloss"] == "AMIGO"
+
+
+def test_topic_is_used_in_sentence_fallback_and_told_to_llm():
+    seen = {}
+
+    async def llm(system, user):
+        seen["user"] = user
+        return "no es json"
+
+    s = session(SeqClassifier(), weight=0.0, sentences=SentenceBuilder(llm=llm))
+    asyncio.run(s.handle({"type": "topic", "topic": "salud"}))
+    s.pending = [{"gloss": "AMIGO", "top3": [["AMIGO", 0.4], ["DOLOR", 0.3]], "confident": False}]
+    sent = asyncio.run(s.handle({"type": "build_sentence"}))[-1]
+    assert "Tema de la conversación: salud" in seen["user"]
+    assert sent["source"] == "template" and sent["glosses"] == ["DOLOR"] and sent["corrected"] == [0]
+
+
+def test_practice_mode_ignores_topic():
+    s = Session(SeqClassifier(AMIGO_DOLOR), {}, SentenceBuilder(llm=None, provider="none"), context=None)
+    asyncio.run(s.handle({"type": "topic", "topic": "salud"}))
+    asyncio.run(s.handle({"type": "hello", "mode": "practice", "target": "HOLA"}))
+    ev = next(m for m in asyncio.run(run(s, one_sign(rest=30))) if m["type"] == "evaluation")
+    assert [g for g, _ in ev["recognized"]] == ["AMIGO", "DOLOR", "HOLA"]

@@ -124,29 +124,41 @@ def _lp(p: float) -> float:
     return math.log(max(float(p), P_FLOOR))
 
 
-def rerank(cands: Cands, prev: str | None, model: ContextModel | None, weight: float) -> tuple[list, bool]:
-    """Reordena las candidatas [(glosa, p_clf)…] (ordenadas por p) con el contexto `prev`.
+def _bonus(g: str, favored: frozenset | set, boost: float) -> float:
+    """log(boost) si la glosa es del tema elegido (ver lsm.topics); 0 si no."""
+    return math.log(boost) if g in favored else 0.0
+
+
+def rerank(cands: Cands, prev: str | None, model: ContextModel | None, weight: float,
+           favored: frozenset | set = frozenset(), boost: float = 1.0) -> tuple[list, bool]:
+    """Reordena las candidatas [(glosa, p_clf)…] (ordenadas por p) con el contexto `prev` y el tema:
+    score = log p_clf + λ·log p_ctx(g | prev) + log(boost)·[g del tema].
 
     Solo compiten el top-1 y las candidatas con p ≥ MIN_P; un top-1 con p ≥ LOCK_P no se cambia y NINGUNA nunca
     compite. Las demás quedan al final en su orden. Las probabilidades no se modifican. Devuelve (lista, ¿cambió
     el top-1?)."""
     cands = [(g, p) for g, p in cands]
-    if (not cands or model is None or weight <= 0 or cands[0][1] >= LOCK_P or cands[0][0] == NONE_GLOSS):
+    use_ctx = model is not None and weight > 0
+    use_topic = bool(favored) and boost > 1.0
+    if not cands or not (use_ctx or use_topic) or cands[0][1] >= LOCK_P or cands[0][0] == NONE_GLOSS:
         return cands, False
     ok = [(i == 0 or c[1] >= MIN_P) and c[0] != NONE_GLOSS for i, c in enumerate(cands)]
     eligible = [c for c, e in zip(cands, ok) if e]
     rest = [c for c, e in zip(cands, ok) if not e]
-    score = {g: _lp(p) + weight * model.logp(g, prev) for g, p in eligible}
+    score = {g: _lp(p) + (weight * model.logp(g, prev) if use_ctx else 0.0) + _bonus(g, favored, boost)
+             for g, p in eligible}
     eligible.sort(key=lambda c: -score[c[0]])  # estable: ante empate queda el orden del clasificador
     out = eligible + rest
     return out, out[0][0] != cands[0][0]
 
 
 def viterbi(positions: Sequence[Cands], model: ContextModel | None, weight: float,
-            spelled: Iterable[int] = ()) -> list[str]:
-    """Mejor secuencia (una glosa por posición) maximizando Σ log p_clf + λ·log p_ctx(g_i | g_{i-1}),
-    de <s> a </s>. `spelled`: índices de posiciones deletreadas (token <NOMBRE>). Posición vacía → ""."""
+            spelled: Iterable[int] = (), favored: frozenset | set = frozenset(), boost: float = 1.0) -> list[str]:
+    """Mejor secuencia (una glosa por posición) maximizando Σ log p_clf + λ·log p_ctx(g_i | g_{i-1}) (+ log(boost)
+    para las glosas del tema), de <s> a </s>. `spelled`: índices de posiciones deletreadas (token <NOMBRE>).
+    Posición vacía → ""."""
     spelled = set(spelled)
+    boost = boost if boost > 1.0 else 1.0
     use_ctx = model is not None and weight > 0
     # cada estado: (score, camino de glosas, token previo)
     beams: list[tuple[float, list[str], str]] = [(0.0, [], START)]
@@ -157,7 +169,7 @@ def viterbi(positions: Sequence[Cands], model: ContextModel | None, weight: floa
             tok = token(g, i in spelled)
             best = None
             for sc, path, prev in beams:
-                s = sc + _lp(p) + (weight * model.logp(tok, prev) if use_ctx else 0.0)
+                s = sc + _lp(p) + (weight * model.logp(tok, prev) if use_ctx else 0.0) + _bonus(g, favored, boost)
                 if best is None or s > best[0]:
                     best = (s, path + [g], tok)
             nxt.append(best)

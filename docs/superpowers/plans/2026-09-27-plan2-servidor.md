@@ -36,6 +36,7 @@
 | `remove_gloss` | `index: int` | Borra una etiqueta pendiente |
 | `build_sentence` | — | Fuerza la oración con las etiquetas pendientes |
 | `reset` | — | Limpia buffers y párrafo |
+| `topic` | `topic: "todo"\|"saludos"\|"salud"\|"emergencias"` | Tema de la conversación en Interpretación (ver nota de tema); responde `{"type":"topic","topic":…}` |
 
 Nota (aditiva, 2026-09-28): `frame.t` es la marca de tiempo en ms del cuadro (la misma, monótona, que se pasa
 a MediaPipe). El servidor estima los FPS con la media móvil de los dt de los últimos 30 cuadros (acotada a
@@ -60,6 +61,7 @@ no afecta a los rasgos del modelo). Registro de diagnóstico en `logs/lsm.log` (
 | `warning` | `code`, `message` |
 | `error` | `message` |
 | `pausing` | `remaining: number\|null` (s, 1 decimal), `total: number` (s) — ver nota de pausa |
+| `topic` | `topic` (acuse del mensaje `topic`; un valor inválido responde `error`) |
 
 Nota (aditiva, 2026-09-28, pausa de oración): en Traducción la oración se forma tras `LSM_PAUSE_S` segundos
 (por defecto **3.5**, rango 1.5–10; antes 45 cuadros ≈ 1.5 s) con las manos en reposo, medidos desde que la mano
@@ -91,6 +93,19 @@ las candidatas con el mismo prior y se usa la plantilla (`source: "template"`). 
 y `corrected` los índices que cambiaron (la web los marca "corregida por contexto"). `LSM_CONTEXT_LLM=0` manda al
 LLM solo la glosa mostrada (sin candidatas). El registro anota `oración corregida por contexto fuente=... cambios=i:A->B`
 (nunca el texto).
+
+Nota (aditiva, 2026-09-29, tema): `{"type":"topic","topic":"saludos"|"salud"|"emergencias"|"todo"}` elige el tema
+de la conversación. Es una preferencia de la **conexión** (no un campo de `hello`): sobrevive a `hello` y `reset`, así
+cambiar de pestaña no la borra; como cada conexión es una `Session` nueva, la web la reenvía después de `hello` al
+reconectar. Por defecto `todo` (sin efecto). En Interpretación, las glosas del tema suman `log(boost)` al puntaje del
+reordenamiento en vivo (el mismo de la nota de contexto, con los mismos límites: solo dentro del top-5, sin NINGUNA,
+p ≥ 0.05 y un top-1 con p ≥ 0.7 no cambia; no se inventan glosas) y del Viterbi de respaldo; al LLM se le dice
+"Tema de la conversación: <tema>". `boost` = `LSM_TOPIC_BOOST` (por defecto 3, rango 1–20; 1 = sin empujón).
+Temas (`lsm.topics`, a partir de `lsm.themes`): saludos = Saludos y cortesía + Personas + Preguntas + Respuestas y
+descripciones + Comunicación + Tiempo; salud = Salud y síntomas + Cuerpo + Profesiones + Lugares + Acciones + Tiempo;
+emergencias = Emergencias + Profesiones + Lugares + Acciones + Salud y síntomas. Todos suman las palabras núcleo YO MI
+SU EL SI NO COMO DONDE CUANTO AHORA AYUDA NECESITAR TENER IR POR_FAVOR GRACIAS. `reranked: true` aparece también si
+el cambio de top-1 lo causó el tema; el registro anota `tema=<tema>` en la línea `contexto top1`.
 
 ## Estructura de archivos
 

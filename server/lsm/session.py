@@ -20,6 +20,9 @@ from lsm.live import LiveNormalizer, frame_to_raw
 from lsm.normalize import NormSequence
 from lsm.segmenter import BASE_FPS, SegEvent, Segmenter, scale_frames, trim_descent
 from lsm.sentences import SentenceBuilder
+from lsm.topics import ALL as ALL_TOPICS
+from lsm.topics import NAMES as TOPIC_NAMES
+from lsm.topics import topic_boost, topic_glosses
 from lsm.vocab import canonical
 from lsm.windows import NONE_GLOSS
 
@@ -109,6 +112,10 @@ class Session:
         self.ctx_weight = env_context_weight() if context_weight is None else max(0.0, float(context_weight))
         # LSM_CONTEXT_LLM=0: al formar la oración el LLM solo recibe la glosa mostrada (sin candidatas)
         self.llm_choose = os.environ.get("LSM_CONTEXT_LLM", "1").strip() != "0"
+        # Tema de conversación (mensaje "topic"): sus glosas reciben log(boost) en el reordenamiento.
+        # Es una preferencia de la conexión: sobrevive a hello y reset.
+        self.topic = ALL_TOPICS
+        self.topic_boost = topic_boost()
         self.references = references or {}
         self.sentences = sentences or SentenceBuilder()
         self.mode, self.target = "translate", None
@@ -174,6 +181,12 @@ class Session:
             return [self._ready()]
         if t == "frame":
             return await self._frame(msg)
+        if t == "topic":
+            topic = msg.get("topic")
+            if not isinstance(topic, str) or topic not in TOPIC_NAMES:
+                return [{"type": "error", "message": "topic inválido: " + "|".join(TOPIC_NAMES)}]
+            self.topic = topic
+            return [{"type": "topic", "topic": topic}]
         if t == "calibrate":
             return self._calibrate(msg.get("step"))
         if t in ("confirm_gloss", "remove_gloss"):
@@ -330,13 +343,14 @@ class Session:
         if not top3 or (none_top1 and top[0][1] >= NONE_MIN):
             return []  # NINGUNA segura (movimiento que no es seña): se descarta en silencio
         prev = self._ctx_prev()
-        ranked, changed = rerank(cands, prev, self.context, self.ctx_weight)
+        ranked, changed = rerank(cands, prev, self.context, self.ctx_weight, favored=topic_glosses(self.topic),
+                                 boost=self.topic_boost)
         top3 = [[g, p] for g, p in ranked[:3]]
         item = {"gloss": top3[0][0], "top3": top3, "confident": top3[0][1] >= CONF_MIN}
         if changed:
             item["reranked"] = True
-            log.info("contexto top1 %s->%s previa=%s p=%.2f->%.2f lambda=%.2f", cands[0][0], top3[0][0], prev,
-                     cands[0][1], top3[0][1], self.ctx_weight)
+            log.info("contexto top1 %s->%s previa=%s p=%.2f->%.2f lambda=%.2f tema=%s", cands[0][0], top3[0][0], prev,
+                     cands[0][1], top3[0][1], self.ctx_weight, self.topic)
         self.pending.append(item)
         return [{"type": "sign", "index": len(self.pending) - 1, **item}]
 
@@ -376,8 +390,10 @@ class Session:
             return []
         shown = [p["gloss"] for p in self.pending]
         positions = [self._position(p) for p in self.pending]
-        glosses, text, source = await self.sentences.choose(positions, self.paragraph[-3:], prior=self.context,
-                                                            weight=self.ctx_weight)
+        glosses, text, source = await self.sentences.choose(
+            positions, self.paragraph[-3:], prior=self.context, weight=self.ctx_weight,
+            topic=None if self.topic == ALL_TOPICS else self.topic, favored=topic_glosses(self.topic),
+            boost=self.topic_boost)
         corrected = [i for i, (a, b) in enumerate(zip(shown, glosses)) if a != b]
         if corrected:  # una deletreada nunca cambia: no se registra ningún nombre
             log.info("oración corregida por contexto fuente=%s cambios=%s", source,
