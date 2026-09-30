@@ -1590,3 +1590,67 @@
     grid-template-columns: 5.5rem 1fr 3rem;
   }
 }
+
+/* ---------- GloveGate (en lugar de la cámara mientras falta una pulsera) ---------- */
+.glove-gate {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  aspect-ratio: 16 / 9;
+  padding: var(--space-5);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.glove-gate > .icon {
+  color: var(--color-text-muted);
+}
+
+.glove-gate__title {
+  margin: 0;
+  max-width: 32ch;
+  font-size: var(--text-lg);
+  text-wrap: balance;
+}
+
+.glove-gate__list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.glove-gate__list li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.glove-gate__list li[data-tone="ok"] {
+  color: var(--color-ok);
+}
+
+.glove-gate__hint {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.glove-gate .gloves {
+  justify-items: center;
+  text-align: start;
+}
+
+@media (max-width: 767px) {
+  .glove-gate {
+    aspect-ratio: auto;
+    padding: var(--space-4);
+  }
+}

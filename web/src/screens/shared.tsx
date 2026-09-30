@@ -89,9 +89,61 @@ export function useSessionMode(mode: Mode, target: string | null, enabled = true
   }, [mode, target, enabled, setSessionMode]);
 }
 
-/** La cámara compartida, con avisos superpuestos (cuenta regresiva, "no veo tus manos"). `body`: dibuja cara y torso. */
-export function CameraStage({ children, body = false }: { children?: ReactNode; body?: boolean }) {
+/**
+ * Requisito de la rúbrica: la cámara (y con ella MediaPipe: manos, cara y cuerpo) no se enciende en ninguna pantalla
+ * hasta que las dos pulseras estén conectadas; si una se desconecta, la cámara se apaga. Mientras tanto, en su lugar
+ * va GloveGate. `?sin-pulseras` en la dirección la deja encender sin ellas (para probar sin el hardware).
+ */
+const CAMERA_WITHOUT_GLOVES = (() => {
+  try {
+    return new URLSearchParams(window.location.search).has("sin-pulseras");
+  } catch {
+    return false;
+  }
+})();
+
+export function useGlovesReady(): boolean {
+  const { gloves } = useApp();
+  return CAMERA_WITHOUT_GLOVES || (gloves.sides.L.connected && gloves.sides.R.connected);
+}
+
+/** En lugar de la cámara mientras falta alguna pulsera: cuál falta y, con `controls`, cómo conectarla aquí mismo. */
+export function GloveGate({ controls = true }: { controls?: boolean }) {
+  const { gloves } = useApp();
+  const sides = [
+    { side: "L" as const, label: "Pulsera izquierda" },
+    { side: "R" as const, label: "Pulsera derecha" },
+  ];
+  return (
+    <section className="glove-gate" aria-labelledby="glove-gate-title">
+      <IconGlove size={32} />
+      <h3 id="glove-gate-title" className="glove-gate__title">
+        Conecta las dos pulseras para encender la cámara
+      </h3>
+      <ul className="glove-gate__list" role="status">
+        {sides.map(({ side, label }) => {
+          const on = gloves.sides[side].connected;
+          return (
+            <li key={side} data-tone={on ? "ok" : "off"}>
+              {on ? <ToneIcon tone="ok" size={18} /> : <IconGlove size={18} />}
+              <span>
+                {label}: <strong>{on ? "conectada" : "sin conectar"}</strong>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {controls ? <GloveControls compact /> : <p className="glove-gate__hint">Conéctalas en «Guantes», junto a esta vista.</p>}
+    </section>
+  );
+}
+
+/** La cámara compartida, con avisos superpuestos (cuenta regresiva, "no veo tus manos"). `body`: dibuja cara y torso.
+ *  `gloveControls`: si falta una pulsera, el aviso trae los controles para conectarla (no si ya están al lado). */
+export function CameraStage({ children, body = false, gloveControls = true }: { children?: ReactNode; body?: boolean; gloveControls?: boolean }) {
   const { camera, vision, gloves } = useApp();
+  const glovesReady = useGlovesReady();
+  if (!glovesReady) return <GloveGate controls={gloveControls} />;
   return (
     <CameraView
       videoRef={camera.videoRef}

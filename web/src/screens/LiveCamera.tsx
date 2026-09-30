@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CameraView } from "../components/CameraView";
 import { WristLevel } from "../components/WristLevel";
-import { useApp } from "./shared";
+import { GloveGate, useApp, useGlovesReady } from "./shared";
 
 /**
  * Como `CameraStage` (shared.tsx), pero con los medidores de las pantallas de trabajo: FPS en la
@@ -11,6 +11,8 @@ import { useApp } from "./shared";
  */
 export function LiveCamera({ corner, children }: { corner?: ReactNode; children?: ReactNode }) {
   const { camera, vision, gloves } = useApp();
+  // Sin las dos pulseras no se monta el video: la cámara y MediaPipe no se encienden (rúbrica).
+  if (!useGlovesReady()) return <GloveGate />;
   return (
     <CameraView
       videoRef={camera.videoRef}

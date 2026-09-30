@@ -234,7 +234,7 @@ export function Calibration() {
         </section>
 
         <div className="calib-side">
-          <CameraStage body>{overlay}</CameraStage>
+          <CameraStage body gloveControls={false}>{overlay}</CameraStage>
           <BodyDetection />
           <GloveControls compact />
           <GyroCalibration />
