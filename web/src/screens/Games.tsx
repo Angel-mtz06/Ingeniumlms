@@ -131,18 +131,24 @@ function letterNote(run: Run): { tone?: "ok" | "warn"; text: string } {
   return { tone: "warn", text: fb.message };
 }
 
-/** Las letras de un texto: hechas, saltadas, la actual y las que faltan. Los espacios se muestran pero no se deletrean. */
+/**
+ * Las letras de un texto: hechas, saltadas, la actual y las que faltan. Cada palabra va junta (no se
+ * parte entre renglones); los espacios separan palabras pero no se deletrean.
+ */
 function LetterStrip({ text, index, skipped, big }: { text: string; index: number; skipped: ReadonlySet<number>; big?: boolean }) {
   const letters = lettersOf(text);
   let n = 0;
   return (
     <p className={`game-word${big ? " game-word--big" : ""}`} translate="no" aria-label={`${text}: letra ${Math.min(index + 1, letters.length)} de ${letters.length}`}>
-      {[...spellable(text)].map((c, i) => {
-        if (c === " ") return <span key={i} className="game-word__gap" aria-hidden="true" />;
-        const k = n++;
-        const state = k < index ? (skipped.has(k) ? "skip" : "done") : k === index ? "now" : "todo";
-        return <span key={i} className="game-word__letter" data-state={state} aria-hidden="true">{c}</span>;
-      })}
+      {spellable(text).split(" ").filter(Boolean).map((w, wi) => (
+        <span key={wi} className="game-word__w">
+          {[...w].map((c, i) => {
+            const k = n++;
+            const state = k < index ? (skipped.has(k) ? "skip" : "done") : k === index ? "now" : "todo";
+            return <span key={i} className="game-word__letter" data-state={state} aria-hidden="true">{c}</span>;
+          })}
+        </span>
+      ))}
     </p>
   );
 }
@@ -175,7 +181,8 @@ function SpellGame({ onBack }: { onBack(): void }) {
   useEffect(() => {
     if (!run.done || elapsed !== null) return;
     setElapsed(performance.now() - started.current);
-    setScore((s) => ({ words: s.words + 1, letters: s.letters + letters.length - skipped.size }));
+    // La estrella se gana haciendo letras: una palabra saltada completa no cuenta.
+    if (skipped.size < letters.length) setScore((s) => ({ words: s.words + 1, letters: s.letters + letters.length - skipped.size }));
   }, [run.done, elapsed, letters.length, skipped.size]);
   useEffect(() => { setHint(false); }, [run.index]);
 

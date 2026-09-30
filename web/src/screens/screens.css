@@ -2032,8 +2032,16 @@
   transform: translateY(-3px);
 }
 
-.game-word__gap {
-  width: 0.8em;
+.game-word {
+  column-gap: 0.7em;
+  row-gap: var(--space-2);
+}
+
+/* Una palabra no se parte entre renglones. */
+.game-word__w {
+  display: inline-flex;
+  gap: var(--space-1);
+  white-space: nowrap;
 }
 
 .game-phrase {
