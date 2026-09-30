@@ -1373,3 +1373,152 @@
     animation: none;
   }
 }
+
+/* ---------- WristLevel (nivel de la muñeca de las pulseras, esquina inferior izquierda) ---------- */
+.camera__gauge {
+  position: absolute;
+  inset-block-end: var(--space-3);
+  inset-inline-start: var(--space-3);
+  max-width: calc(100% - 2 * var(--space-3));
+  pointer-events: none;
+}
+
+.wrist {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.wrist__card {
+  --bubble-x: 0;
+  --bubble-y: 0;
+  --speed: 0;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    "title title"
+    "level values"
+    "speed speed";
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-1);
+  font-size: var(--text-xs);
+}
+
+.wrist__title {
+  grid-area: title;
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* Nivel de burbuja: el punto se aleja del centro según la inclinación y el giro lateral. */
+.wrist__level {
+  grid-area: level;
+  position: relative;
+  --level: 44px;
+  display: block;
+  inline-size: var(--level);
+  block-size: var(--level);
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(var(--color-hairline), var(--color-hairline)) center / 1px 100% no-repeat,
+    linear-gradient(var(--color-hairline), var(--color-hairline)) center / 100% 1px no-repeat;
+}
+
+.wrist__bubble {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  inline-size: 12px;
+  block-size: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-contrast);
+  --travel: calc(var(--level) / 2 - 8px);
+  transform: translate(calc(var(--bubble-x) * var(--travel)), calc(var(--bubble-y) * var(--travel)));
+}
+
+.wrist__values {
+  grid-area: values;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.wrist__values div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.wrist__values dt {
+  color: var(--color-text-muted);
+}
+
+.wrist__values dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.wrist__card[data-moving="true"] [data-v="speed"] {
+  color: var(--color-accent);
+}
+
+/* Velocidad de giro: barra que crece desde la izquierda (sin carril de fondo). */
+.wrist__speed {
+  grid-area: speed;
+  display: block;
+  block-size: 3px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transform-origin: left center;
+  transform: scaleX(var(--speed));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wrist__bubble,
+  .wrist__speed {
+    transition: transform 100ms linear;
+  }
+}
+
+@media (max-width: 767px) {
+  .camera__gauge {
+    inset-block-end: var(--space-2);
+    inset-inline-start: var(--space-2);
+  }
+
+  /* En el teléfono solo el nivel y la barra: las fichas van una junto a otra y no tapan la cámara. */
+  .wrist {
+    grid-auto-flow: column;
+    justify-content: start;
+  }
+
+  .wrist__card {
+    grid-template-columns: auto;
+    grid-template-areas:
+      "title"
+      "level"
+      "speed";
+    justify-items: center;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .wrist__values {
+    display: none;
+  }
+
+  .wrist__level {
+    --level: 36px;
+  }
+
+  .wrist__speed {
+    justify-self: stretch;
+  }
+}

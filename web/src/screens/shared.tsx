@@ -5,6 +5,7 @@
  */
 import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type ReactNode } from "react";
 import { CameraView } from "../components/CameraView";
+import { WristLevel } from "../components/WristLevel";
 import { IconError, IconGlove, IconWarning, ToneIcon } from "../components/icons";
 import type { CameraStatus } from "../components/StatusBar";
 import type { CameraHandle } from "../hooks/useCamera";
@@ -90,12 +91,13 @@ export function useSessionMode(mode: Mode, target: string | null, enabled = true
 
 /** La cámara compartida, con avisos superpuestos (cuenta regresiva, "no veo tus manos"). `body`: dibuja cara y torso. */
 export function CameraStage({ children, body = false }: { children?: ReactNode; body?: boolean }) {
-  const { camera, vision } = useApp();
+  const { camera, vision, gloves } = useApp();
   return (
     <CameraView
       videoRef={camera.videoRef}
       hands={vision.lastHands}
       body={body ? vision.lastBody : undefined}
+      gauge={<WristLevel read={gloves.latest} />}
       loading={!camera.error && !vision.error && (!camera.ready || vision.loading)}
       error={camera.error ?? vision.error}
     >
@@ -201,12 +203,16 @@ export function useVocab(): { vocab: VocabItem[] | null; error: string | null; r
 
 
 const WIFI_KEY = "lsm.pulsera";
+/** IP fija de la pulsera derecha en la zona con cobertura de Windows (firmware: IP_FIJA en config.h). */
+export const PULSERA_IP = "192.168.137.190";
 
 function readAddress(): string {
   try {
-    return localStorage.getItem(WIFI_KEY) || "pulsera-der.local";
+    const saved = localStorage.getItem(WIFI_KEY);
+    // Lo guardado antes de la IP fija (el nombre .local) se cambia por la IP.
+    return saved && saved !== "pulsera-der.local" ? saved : PULSERA_IP;
   } catch {
-    return "pulsera-der.local";
+    return PULSERA_IP;
   }
 }
 
@@ -230,12 +236,12 @@ function WifiConnect() {
       </label>
       <div className="gloves__wifi-row">
         <input id="pulsera-dir" name="pulsera" className="gloves__wifi-input" value={address} onChange={(e) => setAddress(e.target.value)}
-          autoComplete="off" spellCheck={false} inputMode="url" placeholder="pulsera-der.local o 192.168.137.…" />
+          autoComplete="off" spellCheck={false} inputMode="url" placeholder="192.168.137.190" />
         <button type="submit" className="btn btn--secondary" disabled={gloves.connecting || !address.trim()}>
           {gloves.connecting ? "Conectando…" : "Conectar por WiFi"}
         </button>
       </div>
-      <p className="gloves__hint">Si el nombre no funciona, usa la IP que muestra el monitor serie de la pulsera.</p>
+      <p className="gloves__hint">Derecha 192.168.137.190 · izquierda 192.168.137.191 (zona con cobertura de la laptop encendida).</p>
     </form>
   );
 }

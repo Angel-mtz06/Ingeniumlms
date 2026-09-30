@@ -38,7 +38,7 @@ Las líneas que empiezan con `#` son mensajes de estado (IMU que responden, camb
 
 | Comando | Qué hace |
 |---|---|
-| `ID?` | Responde la identificación de la pulsera (`ID,R,fw=1.2,imus=1,…`). |
+| `ID?` | Responde la identificación de la pulsera (`ID,R,fw=1.3,imus=1,…`). |
 | `CAL` | Calibra el giroscopio: mano apoyada y quieta 2 s. Responde `CAL,R,ok,…` o `CAL,R,error,movimiento,0`. Se guarda en el ESP32. |
 | `PRUEBA` | Activa/desactiva el modo de prueba: cada 0.5 s un resumen legible (Hz, WiFi e IP, app conectada, muñeca ok o NO RESPONDE, inclinación, giro lateral y velocidad de giro). Mientras está activo no salen las líneas `D,…` por USB. |
 
@@ -49,7 +49,11 @@ Fuera del modo de prueba, cada 20 ms sale una línea `D,…` (la que lee la app)
 1. Windows → Configuración → Red e Internet → **Zona con cobertura inalámbrica móvil**: nombre `LSM-Dedales`,
    banda **2.4 GHz** (el ESP32-C3 no ve 5 GHz), contraseña a tu elección; desactiva el ahorro de energía.
 2. Copia `secrets.example.h` como `secrets.h` (en esta misma carpeta) y escribe ahí el nombre y la contraseña.
-3. Compila y carga. En el monitor serie debe salir `# WiFi: conectado a LSM-Dedales IP …`.
+3. Compila y carga. En el monitor serie debe salir `# WiFi: conectado a LSM-Dedales IP 192.168.137.190`.
+
+La IP es fija (`IP_FIJA 1` en config.h): **192.168.137.190** la derecha y **192.168.137.191** la izquierda, la que
+la app ya trae escrita. Sirve con la zona con cobertura de Windows en cualquier laptop (siempre usa
+192.168.137.x). Con otra red (p. ej. el celular), pon `IP_FIJA 0` y usa `pulsera-der.local` o la IP del monitor.
 
 Con `ESPERAR_WIFI 1` (config.h) los sensores arrancan hasta que la pulsera se conecta: el monitor dice cada 2 s
 «Esperando WiFi…» y luego «Iniciando sensores… Lecturas en marcha». Para probar solo por USB, sin la zona

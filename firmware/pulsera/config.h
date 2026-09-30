@@ -16,6 +16,14 @@
 // 0 = empieza a leer de inmediato (útil para probar solo por USB, sin la zona con cobertura).
 #define ESPERAR_WIFI 1
 
+// IP fija en la zona con cobertura de Windows (siempre 192.168.137.x; la laptop es la .1): la app ya la trae
+// escrita. 0 = la IP que asigne la red (entonces usa pulsera-der.local o la IP que diga el monitor serie).
+#define IP_FIJA 1
+#define IP_PULSERA_DER 192, 168, 137, 190
+#define IP_PULSERA_IZQ 192, 168, 137, 191
+#define IP_PUERTA 192, 168, 137, 1
+#define IP_MASCARA 255, 255, 255, 0
+
 #define PUERTO_WEBSOCKET 81
 // Nombre en la red (mDNS): pulsera-der.local / pulsera-izq.local
 #define NOMBRE_DER "pulsera-der"
@@ -37,7 +45,7 @@ static const uint8_t CANAL_IMU[] = {2};
 // ---------- Envío ----------
 #define PERIODO_MS 20       // 50 lecturas por segundo
 #define SERIAL_BAUDIOS 921600
-#define FIRMWARE "1.2"
+#define FIRMWARE "1.3"
 
 // Filtro complementario: peso del giroscopio (0–1). Más alto = más suave, más bajo = responde más rápido.
 #define ALFA_GIRO 0.96f

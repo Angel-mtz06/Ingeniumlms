@@ -346,6 +346,12 @@ void iniciarWifi() {
   Serial.printf("# Red creada: %s  IP %s\n", WIFI_SSID, WiFi.softAPIP().toString().c_str());
 #else
   WiFi.mode(WIFI_STA);
+#if IP_FIJA
+  IPAddress ip = LADO == 'R' ? IPAddress(IP_PULSERA_DER) : IPAddress(IP_PULSERA_IZQ);
+  if (!WiFi.config(ip, IPAddress(IP_PUERTA), IPAddress(IP_MASCARA), IPAddress(IP_PUERTA))) {
+    Serial.println("# No se pudo fijar la IP: se usa la que asigne la red");
+  }
+#endif
   WiFi.setSleep(false);          // menor retraso: sin ahorro de energía del radio
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASS);

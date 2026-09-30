@@ -24,6 +24,8 @@ export interface CameraViewProps {
   corner?: ReactNode;
   /** Cara y cuerpo (se consulta en cada repintado, como `hands`): se dibujan debajo de las manos, en otros colores. */
   body?: () => BodyPoints;
+  /** Medidor de la esquina inferior izquierda (el nivel de la muñeca de las pulseras). */
+  gauge?: ReactNode;
 }
 
 const COLOR_VARS = ["--color-accent", "--color-accent-contrast", "--color-face", "--color-torso"] as const;
@@ -138,7 +140,7 @@ function drawHands(canvas: HTMLCanvasElement, video: HTMLVideoElement, hands: Ha
  * Video de la cámara con un lienzo superpuesto que dibuja las manos (y, con `body`, la cara y el torso debajo). Video y lienzo comparten
  * `object-fit: contain` y el tamaño intrínseco del video, así que los puntos coinciden sin cálculos.
  */
-export function CameraView({ videoRef, hands, mirrored = true, loading = false, error = null, children, fps, fpsDetail, corner, body }: CameraViewProps) {
+export function CameraView({ videoRef, hands, mirrored = true, loading = false, error = null, children, fps, fpsDetail, corner, body, gauge }: CameraViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const handsRef = useRef(hands);
   handsRef.current = hands;
@@ -206,6 +208,7 @@ export function CameraView({ videoRef, hands, mirrored = true, loading = false, 
         </p>
       ) : null}
       {!error && !loading && corner ? <div className="camera__corner">{corner}</div> : null}
+      {!error && !loading && gauge ? <div className="camera__gauge">{gauge}</div> : null}
       {children ? <div className="camera__slot">{children}</div> : null}
     </div>
   );

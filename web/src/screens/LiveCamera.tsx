@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CameraView } from "../components/CameraView";
+import { WristLevel } from "../components/WristLevel";
 import { useApp } from "./shared";
 
 /**
@@ -9,7 +10,7 @@ import { useApp } from "./shared";
  * solo se dibujan en Calibración.
  */
 export function LiveCamera({ corner, children }: { corner?: ReactNode; children?: ReactNode }) {
-  const { camera, vision } = useApp();
+  const { camera, vision, gloves } = useApp();
   return (
     <CameraView
       videoRef={camera.videoRef}
@@ -23,6 +24,7 @@ export function LiveCamera({ corner, children }: { corner?: ReactNode; children?
           : null
       }
       corner={corner}
+      gauge={<WristLevel read={gloves.latest} />}
     >
       {children}
     </CameraView>
