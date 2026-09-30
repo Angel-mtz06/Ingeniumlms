@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FramePayload } from "../lib/protocol";
+import { type GyroCal, parseCalLine } from "../lib/gyroCal";
 import { GloveSerial } from "../lib/serial";
 import { type GloveState, duplicateGloveMessage, gloveErrorMessage, gloveLostMessage, gloveState, sameGloveState, selectLatest } from "../lib/ui";
 
@@ -16,10 +17,17 @@ export interface GlovesHandle {
   error: string | null;
   /** Última línea cruda de cada guante conectado con datos frescos; null si está sin conectar o sin datos (> 500 ms). */
   latest(): FramePayload["gloves"];
+  /** Calibración de giroscopios de cada guante (comando CAL del firmware). */
+  gyro: { L: GyroCal; R: GyroCal };
+  /** Manda CAL a los guantes conectados: deben quedarse quietos ~2 s; la respuesta llega a `gyro`. */
+  calibrateGyro(): void;
 }
 
 const OFF: GloveState = { connected: false, stale: false };
 const POLL_MS = 200;
+const IDLE: GyroCal = { phase: "idle" };
+/** Sin respuesta a CAL en este tiempo: firmware viejo (sin el comando) o guante colgado. */
+export const CAL_TIMEOUT_MS = 6000;
 
 /**
  * Guantes por Web Serial. Usa solo la API pública de GloveSerial:
@@ -32,6 +40,16 @@ export function useGloves(): GlovesHandle {
   const [sides, setSides] = useState<{ L: GloveState; R: GloveState }>({ L: OFF, R: OFF });
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gyro, setGyro] = useState<{ L: GyroCal; R: GyroCal }>({ L: IDLE, R: IDLE });
+  const calTimers = useRef<{ L: number | null; R: number | null }>({ L: null, R: null });
+  const setSideCal = useCallback((side: Side, cal: GyroCal) => {
+    setGyro((g) => ({ ...g, [side]: cal }));
+    const t = calTimers.current[side];
+    if (cal.phase === "ok" || cal.phase === "error") {
+      if (t !== null) window.clearTimeout(t);
+      calTimers.current[side] = null;
+    }
+  }, []);
 
   const refresh = useCallback(() => {
     const now = performance.now();
@@ -86,6 +104,11 @@ export function useGloves(): GlovesHandle {
         return;
       }
       ports.current[side] = glove;
+      setSideCal(side, IDLE);
+      glove.onCal = (line) => {
+        const r = parseCalLine(line);
+        if (r && r.side === side && ports.current[side] === glove && mounted.current) setSideCal(side, r.cal);
+      };
       // Desenchufado o error fatal de lectura: el lado vuelve a "sin conectar" (reaparece "Conectar").
       glove.onLost = () => {
         if (ports.current[side] !== glove) return;
@@ -105,17 +128,36 @@ export function useGloves(): GlovesHandle {
         refresh();
       }
     }
-  }, [supported, refresh]);
+  }, [supported, refresh, setSideCal]);
+
+  const calibrateGyro = useCallback(() => {
+    for (const side of ["L", "R"] as const) {
+      const glove = ports.current[side];
+      if (!glove) continue;
+      setSideCal(side, { phase: "waiting" });
+      glove.send("CAL");
+      const old = calTimers.current[side];
+      if (old !== null) window.clearTimeout(old);
+      calTimers.current[side] = window.setTimeout(() => {
+        calTimers.current[side] = null;
+        if (mounted.current) setSideCal(side, { phase: "error", reason: "sin_respuesta", imu: null });
+      }, CAL_TIMEOUT_MS);
+    }
+  }, [setSideCal]);
 
   const disconnect = useCallback(
     async (side: Side) => {
       const glove = ports.current[side];
       ports.current[side] = null;
-      if (glove) glove.onLost = null;
+      if (glove) {
+        glove.onLost = null;
+        glove.onCal = null;
+      }
+      setSideCal(side, IDLE);
       await glove?.disconnect();
       refresh();
     },
-    [refresh],
+    [refresh, setSideCal],
   );
 
   const latest = useCallback(
@@ -130,5 +172,5 @@ export function useGloves(): GlovesHandle {
     [],
   );
 
-  return { supported, sides, connect, disconnect, connecting, error, latest };
+  return { supported, sides, connect, disconnect, connecting, error, latest, gyro, calibrateGyro };
 }

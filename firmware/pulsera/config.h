@@ -34,7 +34,12 @@ static const uint8_t CANAL_IMU[6] = {2, 7, 6, 5, 4, 3};
 // ---------- Envío ----------
 #define PERIODO_MS 20       // 50 lecturas por segundo
 #define SERIAL_BAUDIOS 921600
-#define FIRMWARE "1.0"
+#define FIRMWARE "1.1"
 
 // Filtro complementario: peso del giroscopio (0–1). Más alto = más suave, más bajo = responde más rápido.
 #define ALFA_GIRO 0.96f
+
+// ---------- Calibración de giroscopios (comando CAL) ----------
+#define CAL_MS 2000         // tiempo que la mano debe quedarse quieta y apoyada
+#define CAL_MAX_STD 1.5f    // °/s: si un giroscopio varía más que esto, la mano se movió y se rechaza
+#define CAL_MIN_MUESTRAS 40 // lecturas mínimas por IMU para aceptar la calibración

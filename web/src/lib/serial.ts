@@ -1,3 +1,4 @@
+import { parseCalLine } from "./gyroCal";
 import { LineBuffer, parseIdLine } from "./lines";
 
 /** Pure helper for testing: accepts a new line if it's new data or updates state. */
@@ -71,6 +72,8 @@ export class GloveSerial {
    * físicamente o error de lectura fatal). Cuando se llama, el puerto ya quedó cerrado.
    */
   onLost: (() => void) | null = null;
+  /** Cada línea CAL,… del guante (respuesta al comando CAL: calibración de giroscopios). */
+  onCal: ((line: string) => void) | null = null;
 
   static supported(): boolean {
     return typeof navigator !== "undefined" && "serial" in navigator;
@@ -132,14 +135,24 @@ export class GloveSerial {
   /** Escribe "ID?\n" (escrituras encadenadas: nunca dos writers a la vez). */
   private sendId(port: SerialPort) {
     if (this.identified || this.closing || port !== this.port) return;
+    this.write(port, "ID?\n", () => this.identified);
+  }
+
+  /** Manda un comando de texto al guante ya identificado (p. ej. "CAL"). */
+  send(command: string) {
+    if (!this.port || !this.identified || this.closing) return;
+    this.write(this.port, `${command}\n`, () => false);
+  }
+
+  private write(port: SerialPort, text: string, skip: () => boolean) {
     this.writing = this.writing.then(async () => {
       const w = port.writable;
-      if (!w || w.locked || this.closing || this.identified) return;
+      if (!w || w.locked || this.closing || skip()) return;
       const writer = w.getWriter();
       try {
-        await writer.write(new TextEncoder().encode("ID?\n"));
+        await writer.write(new TextEncoder().encode(text));
       } catch {
-        /* se reintenta en el siguiente intervalo */
+        /* ID? se reintenta en el siguiente intervalo; CAL lo repite la persona */
       } finally {
         writer.releaseLock();
       }
@@ -158,6 +171,10 @@ export class GloveSerial {
     const handle = (line: string) => {
       if (dropPartial) {
         dropPartial = false; // resto de una línea cortada por el error
+        return;
+      }
+      if (parseCalLine(line)) {
+        this.onCal?.(line);
         return;
       }
       const id = parseIdLine(line);

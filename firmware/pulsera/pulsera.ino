@@ -5,6 +5,12 @@
 //                       D,<L|R>,<seq>,<t_ms>,p0,r0,…,p5,r5,gx,gy,gz,<status>
 // IMU 0 = dorso; 1–5 = pulgar→meñique. Ángulos en grados (1 decimal), giroscopio del dorso en °/s.
 //
+// Calibración de giroscopios: el comando CAL (USB o WebSocket) mide el sesgo de las 6 IMU durante CAL_MS con la
+// mano quieta, lo rechaza si alguna se movió y, si sale bien, lo guarda en la memoria del ESP32 (sobrevive al
+// apagado). Responde CAL,<L|R>,midiendo,<ms> y luego CAL,<L|R>,ok,<variación máx °/s> o
+// CAL,<L|R>,error,<movimiento|no_responde>,<imu>. Al encender se mide de nuevo solo si la mano está quieta;
+// si no, se usa el sesgo guardado.
+//
 // Montaje de cada MPU-6050: eje X hacia la punta del dedo, eje Z saliendo de la uña (o del dorso).
 // Así "p" (inclinación) gira al doblar el dedo y cubre −180…180°; "r" es el giro lateral.
 
@@ -13,6 +19,7 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <WebSocketsServer.h>
+#include <Preferences.h>
 
 #include "config.h"
 #if __has_include("secrets.h")
@@ -43,6 +50,8 @@ uint32_t proximo = 0;
 uint32_t ultimoMicros = 0;
 bool mdnsListo = false;
 String entradaSerie;
+Preferences memoria;
+bool calPendiente = false;  // se pidió CAL (se atiende en loop, fuera del callback del WebSocket)
 
 const char* nombreRed() { return LADO == 'R' ? NOMBRE_DER : NOMBRE_IZQ; }
 
@@ -83,19 +92,93 @@ bool iniciarImu(int i) {
   escribirRegistro(0x1B, 0x08);                       // giroscopio ±500 °/s
   escribirRegistro(0x1C, 0x08);                       // acelerómetro ±4 g
   delay(10);
-  float ax, ay, az, gx, gy, gz, sx = 0, sy = 0, sz = 0;
+  float ax, ay, az, gx, gy, gz, sx = 0, sy = 0, sz = 0, qx = 0, qy = 0, qz = 0;
   int n = 0;
   for (int k = 0; k < 100; k++) {
-    if (leerCrudo(ax, ay, az, gx, gy, gz)) { sx += gx; sy += gy; sz += gz; n++; }
+    if (leerCrudo(ax, ay, az, gx, gy, gz)) {
+      sx += gx; sy += gy; sz += gz; qx += gx * gx; qy += gy * gy; qz += gz * gz; n++;
+    }
     delay(2);
   }
   if (n < 50) return false;
-  m.bx = sx / n; m.by = sy / n; m.bz = sz / n;
+  float sd = sqrtf(fmaxf(fmaxf(qx / n - sq(sx / n), qy / n - sq(sy / n)), qz / n - sq(sz / n)));
+  if (sd <= CAL_MAX_STD || !sesgoGuardado(i, m)) {  // quieta (o sin nada guardado): sesgo medido ahora
+    m.bx = sx / n; m.by = sy / n; m.bz = sz / n;
+  }
   if (!leerCrudo(ax, ay, az, gx, gy, gz)) return false;
   m.p = atan2f(-ax, az) * RAD_A_GRADOS;
   m.r = atan2f(ay, sqrtf(ax * ax + az * az)) * RAD_A_GRADOS;
   m.iniciada = m.ok = true;
   return true;
+}
+
+// Ángulos iniciales desde el acelerómetro, conservando el sesgo del giroscopio.
+void iniciarDesdeAcelerometro(int i) {
+  Imu& m = imus[i];
+  float ax, ay, az, gx, gy, gz;
+  if (!seleccionarCanal(CANAL_IMU[i]) || !leerCrudo(ax, ay, az, gx, gy, gz)) return;
+  m.p = atan2f(-ax, az) * RAD_A_GRADOS;
+  m.r = atan2f(ay, sqrtf(ax * ax + az * az)) * RAD_A_GRADOS;
+  m.iniciada = m.ok = true;
+}
+
+// ---------------------------------------------------------------- Calibración guardada
+// Clave "b<i>": 3 floats (sesgo x, y, z en °/s) de la IMU i.
+bool sesgoGuardado(int i, Imu& m) {
+  char clave[3] = {'b', char('0' + i), 0};
+  float b[3];
+  if (memoria.getBytesLength(clave) != sizeof(b)) return false;
+  memoria.getBytes(clave, b, sizeof(b));
+  m.bx = b[0]; m.by = b[1]; m.bz = b[2];
+  return true;
+}
+
+void guardarSesgo(int i, const Imu& m) {
+  char clave[3] = {'b', char('0' + i), 0};
+  float b[3] = {m.bx, m.by, m.bz};
+  memoria.putBytes(clave, b, sizeof(b));
+}
+
+void responder(String linea) {
+  Serial.println(linea);
+  ws.broadcastTXT(linea);
+}
+
+// CAL: CAL_MS con la mano quieta. Todas las IMU se miden a la vez; si alguna se movió (o no responde) no cambia
+// nada. Mientras dura no se mandan datos (la app hace la cuenta regresiva y espera la respuesta).
+void calibrarGiroscopios() {
+  String pre = String("CAL,") + LADO + ",";
+  responder(pre + "midiendo," + CAL_MS);
+  double s[N_IMU][3] = {}, q[N_IMU][3] = {};
+  int n[N_IMU] = {};
+  uint32_t t0 = millis();
+  while (millis() - t0 < (uint32_t)CAL_MS) {
+    for (int i = 0; i < N_IMU; i++) {
+      float ax, ay, az, g[3];
+      if (!seleccionarCanal(CANAL_IMU[i]) || !leerCrudo(ax, ay, az, g[0], g[1], g[2])) continue;
+      for (int k = 0; k < 3; k++) { s[i][k] += g[k]; q[i][k] += (double)g[k] * g[k]; }
+      n[i]++;
+    }
+    ws.loop();
+    delay(5);
+  }
+  float peor = 0;
+  for (int i = 0; i < N_IMU; i++) {
+    if (n[i] < CAL_MIN_MUESTRAS) { responder(pre + "error,no_responde," + i); return; }
+    for (int k = 0; k < 3; k++) {
+      double media = s[i][k] / n[i];
+      float sd = sqrt(fmax(0.0, q[i][k] / n[i] - media * media));
+      if (sd > CAL_MAX_STD) { responder(pre + "error,movimiento," + i); return; }
+      peor = fmaxf(peor, sd);
+    }
+  }
+  for (int i = 0; i < N_IMU; i++) {
+    Imu& m = imus[i];
+    m.bx = s[i][0] / n[i]; m.by = s[i][1] / n[i]; m.bz = s[i][2] / n[i];
+    guardarSesgo(i, m);
+    iniciarDesdeAcelerometro(i);  // reinicia el filtro con el sesgo nuevo
+  }
+  responder(pre + "ok," + String(peor, 2));
 }
 
 float envolver(float a) {   // a −180…180
@@ -150,6 +233,8 @@ void alRecibirWs(uint8_t cliente, WStype_t tipo, uint8_t* datos, size_t largo) {
     if (msg == "ID?") {
       String id = lineaId();
       ws.sendTXT(cliente, id);
+    } else if (msg == "CAL") {
+      calPendiente = true;
     }
   }
 }
@@ -160,6 +245,7 @@ void leerSerie() {
     if (c == '\n' || c == '\r') {
       entradaSerie.trim();
       if (entradaSerie == "ID?") Serial.println(lineaId());
+      else if (entradaSerie == "CAL") calPendiente = true;
       entradaSerie = "";
     } else if (entradaSerie.length() < 32) {
       entradaSerie += c;
@@ -202,6 +288,7 @@ void revisarMdns() {
 void setup() {
   Serial.begin(SERIAL_BAUDIOS);
   Wire.begin(PIN_SDA, PIN_SCL, I2C_HZ);
+  memoria.begin("pulsera", false);  // sesgo de los giroscopios guardado por CAL
   delay(200);
   Serial.printf("# Pulsera %c · firmware %s\n", LADO, FIRMWARE);
   for (int i = 0; i < N_IMU; i++) {
@@ -220,6 +307,12 @@ void loop() {
   ws.loop();
   leerSerie();
   revisarMdns();
+  if (calPendiente) {
+    calPendiente = false;
+    calibrarGiroscopios();
+    ultimoMicros = micros();
+    proximo = millis();
+  }
   uint32_t ahora = millis();
   if ((int32_t)(ahora - proximo) < 0) return;
   proximo += PERIODO_MS;

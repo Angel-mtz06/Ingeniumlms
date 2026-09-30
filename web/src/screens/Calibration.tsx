@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IconCheck, IconError, IconWarning, ToneIcon } from "../components/icons";
 import { calibrationOutcome } from "../lib/calibration";
+import { gyroCalText } from "../lib/gyroCal";
 import type { FramePayload, ServerMsg } from "../lib/protocol";
 import { CalibrationLostNotice, CameraStage, GloveControls, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
@@ -236,6 +237,7 @@ export function Calibration() {
           <CameraStage body>{overlay}</CameraStage>
           <BodyDetection />
           <GloveControls compact />
+          <GyroCalibration />
         </div>
       </div>
     </div>
@@ -329,6 +331,60 @@ function BodyDetection() {
         <p className="sheet__hint">Aléjate un poco de la cámara para que se vean tus hombros.</p>
       ) : null}
       <p className="sheet__hint">En Práctica, Alfabeto e Interpretación solo se dibujan las manos; la cara y el torso se siguen detectando.</p>
+    </section>
+  );
+}
+
+const GYRO_COUNTDOWN_S = 3;
+
+/**
+ * Giroscopios de los guantes: cuenta regresiva de 3 s para apoyar la mano y manda CAL; el firmware mide ~2 s con la
+ * mano quieta, rechaza la medición si algo se movió y la guarda en el guante (sobrevive al apagado).
+ */
+function GyroCalibration() {
+  const { gloves } = useApp();
+  const [left, setLeft] = useState(0);
+  const connected = (["R", "L"] as const).filter((s) => gloves.sides[s].connected);
+  const busy = left > 0 || connected.some((s) => gloves.gyro[s].phase === "waiting" || gloves.gyro[s].phase === "measuring");
+  // La función vive en un ref: la app se vuelve a dibujar cada segundo (FPS) y la cuenta no debe reiniciarse.
+  const calibrate = useRef(gloves.calibrateGyro);
+  calibrate.current = gloves.calibrateGyro;
+  useEffect(() => {
+    if (left <= 0) return;
+    const id = window.setTimeout(() => {
+      if (left === 1) calibrate.current();
+      setLeft(left - 1);
+    }, 1000);
+    return () => window.clearTimeout(id);
+  }, [left]);
+  if (!gloves.supported) return null;
+  return (
+    <section className="sheet" aria-labelledby="calib-giro">
+      <h3 id="calib-giro" className="sheet__title">
+        Giroscopios de los guantes
+      </h3>
+      <p className="sheet__hint">Apoya la mano en la mesa con los dedos estirados y no la muevas unos 5 s. Se guarda en el guante: basta con hacerlo una vez.</p>
+      <div className="sheet__actions">
+        <button type="button" className="btn btn--secondary" onClick={() => setLeft(GYRO_COUNTDOWN_S)} disabled={connected.length === 0 || busy}>
+          {left > 0 ? <>Apoya la mano: <span className="tabular">{left}</span></> : "Calibrar giroscopios"}
+        </button>
+      </div>
+      {connected.length === 0 ? <p className="sheet__hint">Conecta un guante para calibrarlo.</p> : null}
+      <ul className="calib-result__list" role="status">
+        {connected.map((side) => {
+          const cal = gloves.gyro[side];
+          if (cal.phase === "idle") return null;
+          const tone = cal.phase === "ok" ? "ok" : cal.phase === "error" ? "bad" : null;
+          return (
+            <li key={side} className="calib-result__item" data-tone={tone ?? undefined}>
+              {tone ? <ToneIcon tone={tone} /> : null}
+              <span>
+                <strong>{side === "R" ? "Guante derecho" : "Guante izquierdo"}:</strong> {gyroCalText(cal)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
