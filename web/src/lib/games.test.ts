@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  availablePhrases, lettersOf, lettersPerMinute, pickOther, RACE_LEVEL_ORDER, RACE_LEVELS, RACE_TEXTS, readRecords,
-  rivalFinishMs, rivalProgress, saveRecord, SIGN_PHRASES, SPELL_WORDS, spellable, standings, wordCorrect,
+  availablePhrases, availableSigns, knownMarks, lettersOf, lettersPerMinute, pickDistinct, pickOther, RACE_LEVEL_ORDER,
+  RACE_LEVELS, RACE_TEXTS, readBest, readRecords, recognizedInBank, rivalFinishMs, rivalProgress, saveBest, saveRecord,
+  scoreGuess, SIGN_PHRASES, SIMON_LETTERS, simonNext, SPELL_WORDS, spellable, standings, wordCorrect, WORDLE_WORDS,
 } from "./games";
 import { LETTERS } from "./alphabet";
 
@@ -80,5 +81,64 @@ describe("Carrera: niveles de dificultad", () => {
     expect(readRecords(storage)).toEqual({ normal: 30000 });
     expect(readRecords(null)).toEqual({});
     expect(saveRecord("fácil", 1000, null)).toBe(true);
+  });
+});
+
+describe("Wordle", () => {
+  it("verde en su lugar, amarillo en otro lugar, gris si no está", () => {
+    expect(scoreGuess([..."GATOS"], [..."GATOS"])).toEqual(["ok", "ok", "ok", "ok", "ok"]);
+    expect(scoreGuess([..."SOGAT"], [..."GATOS"])).toEqual(["near", "near", "near", "near", "near"]);
+    expect(scoreGuess([..."PLUMA"], [..."GATOS"])).toEqual(["no", "no", "no", "no", "near"]);
+  });
+  it("letras repetidas: cada letra del secreto cuenta una sola vez", () => {
+    expect(scoreGuess([..."PERRO"], [..."ROSAS"])).toEqual(["no", "no", "near", "no", "near"]);
+    expect(scoreGuess([..."LLAMA"], [..."SILLA"])).toEqual(["near", "near", "no", "no", "ok"]);
+  });
+  it("también con señas (secuencia de 3)", () => {
+    expect(scoreGuess(["HOLA", "YO", "CASA"], ["YO", "HOLA", "CASA"])).toEqual(["near", "near", "ok"]);
+    expect(scoreGuess(["NO", "NO", "NO"], ["NO", "SI", "YO"])).toEqual(["ok", "no", "no"]);
+  });
+  it("el teclado guarda la mejor marca de cada letra", () => {
+    const k = knownMarks([{ guess: [..."AB"], marks: ["near", "no"] }, { guess: [..."BA"], marks: ["no", "ok"] }]);
+    expect(k.get("A")).toBe("ok");
+    expect(k.get("B")).toBe("no");
+  });
+  it("todas las palabras secretas tienen 5 letras deletreables", () => {
+    for (const w of WORDLE_WORDS) expect(lettersOf(w)).toHaveLength(5);
+  });
+  it("seña del banco: la más probable del top 3 que esté en el banco", () => {
+    expect(recognizedInBank([["NADA", 0.5], ["HOLA", 0.3]], ["HOLA", "YO"])).toBe("HOLA");
+    expect(recognizedInBank([["NADA", 0.9], ["HOLA", 0.05]], ["HOLA", "YO"])).toBeNull();
+    expect(recognizedInBank([["YO", 0.4]], ["HOLA", "YO"])).toBe("YO");
+  });
+  it("señas disponibles y elección sin repetir", () => {
+    const vocab = [{ gloss: "HOLA", has_reference: true }, { gloss: "YO", has_reference: false }, { gloss: "SI", has_reference: true }];
+    expect(availableSigns(vocab)).toEqual(["HOLA", "SI"]);
+    const picked = pickDistinct(["A", "B", "C", "D"], 3, () => 0.3);
+    expect(new Set(picked).size).toBe(3);
+  });
+});
+
+describe("Simón dice", () => {
+  it("la secuencia crece de uno en uno y no repite el último", () => {
+    let seq: string[] = [];
+    for (let i = 0; i < 20; i++) {
+      const next = simonNext(seq, SIMON_LETTERS);
+      expect(next).toHaveLength(seq.length + 1);
+      if (seq.length) expect(next.at(-1)).not.toBe(seq.at(-1));
+      seq = next;
+    }
+    expect(SIMON_LETTERS.some((l) => "JÑQXZK".includes(l))).toBe(false);
+  });
+  it("récord: más alto es mejor (rondas) o más bajo (intentos)", () => {
+    const mem = new Map<string, string>();
+    const st = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, v); } };
+    expect(saveBest("simon", 3, true, st)).toBe(true);
+    expect(saveBest("simon", 2, true, st)).toBe(false);
+    expect(saveBest("wordle", 4, false, st)).toBe(true);
+    expect(saveBest("wordle", 3, false, st)).toBe(true);
+    expect(readBest("simon", st)).toBe(3);
+    expect(readBest("wordle", st)).toBe(3);
+    expect(readBest("nada", null)).toBeNull();
   });
 });

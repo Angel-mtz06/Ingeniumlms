@@ -176,3 +176,109 @@ export function pickOther<T>(list: T[], previous: T | null, random = Math.random
   const pool = list.length > 1 && previous !== null ? list.filter((x) => x !== previous) : list;
   return pool[Math.floor(random() * pool.length) % pool.length];
 }
+
+/* ------------------------------ Wordle ------------------------------ */
+
+/** Palabras secretas de 5 letras (sin acentos; algunas con J, Ñ, Q, Z o letras repetidas). */
+export const WORDLE_WORDS: string[] = [
+  "GATOS", "LIBRO", "MUNDO", "PLAYA", "FRUTA", "VERDE", "NEGRO", "FUEGO", "LECHE", "MANGO", "PIANO", "TIGRE",
+  "ARBOL", "CARTA", "PLATO", "NUBES", "COCHE", "HUEVO", "LIMON", "RATON", "PAPEL", "CIELO", "LUNAS", "DULCE",
+  "CAMPO", "BARCO", "AVION", "MONOS", "PERRO", "SILLA", "LLAVE", "RELOJ", "QUESO", "ZORRO", "JUGAR", "NIÑOS",
+];
+export const WORDLE_TRIES = 6;
+
+/** Señas candidatas para el Wordle de señas y Simón dice (se usan las que el modelo puede calificar). */
+export const GAME_SIGNS: string[] = [
+  "HOLA", "GRACIAS", "YO", "SI", "NO", "CASA", "AMIGO", "AYUDA", "DOCTOR", "COMIDA", "BAÑO", "TELEFONO",
+  "DINERO", "TRABAJO", "FIEBRE", "POLICIA", "CARRO", "AGUA", "BUENO", "MAL", "DORMIR", "NECESITAR",
+];
+
+export type Mark = "ok" | "near" | "no";
+
+/**
+ * Califica un intento como Wordle, para letras o para señas: "ok" en su lugar, "near" está en otro
+ * lugar, "no" no está. Con repetidas, cada elemento del secreto se usa una sola vez (primero los "ok").
+ */
+export function scoreGuess<T>(guess: readonly T[], secret: readonly T[]): Mark[] {
+  const marks: Mark[] = guess.map((g, i) => (g === secret[i] ? "ok" : "no"));
+  const left = new Map<T, number>();
+  secret.forEach((s, i) => { if (guess[i] !== s) left.set(s, (left.get(s) ?? 0) + 1); });
+  guess.forEach((g, i) => {
+    if (marks[i] === "ok") return;
+    const n = left.get(g) ?? 0;
+    if (n > 0) { marks[i] = "near"; left.set(g, n - 1); }
+  });
+  return marks;
+}
+
+/** Mejor marca conocida de cada elemento en los intentos hechos (para pintar el teclado / el banco). */
+export function knownMarks<T>(guesses: readonly { guess: readonly T[]; marks: readonly Mark[] }[]): Map<T, Mark> {
+  const rank: Record<Mark, number> = { no: 0, near: 1, ok: 2 };
+  const out = new Map<T, Mark>();
+  for (const { guess, marks } of guesses) guess.forEach((g, i) => {
+    const prev = out.get(g);
+    if (prev === undefined || rank[marks[i]] > rank[prev]) out.set(g, marks[i]);
+  });
+  return out;
+}
+
+/** Las señas de `list` que el modelo sabe calificar (catálogo con referencia). */
+export function availableSigns(vocab: { gloss: string; has_reference: boolean }[] | null, list = GAME_SIGNS): string[] {
+  if (!vocab) return [];
+  const ok = new Set(vocab.filter((v) => v.has_reference).map((v) => v.gloss));
+  return list.filter((g) => ok.has(g));
+}
+
+/** `n` elementos distintos al azar de `list`, en orden aleatorio. */
+export function pickDistinct<T>(list: readonly T[], n: number, random = Math.random): T[] {
+  const pool = [...list];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, Math.min(n, pool.length));
+}
+
+/**
+ * Qué seña del banco se hizo: la más probable del top-3 del modelo que esté en el banco (en el juego
+ * solo se puede elegir del banco, así una seña parecida fuera de él no estorba). null si ninguna.
+ */
+export function recognizedInBank(recognized: Glosses, bank: readonly string[], minP = 0.1): string | null {
+  const hit = recognized.slice(0, 3).find(([g, p], i) => bank.includes(g) && (i === 0 || p >= minP));
+  return hit ? hit[0] : null;
+}
+
+/* ------------------------------ Simón dice ------------------------------ */
+
+/** Letras de Simón dice: solo estáticas (una letra con movimiento tarda más y rompe el ritmo de la memoria). */
+export const SIMON_LETTERS: string[] = [..."ABCDEFGHILMNOPRSTUVWY"];
+
+/** Agrega un elemento al azar a la secuencia (distinto del último, para que no se confunda con "repetir"). */
+export function simonNext<T>(seq: readonly T[], pool: readonly T[], random = Math.random): T[] {
+  const last = seq[seq.length - 1];
+  const options = pool.length > 1 ? pool.filter((x) => x !== last) : [...pool];
+  return [...seq, options[Math.floor(random() * options.length) % options.length]];
+}
+
+/** Récord simple por clave (mejor ronda, mejor número de intentos…), en este navegador. */
+const BEST_KEY = "lsm.games.best";
+export function readBest(key: string, storage: Pick<Storage, "getItem"> | null = safeStorage()): number | null {
+  try {
+    const data = JSON.parse(storage?.getItem(BEST_KEY) ?? "{}");
+    return typeof data?.[key] === "number" ? data[key] : null;
+  } catch {
+    return null;
+  }
+}
+/** Guarda `value` si es mejor (`higher` = más alto es mejor); devuelve true si fue récord nuevo. */
+export function saveBest(key: string, value: number, higher = true, storage: Pick<Storage, "getItem" | "setItem"> | null = safeStorage()): boolean {
+  const prev = readBest(key, storage);
+  if (prev !== null && (higher ? value <= prev : value >= prev)) return false;
+  try {
+    const data = JSON.parse(storage?.getItem(BEST_KEY) ?? "{}");
+    storage?.setItem(BEST_KEY, JSON.stringify({ ...(typeof data === "object" && data ? data : {}), [key]: value }));
+  } catch {
+    /* sin almacenamiento */
+  }
+  return true;
+}

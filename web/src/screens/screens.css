@@ -2190,6 +2190,206 @@
   font-weight: 700;
 }
 
+/* Wordle: tablero de intentos (verde en su lugar, amarillo en otro lugar, gris no está). */
+.wordle-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: start;
+  gap: var(--space-5);
+}
+
+.wordle-main {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+}
+
+.wordle-board {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.wordle-row {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.wordle-cell {
+  display: grid;
+  place-items: center;
+  min-width: 3rem;
+  min-height: 3rem;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font: 800 var(--text-xl)/1 var(--font-display);
+  text-align: center;
+}
+
+.wordle-board[data-cols="3"] .wordle-cell {
+  min-width: 6.5rem;
+  font-size: var(--text-md);
+}
+
+.wordle-row[data-current] .wordle-cell {
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+
+.wordle-cell[data-filled] {
+  box-shadow: inset 0 0 0 2px var(--color-text-muted);
+}
+
+.wordle-cell[data-mark="ok"],
+.wordle-key[data-mark="ok"] {
+  background: var(--color-ok);
+  color: #fff;
+  box-shadow: none;
+}
+
+.wordle-cell[data-mark="near"],
+.wordle-key[data-mark="near"] {
+  background: var(--color-warn);
+  color: #1b1300;
+  box-shadow: none;
+}
+
+.wordle-cell[data-mark="no"],
+.wordle-key[data-mark="no"] {
+  background: color-mix(in srgb, var(--color-text-muted) 45%, var(--color-surface));
+  color: var(--color-text);
+  box-shadow: none;
+  opacity: 0.75;
+}
+
+.wordle-cell--mini {
+  display: inline-block;
+  min-width: 0.9rem;
+  min-height: 0.9rem;
+  margin: 0 0.3rem 0 0.7rem;
+  vertical-align: middle;
+}
+
+.wordle-legend {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.wordle-keys,
+.wordle-bank {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.wordle-key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2rem;
+  height: 2.2rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font: 700 var(--text-sm)/1 var(--font-display);
+}
+
+.wordle-key--sign {
+  height: 2.6rem;
+  padding: 0 var(--space-3);
+  cursor: pointer;
+}
+
+.wordle-key--sign[aria-pressed="true"] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.wordle-help {
+  width: min(22rem, 100%);
+}
+
+/* Simón dice */
+.simon-show {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.simon-show__card {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  width: min(20rem, 100%);
+  animation: simon-pop 300ms ease-out;
+}
+
+.simon-show__big {
+  font: 800 5rem/1 var(--font-display);
+  color: var(--color-accent);
+}
+
+.simon-show__big--word {
+  font-size: var(--text-3xl);
+  padding: var(--space-5) 0;
+}
+
+@keyframes simon-pop {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .simon-show__card { animation: none; }
+}
+
+.simon-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.simon-dot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.6rem;
+  height: 2.6rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  font: 800 var(--text-md)/1 var(--font-display);
+}
+
+.simon-dot[data-state="done"] {
+  background: color-mix(in srgb, var(--color-ok) 22%, var(--color-surface));
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 2px var(--color-ok);
+}
+
+.simon-dot[data-state="now"] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  box-shadow: none;
+}
+
+.simon-time {
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 900px) {
+  .wordle-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Selector de dificultad de la carrera: una tarjeta por nivel, con qué cambia y el récord. */
 .race-levels__grid {
   display: grid;
