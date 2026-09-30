@@ -214,11 +214,12 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
     X: [[0,0],[0,.7],[0,.05]],
   };
   /** Igual que el hook: pose inicial de cada letra por clasificador o por verificación de la base. */
-  function runFree(sampleLetter: string, path: number[][], t0: number, t1: number, sample = 0, fps = 30) {
+  function runFree(sampleLetter: string, path: number[][], t0: number, t1: number, sample = 0, fps = 30,
+                   posAt?: (t: number) => number[]) {
     const free=new FreeMotion(), hand=byLetter(sampleLetter)[sample], moving: boolean[]=[], ready=new Set<string>();
     let failed: string | null = null;
     for (let t=0;t<=t1+1500;t+=1000/fps) {
-      const [dx,dy]=along(path,Math.max(0,Math.min(1,(t-t0)/(t1-t0))));
+      const [dx,dy]=posAt ? posAt(t) : along(path,Math.max(0,Math.min(1,(t-t0)/(t1-t0))));
       const h=hand.map(p=>[p[0]*110+320+dx*110,p[1]*110+230+dy*110,p[2]*110]);
       const prediction=predictAlphabet(h), startOk: Record<string, boolean> = {}, score: Record<string, number> = {};
       for (const l of FREE_MOTION_LETTERS) {
@@ -257,6 +258,25 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
     const got=[0,3,6,9,12,15].map((k)=>runFree("Q", [[0,0],[.25,.09],[.5,.12],[.75,.09],[1,0]], 1200, 2200, k, 15).letter);
     expect(got.filter((l)=>l==="Q").length).toBeGreaterThanOrEqual(4);
     expect(got.includes("X")).toBe(false);
+  });
+  it("una Q que se detiene y después regresa la mano a su lugar sigue siendo Q (no es la vuelta de una X)", () => {
+    // Antes la Q esperaba a la X sin fijarse en la pausa: al regresar la mano, salía X.
+    const arc=[[0,0],[.25,.1],[.5,.14],[.75,.1],[1,0]], ease=(u: number)=>.5-.5*Math.cos(Math.PI*Math.max(0,Math.min(1,u)));
+    for (const pause of [300, 150]) {
+      const posAt=(t: number)=>t<2000 ? along(arc, ease((t-1200)/800)) : t<2000+pause ? [1,0] : [1-ease((t-2000-pause)/500),0];
+      for (const pose of ["Q","X"]) {
+        const got=[0,3,6,9,12,15].map((k)=>runFree(pose, arc, 1200, 2000+pause+500, k, 15, posAt).letter);
+        expect(got.includes("X")).toBe(false);
+        expect(got.filter((l)=>l==="Q").length).toBeGreaterThanOrEqual(4);
+      }
+    }
+  });
+  it("una Q que termina y baja la mano (a descansar) sigue siendo Q", () => {
+    const arc=[[0,0],[.25,.1],[.5,.14],[.75,.1],[1,0]], ease=(u: number)=>.5-.5*Math.cos(Math.PI*Math.max(0,Math.min(1,u)));
+    const posAt=(t: number)=>t<2000 ? along(arc, ease((t-1200)/800)) : [1+.1*ease((t-2000)/450), 1.6*ease((t-2000)/450)];
+    const got=[0,3,6,9,12,15].map((k)=>runFree("Q", arc, 1200, 2450, k, 15, posAt).letter);
+    expect(got.includes("X")).toBe(false);
+    expect(got.filter((l)=>l==="Q").length).toBeGreaterThanOrEqual(4);
   });
   it("un movimiento corto (0.7 s) también cuenta: ya no exige 2.2 s de grabación", () => {
     expect(runFree("Ñ", PATHS["Ñ"], 1200, 1900).letter).toBe("Ñ");
