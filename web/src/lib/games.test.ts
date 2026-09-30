@@ -70,7 +70,6 @@ describe("Carrera: niveles de dificultad", () => {
       expect(avg(b.rivals.map((r) => r.lpm))).toBeGreaterThan(avg(a.rivals.map((r) => r.lpm)));
       expect(b.skipPenalty).toBeGreaterThan(a.skipPenalty);
     }
-    expect(RACE_LEVELS["fácil"].hint && !RACE_LEVELS.experto.hint).toBe(true);
   });
   it("récord por nivel: solo se guarda si mejora; sin almacenamiento no falla", () => {
     const mem = new Map<string, string>();

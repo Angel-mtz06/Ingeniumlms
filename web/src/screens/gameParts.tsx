@@ -121,9 +121,9 @@ export function Note({ note }: { note: { tone?: "ok" | "warn"; text: string } })
 /* ------------------------------ Asistencia y pistas ------------------------------ */
 
 /**
- * Asistencia: un modo que, mientras está activo, SIEMPRE muestra cómo se hace lo que toca (foto o
- * video de la letra, animación de la seña) y tus dedos en vivo con lo que debes corregir. Es distinta
- * de la Pista, que es una ayuda puntual y limitada de cada juego. Con asistencia no se guardan récords.
+ * Asistencia: habilita fotos, videos y ejemplos. En Simón dice solo se muestran
+ * al presentar la secuencia; los demás juegos los muestran durante el turno.
+ * Las pistas de memoria revelan texto. Con asistencia no se guardan récords.
  * Se recuerda en este navegador para todos los juegos.
  */
 const ASSIST_KEY = "lsm.games.assist";
@@ -150,26 +150,11 @@ export function useAssistUsed(on: boolean, active: boolean) {
 export function AssistToggle({ assist }: { assist: Assist }) {
   return (
     <button type="button" role="switch" aria-checked={assist.on} className="switch game-assist-toggle" onClick={assist.toggle}
-      title="Muestra siempre cómo se hace lo que toca y tus dedos en vivo">
+      title="Muestra fotos y ejemplos; en Simón dice, solo al presentar la secuencia">
       <span className="switch__track" aria-hidden="true"><span className="switch__thumb" /></span>
       <span className="switch__label">🧑‍🏫 Asistencia</span>
     </button>
   );
-}
-
-/** Pista temporal: se muestra `ms` y se cuenta cuántas se usaron. */
-export function useTimedHint(ms: number) {
-  const [shown, setShown] = useState(false);
-  const [used, setUsed] = useState(0);
-  useEffect(() => {
-    if (!shown) return;
-    const id = window.setTimeout(() => setShown(false), ms);
-    return () => window.clearTimeout(id);
-  }, [shown, ms]);
-  const show = useCallback(() => { setUsed((u) => u + 1); setShown(true); }, []);
-  const reset = useCallback(() => { setUsed(0); setShown(false); }, []);
-  const hide = useCallback(() => setShown(false), []);
-  return { shown, used, show, reset, hide };
 }
 
 /**

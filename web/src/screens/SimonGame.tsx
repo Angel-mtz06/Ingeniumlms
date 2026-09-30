@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LetterReference } from "../components/LetterReference";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { availableSigns, pickDistinct, readBest, saveBest, SIMON_LETTERS, simonNext, wordCorrect } from "../lib/games";
 import type { GaugeView } from "../lib/gauge";
@@ -143,11 +142,9 @@ function SimonFrame<T>({ simon, assist, title, lead, onBack, label, showCard, as
 }) {
   const { phase, expected } = simon;
   const playing = phase === "play";
-  // La asistencia solo enseña la nueva de la ronda (la última): el chiste es recordar las anteriores.
-  const isNew = expected !== null && simon.pos === simon.seq.length - 1;
   const help = (
     <p className="sheet__hint game-help">
-      💡 <strong>Pista:</strong> te muestro un momento lo que toca ({PEEKS} por partida). 🧑‍🏫 <strong>Asistencia:</strong> te enseña cómo se hace la nueva de cada ronda, con más tiempo; las anteriores van de memoria. Con ayuda no se guarda récord.
+      💡 <strong>Pista:</strong> revela el nombre de lo que toca ({PEEKS} por partida). 🧑‍🏫 <strong>Asistencia:</strong> muestra cómo se hace cada elemento mientras memorizas la secuencia. En tu turno, repítela de memoria. Con ayuda no se guarda récord.
     </p>
   );
   return (
@@ -185,10 +182,13 @@ function SimonFrame<T>({ simon, assist, title, lead, onBack, label, showCard, as
         )}
         side={phase === "ready" ? <>{readyExtra}{help}</>
           : phase === "show" ? (
-            <section className="sheet simon-show" aria-live="assertive">
-              <p className="game-target__label">Memoriza · {simon.shown + 1} de {simon.seq.length}</p>
-              <div key={simon.shown} className="simon-show__card">{showCard(simon.seq[simon.shown])}</div>
-            </section>
+            <div key={simon.shown}>
+              <section className="sheet simon-show" aria-live="assertive">
+                <p className="game-target__label">Memoriza · {simon.shown + 1} de {simon.seq.length}</p>
+                <div className="simon-show__card">{showCard(simon.seq[simon.shown])}</div>
+              </section>
+              {assist.on ? assistFor(simon.seq[simon.shown]) : null}
+            </div>
           ) : (
             <>
               <section className="sheet game-target" aria-live="polite">
@@ -202,10 +202,7 @@ function SimonFrame<T>({ simon, assist, title, lead, onBack, label, showCard, as
                   <p className="game-target__label">💡 Pista · toca</p>
                   <div className="simon-show__card">{showCard(expected)}</div>
                 </section>
-              ) : expected !== null && assist.on && isNew ? assistFor(expected)
-                : expected !== null && assist.on ? (
-                  <p className="sheet__hint game-help">🧠 Esta va de memoria. La asistencia te enseña solo la nueva, que es la última de la secuencia (si no te acuerdas, usa una 💡 pista).</p>
-                ) : playing ? help : null}
+              ) : playing ? help : null}
             </>
           )}
       />
@@ -219,9 +216,9 @@ const LETTER_SHOW_MS = 1300, LETTER_TIMEOUT_MS = 9000;
 
 export function SimonLetters({ onBack }: { onBack(): void }) {
   const assist = useAssist();
-  // Con asistencia hay más tiempo por letra: da para ver la foto y acomodar los dedos.
+  // Con asistencia hay más tiempo para memorizar el ejemplo y para responder.
   const timeout = LETTER_TIMEOUT_MS * (assist.on ? 2 : 1);
-  const simon = useSimon(SIMON_LETTERS, LETTER_SHOW_MS, timeout, "simon-letras", assist.on);
+  const simon = useSimon(SIMON_LETTERS, LETTER_SHOW_MS * (assist.on ? 2 : 1), timeout, "simon-letras", assist.on);
   const playing = simon.phase === "play";
   // La secuencia con la letra actual como objetivo (reconocedor del alfabeto); en pantalla no se muestra.
   const run = useLetterRun(simon.seq, playing);
@@ -238,8 +235,8 @@ export function SimonLetters({ onBack }: { onBack(): void }) {
   return (
     <SimonFrame simon={simon} assist={assist} title="Simón dice · con letras" lead="Memoriza la secuencia de letras y hazla en el mismo orden." onBack={onBack}
       label={(l) => l} what="letras" timeout={timeout}
-      showCard={(l) => (<><p className="simon-show__big" translate="no">{l}</p><LetterReference letter={l} /></>)}
-      assistFor={(l) => <LetterAssist letter={l} rec={run.rec} />}
+      showCard={(l) => <p className="simon-show__big" translate="no">{l}</p>}
+      assistFor={(l) => <LetterAssist letter={l} showFingers={false} />}
       camera={<LiveCamera corner={<ScoreGauge view={gauge} />} />}
       playNote={`Haz la letra ${simon.pos + 1} de la secuencia y mantenla hasta que se marque.`} />
   );
@@ -257,7 +254,7 @@ export function SimonSigns({ onBack }: { onBack(): void }) {
   useEffect(() => { if (!pool.length && signs.length >= 4) setPool(pickDistinct(signs, SIGN_POOL)); }, [signs, pool.length]);
   const assist = useAssist();
   const timeout = SIGN_TIMEOUT_MS * (assist.on ? 2 : 1);
-  const simon = useSimon(pool, SIGN_SHOW_MS, timeout, "simon-senas", assist.on);
+  const simon = useSimon(pool, SIGN_SHOW_MS * (assist.on ? 2 : 1), timeout, "simon-senas", assist.on);
   const playing = simon.phase === "play";
   const target = playing ? simon.seq[simon.pos] ?? null : null;
   useSessionMode("practice", target, target !== null);
@@ -297,7 +294,7 @@ export function SimonSigns({ onBack }: { onBack(): void }) {
         </section>
       ) : null}
       showCard={(g) => <p className="simon-show__big simon-show__big--word" translate="no">{glossLabel(g)}</p>}
-      assistFor={(g) => <SignAssist gloss={g} live={live} />}
+      assistFor={(g) => <SignAssist gloss={g} hands={false} />}
       camera={
         <LiveCamera corner={<ScoreGauge view={gauge} />}>
           {signing ? <p className="overlay-pill" role="status"><span className="rec-mark" aria-hidden="true" /><span>Leyendo tu seña</span></p> : null}

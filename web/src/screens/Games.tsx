@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LetterReference } from "../components/LetterReference";
-import { ReferencePlayer } from "../components/ReferencePlayer";
 import { ScoreGauge } from "../components/ScoreGauge";
 import {
   availablePhrases, lettersOf, lettersPerMinute, pickOther, RACE_LEVEL_ORDER, RACE_LEVELS, readRecords, rivalFinishMs,
@@ -9,7 +7,7 @@ import {
 import { firstTip, type GaugeView } from "../lib/gauge";
 import type { Glosses } from "../lib/protocol";
 import { glossLabel } from "../lib/ui";
-import { GameHead, GameStage, LetterAssist, LetterStrip, letterGauge, letterNote, Note, SignAssist, useAssist, useAssistUsed, useLetterRun, useTimedHint } from "./gameParts";
+import { GameHead, GameStage, LetterAssist, LetterStrip, letterGauge, letterNote, Note, SignAssist, useAssist, useAssistUsed, useLetterRun } from "./gameParts";
 import { LiveCamera } from "./LiveCamera";
 import { SimonLetters, SimonSigns } from "./SimonGame";
 import { WordleLetters, WordleSigns } from "./WordleGame";
@@ -89,7 +87,6 @@ export default function Games() {
 }
 
 const LEVELS = ["fácil", "media", "difícil"] as const;
-const PISTA_MS = 5000;
 
 function SpellGame({ onBack }: { onBack(): void }) {
   const [level, setLevel] = useState<(typeof LEVELS)[number] | "todas">("todas");
@@ -99,7 +96,6 @@ function SpellGame({ onBack }: { onBack(): void }) {
   const run = useLetterRun(letters, true);
   const [skipped, setSkipped] = useState<Set<number>>(new Set());
   const assist = useAssist();
-  const hint = useTimedHint(PISTA_MS);
   const started = useRef(performance.now());
   const [elapsed, setElapsed] = useState<number | null>(null);
   const [score, setScore] = useState({ words: 0, letters: 0 });
@@ -110,17 +106,14 @@ function SpellGame({ onBack }: { onBack(): void }) {
     // La estrella se gana haciendo letras: una palabra saltada completa no cuenta.
     if (skipped.size < letters.length) setScore((s) => ({ words: s.words + 1, letters: s.letters + letters.length - skipped.size }));
   }, [run.done, elapsed, letters.length, skipped.size]);
-  const hideHint = hint.hide;
-  useEffect(() => { hideHint(); }, [run.index, hideHint]);
 
   const next = useCallback((list = pool) => {
     setWord((w) => pickOther(list, w));
     run.reset();
     setSkipped(new Set());
     setElapsed(null);
-    hint.reset();
     started.current = performance.now();
-  }, [pool, run.reset, hint.reset]);
+  }, [pool, run.reset]);
   const skip = () => { setSkipped((s) => new Set(s).add(run.index)); run.skip(); };
   const changeLevel = (l: typeof level) => {
     setLevel(l);
@@ -138,7 +131,7 @@ function SpellGame({ onBack }: { onBack(): void }) {
             <p className="sheet__hint tabular">
               {elapsed !== null ? `${(elapsed / 1000).toFixed(1)} s` : ""}
               {skipped.size ? ` · ${skipped.size} letra${skipped.size > 1 ? "s" : ""} saltada${skipped.size > 1 ? "s" : ""}` : " · sin saltar letras"}
-              {hint.used ? ` · ${hint.used} pista${hint.used > 1 ? "s" : ""}` : ""}{assist.on ? " · con asistencia" : ""}
+              {assist.on ? " · con asistencia" : ""}
             </p>
             <button type="button" className="btn btn--primary" onClick={() => next()} autoFocus>Otra palabra →</button>
           </section>
@@ -149,7 +142,6 @@ function SpellGame({ onBack }: { onBack(): void }) {
             </LiveCamera>
             <Note note={letterNote(run)} />
             <div className="sheet__actions">
-              {!assist.on ? <button type="button" className="btn btn--secondary" onClick={hint.show} disabled={hint.shown}>💡 Pista</button> : null}
               <button type="button" className="btn btn--secondary" onClick={skip}>Saltar letra →</button>
               <button type="button" className="btn btn--quiet" onClick={() => next()}>Otra palabra</button>
             </div>
@@ -169,13 +161,8 @@ function SpellGame({ onBack }: { onBack(): void }) {
             <p className="sheet__hint tabular">{run.done ? `${letters.length} de ${letters.length} letras` : `Letra ${run.index + 1} de ${letters.length}`}</p>
           </section>
           {run.target && assist.on ? <LetterAssist letter={run.target} rec={run.rec} />
-            : run.target && hint.shown ? (
-              <section className="sheet game-hint" aria-live="polite">
-                <h3 className="game-assist__title">💡 Pista: <span translate="no">{run.target}</span></h3>
-                <div className="game-assist__ref"><LetterReference letter={run.target} /></div>
-              </section>
-            ) : !run.done ? (
-              <p className="sheet__hint game-help">💡 <strong>Pista:</strong> la foto de la letra por {PISTA_MS / 1000} s. 🧑‍🏫 <strong>Asistencia:</strong> siempre la foto (o el video), tus dedos en vivo y qué corregir.</p>
+            : !run.done ? (
+              <p className="sheet__hint game-help">Activa la asistencia para ver la foto o el video de la letra y tus dedos en vivo.</p>
             ) : null}
         </>}
       />
@@ -197,8 +184,6 @@ function SignGame({ onBack }: { onBack(): void }) {
   const { evaluation, live } = session.last;
   const [attempt, setAttempt] = useState<{ ok: boolean; recognized: Glosses; tip: string | null } | null>(null);
   const assist = useAssist();
-  // Pista: la animación de la seña hasta la siguiente toma (o 15 s).
-  const hint = useTimedHint(15000);
   const [score, setScore] = useState(0);
   const seen = useRef(evaluation);
 
@@ -208,8 +193,7 @@ function SignGame({ onBack }: { onBack(): void }) {
     seen.current = evaluation;
     if (!target || evaluation.target !== target) return;
     setAttempt({ ok: wordCorrect(evaluation.recognized, target), recognized: evaluation.recognized, tip: firstTip(evaluation) });
-    hint.hide();
-  }, [evaluation, target, hint.hide]);
+  }, [evaluation, target]);
   useEffect(() => {
     if (!attempt?.ok) return;
     const id = window.setTimeout(() => { setIndex((i) => i + 1); setAttempt(null); }, 900);
@@ -218,8 +202,8 @@ function SignGame({ onBack }: { onBack(): void }) {
   const done = phrase !== null && index >= phrase.length;
   useEffect(() => { if (done) setScore((s) => s + 1); }, [done]);
 
-  const next = () => { setPhrase((p) => pickOther(phrases, p)); setIndex(0); setAttempt(null); hint.reset(); };
-  const skip = () => { setIndex((i) => i + 1); setAttempt(null); hint.hide(); };
+  const next = () => { setPhrase((p) => pickOther(phrases, p)); setIndex(0); setAttempt(null); };
+  const skip = () => { setIndex((i) => i + 1); setAttempt(null); };
 
   const signing = live?.segment === "active";
   const top = attempt?.recognized[0]?.[0];
@@ -242,7 +226,7 @@ function SignGame({ onBack }: { onBack(): void }) {
           camera={done ? (
             <section className="sheet game-done" aria-live="polite">
               <p className="game-done__title">🎉 ¡Formaste «<span translate="no">{phrase.map(glossLabel).join(" ")}</span>»!</p>
-              {hint.used || assist.on ? <p className="sheet__hint">{hint.used ? `${hint.used} pista${hint.used > 1 ? "s" : ""}` : ""}{assist.on ? `${hint.used ? " · " : ""}con asistencia` : ""}</p> : null}
+              {assist.on ? <p className="sheet__hint">Con asistencia</p> : null}
               <button type="button" className="btn btn--primary" onClick={next} autoFocus>Otra frase →</button>
             </section>
           ) : (
@@ -254,7 +238,6 @@ function SignGame({ onBack }: { onBack(): void }) {
               </LiveCamera>
               <Note note={note} />
               <div className="sheet__actions">
-                {!assist.on ? <button type="button" className="btn btn--secondary" onClick={hint.show} disabled={hint.shown}>💡 Pista</button> : null}
                 <button type="button" className="btn btn--secondary" onClick={skip}>Saltar seña →</button>
                 <button type="button" className="btn btn--quiet" onClick={next}>Otra frase</button>
               </div>
@@ -271,13 +254,8 @@ function SignGame({ onBack }: { onBack(): void }) {
               <p className="sheet__hint tabular">{done ? `${phrase.length} de ${phrase.length} señas` : `Seña ${index + 1} de ${phrase.length}`}</p>
             </section>
             {target && assist.on ? <SignAssist gloss={target} live={live} tip={attempt && !attempt.ok ? attempt.tip : null} />
-              : target && hint.shown ? (
-                <section className="sheet game-hint" aria-live="polite">
-                  <h3 className="game-assist__title">💡 Pista: «<span translate="no">{glossLabel(target)}</span>»</h3>
-                  <div className="game-assist__ref game-assist__ref--sign"><ReferencePlayer gloss={target} /></div>
-                </section>
-              ) : !done ? (
-                <p className="sheet__hint game-help">💡 <strong>Pista:</strong> la animación de la seña hasta tu siguiente intento. 🧑‍🏫 <strong>Asistencia:</strong> siempre la animación, tus dedos en vivo y el consejo de cada toma.</p>
+              : !done ? (
+                <p className="sheet__hint game-help">Activa la asistencia para ver el ejemplo de la seña, tus dedos en vivo y los consejos.</p>
               ) : null}
           </>}
         />
@@ -291,7 +269,6 @@ function SignGame({ onBack }: { onBack(): void }) {
 const CARS = ["🚗", "🚙", "🚕", "🚓"];
 const LEVEL_ICON: Record<RaceLevel, string> = { "fácil": "🐢", normal: "🐴", "difícil": "🐆", experto: "🚀" };
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
-const RACE_HINT_MS = 3000, RACE_HINT_PENALTY_S = 1;
 
 function RaceGame({ onBack }: { onBack(): void }) {
   const [level, setLevel] = useState<RaceLevel>("normal");
@@ -308,10 +285,7 @@ function RaceGame({ onBack }: { onBack(): void }) {
   const [newRecord, setNewRecord] = useState(false);
   const assist = useAssist();
   const assistUsed = useAssistUsed(assist.on, phase === "countdown" || phase === "racing");
-  const hint = useTimedHint(RACE_HINT_MS);
   const run = useLetterRun(letters, phase === "racing");
-  const hideHint = hint.hide;
-  useEffect(() => { hideHint(); }, [run.index, hideHint]);
 
   useEffect(() => {
     if (phase !== "countdown") return;
@@ -349,12 +323,10 @@ function RaceGame({ onBack }: { onBack(): void }) {
   const place = order.findIndex((r) => r.you) + 1;
 
   const chooseLevel = (l: RaceLevel) => { setLevel(l); setText((t) => pickOther(RACE_LEVELS[l].texts, t)); };
-  const start = () => { run.reset(); setSkipped(new Set()); setYouMs(null); setNewRecord(false); hint.reset(); assistUsed.reset(); setCount(3); setPhase("countdown"); };
+  const start = () => { run.reset(); setSkipped(new Set()); setYouMs(null); setNewRecord(false); assistUsed.reset(); setCount(3); setPhase("countdown"); };
   const again = () => { setText((t) => pickOther(cfg.texts, t)); setPhase("setup"); };
   const skip = () => { setSkipped((s) => new Set(s).add(run.index)); startAt.current -= cfg.skipPenalty * 1000; run.skip(); };
-  const showHint = () => { startAt.current -= RACE_HINT_PENALTY_S * 1000; hint.show(); };
   const best = records[level];
-  const photo = run.target && (cfg.hint || hint.shown) && !assist.on;
 
   const track = (
     <section className="sheet race" aria-label="Pista de carreras">
@@ -392,7 +364,7 @@ function RaceGame({ onBack }: { onBack(): void }) {
         })}
       </div>
       <p className="sheet__hint">
-        {assist.on ? "Con asistencia verás la foto, el video y tus dedos en cada letra (no se guarda récord)." : cfg.hint ? "En este nivel verás la foto de cada letra." : `Sin foto de ayuda: la pista la muestra ${RACE_HINT_MS / 1000} s y cuesta +${RACE_HINT_PENALTY_S} s.`}
+        {assist.on ? "Con asistencia verás la foto, el video y tus dedos en cada letra (no se guarda récord)." : "Activa la asistencia si quieres ver fotos y ejemplos durante la carrera."}
       </p>
       <div className="sheet__actions">
         <button type="button" className="btn btn--primary" onClick={start} autoFocus>¡Arrancar! 🏁</button>
@@ -413,7 +385,6 @@ function RaceGame({ onBack }: { onBack(): void }) {
       <p className="sheet__hint tabular">
         {youMs !== null ? `${lettersPerMinute(letters.length - skipped.size, youMs)} letras por minuto` : ""}
         {skipped.size ? ` · ${skipped.size} saltada${skipped.size > 1 ? "s" : ""}` : ""}
-        {hint.used ? ` · ${hint.used} pista${hint.used > 1 ? "s" : ""}` : ""}
         {assistUsed.used ? " · con asistencia (sin récord)" : best !== undefined && !newRecord ? ` · récord: ${seconds(best)}` : ""}
       </p>
       <div className="sheet__actions">
@@ -430,7 +401,6 @@ function RaceGame({ onBack }: { onBack(): void }) {
       </LiveCamera>
       <Note note={letterNote(run)} />
       <div className="sheet__actions">
-        {!assist.on && !cfg.hint ? <button type="button" className="btn btn--secondary" onClick={showHint} disabled={hint.shown}>💡 Pista (+{RACE_HINT_PENALTY_S} s)</button> : null}
         <button type="button" className="btn btn--secondary" onClick={skip}>Saltar letra (+{cfg.skipPenalty} s)</button>
         <button type="button" className="btn btn--quiet" onClick={() => setPhase("setup")}>Rendirse</button>
       </div>
@@ -444,12 +414,7 @@ function RaceGame({ onBack }: { onBack(): void }) {
       <GameStage wide={assist.on} camera={main} side={<>
         {track}
         {phase === "racing" && run.target && assist.on ? <LetterAssist letter={run.target} rec={run.rec} />
-          : phase === "racing" && photo ? (
-            <section className="sheet game-hint">
-              <h3 className="game-assist__title">{hint.shown ? "💡 Pista" : "Ahora"}: <span translate="no">{run.target}</span></h3>
-              <div className="game-assist__ref"><LetterReference letter={run.target!} /></div>
-            </section>
-          ) : null}
+          : null}
       </>} />
     </div>
   );
