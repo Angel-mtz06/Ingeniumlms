@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { freeGauge, motionGauge, staticGauge, spellStatus } from "./alphabetView";
+import { freeGauge, motionGauge, readyText, staticGauge, spellStatus } from "./alphabetView";
 import type { Feedback } from "./alphabetFeedback";
 
 const fb = (x: Partial<Feedback>): Feedback => ({ correct: false, type: "finger", issue: "should_extend", message: "Extiende el dedo índice.", ...x });
@@ -36,8 +36,15 @@ describe("deletreo en Interpretación: una sola línea de estado", () => {
     expect(spellStatus({ ...none, phase: "capturing", freeReady: "J" }).text).toBe("Siguiendo el movimiento…");
     expect(spellStatus({ ...none, motionResult: { prediction: ["J", .9], reason: "" } }).text).toBe("Letra J (con movimiento).");
     expect(spellStatus({ ...none, motionResult: { prediction: null, reason: "Z: demasiado rápido" } }).tone).toBe("warn");
-    expect(spellStatus({ ...none, freeReady: "ÑQ", stable: ["N", .9] }).text).toBe("Pose de Ñ / Q lista: haz el movimiento.");
+    expect(spellStatus({ ...none, freeReady: "ÑQ", stable: ["N", .9] }).text).toBe("N… o muévela para Ñ · Pose de Q: haz el movimiento.");
     expect(spellStatus({ ...none, stable: ["A", .9] }).text).toBe("Letra A.");
     expect(spellStatus(none).text).toMatch(/Coloca tu mano/);
+  });
+});
+
+describe("pose inicial lista: no pide esperar la letra con movimiento", () => {
+  it("J/Ñ/Z dicen su letra base; Q/X piden el movimiento", () => {
+    expect(readyText("Ñ")).toBe("N… o muévela para Ñ.");
+    expect(readyText("QX")).toBe("Pose de Q / X: haz el movimiento.");
   });
 });

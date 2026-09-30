@@ -1,5 +1,5 @@
-import { alphabetFeatures, CONF_THRESHOLD, type Prediction } from "./alphabet";
-import { poseFeedback } from "./alphabetFeedback";
+import { alphabetFeatures, CONF_THRESHOLD, LETTERS_ORDER, type AlphabetPrediction, type Prediction } from "./alphabet";
+import { poseFeedback, targetMatches } from "./alphabetFeedback";
 
 export const PREPARE_MS = 3000;
 export const CAPTURE_MS = 2500;
@@ -98,6 +98,22 @@ const frameStartOk = (f: MotionFrame, letter: string) => f.startOk ?? startPoseO
 export function startPoseOk(pose: Prediction | null, letter: string): boolean {
   const rule = RULES.find((r) => r.letter === letter);
   return !!rule && !!pose && rule.poses.includes(pose[0]) && pose[1] >= CONF_THRESHOLD;
+}
+
+/**
+ * ¿Esta mano está en la pose inicial de `letter`? (lo usan Secuencial, Libre e Interpretación).
+ * J/Ñ/Z: su letra base verificada (I/N/D) o el clasificador. Q y X: sus poses se confunden entre sí
+ * (en las filas de prueba de letters.npz, 21 de 60 Q se ven como X y viceversa), pero sus movimientos
+ * no (arco / ida y vuelta): para cualquiera de las dos vale la pose de Q o de X y decide el recorrido.
+ * Así la pose inicial se acepta en 59/60 Q y 60/60 X de prueba, y en 9 de 1500 manos de otras letras.
+ */
+const Q_OR_X = ["Q", "X"];
+export function motionStartOk(prediction: AlphabetPrediction, hand: number[][], letter: string): boolean {
+  const base = motionBaseLetter(letter);
+  if (!base) return false;
+  if (!Q_OR_X.includes(letter)) return startPoseOk(prediction.pose, letter) || targetMatches(prediction, hand, base);
+  const share = Q_OR_X.reduce((sum, l)=>sum+(prediction.shares[LETTERS_ORDER.indexOf(l)] ?? 0), 0);
+  return share >= .4 || Q_OR_X.some((l)=>startPoseOk(prediction.pose, l) || targetMatches(prediction, hand, l));
 }
 
 function normalizedPath(frames: MotionFrame[], tip: number): {points: number[][]; t: number[]} {
@@ -572,11 +588,12 @@ export class FreeMotion {
  * Cuándo se da por hecha una letra ESTÁTICA en Libre e Interpretación (sin letra objetivo):
  *  - solo con la mano quieta (STATIC_STILL_PALMS en los últimos STATIC_STILL_MS) y sin una letra con
  *    movimiento en curso: al trazar una Z con la forma de D no se escribe una D a media Z;
- *  - I, N y D (poses iniciales de J, Ñ y Z) esperan BASE_EXTRA_MS más, por si viene su movimiento;
+ *  - I, N y D (poses iniciales de J, Ñ y Z) esperan BASE_EXTRA_MS más, por si viene su movimiento
+ *    (poco: si después llega la J, reemplaza a la I en la lista);
  *    las demás, STATIC_EXTRA_MS más que la estabilidad (StableLetter, 0.6 s);
  *  - perder la mano menos de HAND_GAP_MS no reinicia la letra.
  */
-export const STATIC_STILL_MS = 350, STATIC_STILL_PALMS = .15, STATIC_EXTRA_MS = 150, BASE_EXTRA_MS = 600;
+export const STATIC_STILL_MS = 350, STATIC_STILL_PALMS = .15, STATIC_EXTRA_MS = 150, BASE_EXTRA_MS = 300;
 export const MOTION_START_POSES = new Set(RULES.filter((r)=>r.base !== r.letter).map((r)=>r.base));
 export class StaticGate {
   private recent: MotionFrame[] = [];

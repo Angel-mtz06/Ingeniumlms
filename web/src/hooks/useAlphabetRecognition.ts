@@ -4,7 +4,7 @@ import {
   CaptureMonitor, FeedbackStabilizer, fingerStates, outOfFrame, poseFeedback, targetMatches, type Feedback,
 } from "../lib/alphabetFeedback";
 import {
-  FREE_MOTION_LETTERS, FreeMotion, LiveMotion, motionBaseLetter, RESULT_MS, startPoseOk, StaticGate,
+  FREE_MOTION_LETTERS, FreeMotion, LiveMotion, motionBaseLetter, motionStartOk, RESULT_MS, StaticGate,
   type LiveMotionState, type MotionFrame, type MotionResult,
 } from "../lib/alphabetMotion";
 import type { FramePayload } from "../lib/protocol";
@@ -130,7 +130,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
     if (tracker.current && target) {
       // Letra con movimiento: la pose inicial se verifica como una letra estática (J→I, Ñ→N, Z→D).
       const base = motionBaseLetter(target)!;
-      const startOk = !!hand && !capture && (startPoseOk(prediction.pose, target) || targetMatches(prediction, hand, base));
+      const startOk = !!hand && !capture && motionStartOk(prediction, hand, target);
       const st = tracker.current.push({...frame, startOk});
       setLive(st);
       setDetected(prediction.static);
@@ -152,7 +152,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
       const startOk: Record<string, boolean> = {}, score: Record<string, number> = {};
       for (const letter of FREE_MOTION_LETTERS) {
         const base = motionBaseLetter(letter)!;
-        startOk[letter] = !!hand && !capture && (startPoseOk(prediction.pose, letter) || targetMatches(prediction, hand, base));
+        startOk[letter] = !!hand && !capture && motionStartOk(prediction, hand, letter);
         score[letter] = prediction.shares[LETTERS_ORDER.indexOf(base)] ?? 0;
       }
       const motion = freeMotion.current.push(frame, startOk, score);

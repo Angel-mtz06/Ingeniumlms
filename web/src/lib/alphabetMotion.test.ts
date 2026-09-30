@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { analyzeMotion, analyzeMotionFor, BASE_EXTRA_MS, CAPTURE_MS, FREE_MOTION_LETTERS, FreeMotion, HAND_GAP_MS, LiveMotion, MOTION_START_POSES, STATIC_EXTRA_MS, StaticGate, motionBaseLetter, PREPARE_MS, significantMotion, startPoseOk, trajectoryProgress, type MotionFrame } from "./alphabetMotion";
+import { analyzeMotion, analyzeMotionFor, BASE_EXTRA_MS, CAPTURE_MS, FREE_MOTION_LETTERS, FreeMotion, HAND_GAP_MS, LiveMotion, MOTION_START_POSES, motionStartOk, STATIC_EXTRA_MS, StaticGate, motionBaseLetter, PREPARE_MS, significantMotion, startPoseOk, trajectoryProgress, type MotionFrame } from "./alphabetMotion";
 import { MOTION_LETTERS, predictAlphabet } from "./alphabet";
-import { outOfFrame, targetMatches } from "./alphabetFeedback";
+import { outOfFrame } from "./alphabetFeedback";
 import references from "../data/alphabet_references.json";
 import samples from "../data/alphabet_samples.json";
 
@@ -208,7 +208,7 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
       const prediction=predictAlphabet(h), startOk: Record<string, boolean> = {}, score: Record<string, number> = {};
       for (const l of FREE_MOTION_LETTERS) {
         const base=motionBaseLetter(l)!;
-        startOk[l]=startPoseOk(prediction.pose,l) || targetMatches(prediction,h,base);
+        startOk[l]=motionStartOk(prediction,h,l); void base;
         score[l]=prediction.shares[samples.letters.indexOf(base)] ?? 0;
       }
       const st=free.push({t,hand:h,pose:prediction.pose,out:outOfFrame(h,640,480).out},startOk,score);
@@ -255,6 +255,22 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
     expect(runFree("J", [[0,0],[0,0]], 1200, 2400).letter).toBeNull();
     expect(runFree("A", PATHS.Z, 1200, 2400).letter).toBeNull();
     expect(runFree("B", PATHS["Ñ"], 1200, 2400).letter).toBeNull();
+  });
+});
+
+describe("pose inicial de las letras con movimiento (motionStartOk)", () => {
+  const handOf = (s: number[]) => Array.from({length:21},(_,i)=>s.slice(i*3,i*3+3));
+  const byLetter = (l: string) => samples.samples.filter((_,i)=>samples.letters[samples.labels[i]]===l).map(handOf);
+  it("Q y X: vale la pose de cualquiera de las dos (se confunden entre sí; decide el movimiento)", () => {
+    for (const [pose, letter] of [["Q","Q"],["X","X"],["X","Q"],["Q","X"]]) {
+      const hs=byLetter(pose).slice(0,40);
+      const ok=hs.filter((h)=>motionStartOk(predictAlphabet(h),h,letter)).length;
+      expect(ok/hs.length).toBeGreaterThan(.9);
+    }
+  });
+  it("una mano abierta (B) o un puño (A) no son pose inicial de ninguna", () => {
+    for (const l of ["B","A"]) for (const h of byLetter(l).slice(0,20))
+      for (const m of ["J","Ñ","Q","X","Z"]) expect(motionStartOk(predictAlphabet(h),h,m)).toBe(false);
   });
 });
 

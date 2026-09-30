@@ -6,7 +6,7 @@ import { HandDiagram } from "../components/HandDiagram";
 import { IconEye, IconEyeOff, IconWarning, ToneIcon } from "../components/icons";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { motionBaseLetter, READY_HOLD_MS } from "../lib/alphabetMotion";
-import { freeGauge, motionGauge, staticGauge } from "../lib/alphabetView";
+import { freeGauge, motionGauge, readyText, staticGauge } from "../lib/alphabetView";
 import { LiveCamera } from "./LiveCamera";
 import {
   CalibrationLostNotice,
@@ -129,7 +129,8 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
 
   const target = mode === "free" ? null : mode === "sequential" ? LETTERS[letterIdx] : freeLetter;
 
-  const [cameraOn, setCameraOn] = useState(false);
+  // La cámara se usa en cuanto se entra (sin botón "Abrir cámara"); "Detener cámara" la pausa.
+  const [cameraOn, setCameraOn] = useState(true);
   const [showRef, toggleRef] = useShowReference();
   const [tutorial, setTutorial] = useState(false);
   const motion = target !== null && MOTION_LETTERS.has(target);
@@ -176,7 +177,7 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
       }
       if (feedback?.type === "capture") return { tone: "warn", text: feedback.message };
       // La pose inicial de una letra con movimiento ya se reconoció: avisar que ya puede moverse.
-      if (recognition.freeReady) return { tone: "ok", text: `Pose de ${[...recognition.freeReady].join(" / ")} lista: haz el movimiento.` };
+      if (recognition.freeReady) return { tone: "ok", text: readyText(recognition.freeReady) };
       return null;
     }
     if (motion) {
