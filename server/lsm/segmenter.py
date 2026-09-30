@@ -147,6 +147,15 @@ class Segmenter:
         """Velocidad de quietud por cuadro a la tasa actual (a 15 fps la muñeca recorre el doble por cuadro)."""
         return self.still_speed / self.rate
 
+    def interrupt(self) -> None:
+        """Descarta el segmento activo (sin emitirlo) y reinicia la espera de pausa. Lo usa el deletreo: mientras
+        se deletrea la web no manda cuadros y, al volver, la pausa cuenta desde cero."""
+        self.state = "idle"
+        self.idle_count = self.rest_count = self.still_count = 0
+        self.need_motion = self.post_still = False
+        self.ys = []
+        self.prev_w = self.prev_p = None
+
     def _speed(self, hands: np.ndarray, present: np.ndarray) -> float:
         w = hands[:, 0, :2]
         sp = 0.0

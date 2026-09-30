@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import re
 import warnings
 from collections import deque
 
@@ -35,6 +36,7 @@ TOP_K = 5  # candidatas que se piden al clasificador; el contexto solo reordena 
 NO_HAND_WARN = 60  # cuadros a 30 fps (2 s); se escala con la tasa real
 GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
 SIDE_OF_SLOT = ("R", "L")
+WORD_RE = re.compile(r"[A-ZÑ]{1,24}")  # palabra deletreada (tras canonical): solo letras del alfabeto manual
 SUMMARY_FRAMES = 150  # un resumen de diagnóstico cada ~5 s (cuadros a 30 fps)
 PAUSING_EVERY = 15  # aviso "pausing" cada ~0.5 s (cuadros a 30 fps)
 
@@ -190,6 +192,8 @@ class Session:
                 return [{"type": "error", "message": "topic inválido: " + "|".join(TOPIC_NAMES)}]
             self.topic = topic
             return [{"type": "topic", "topic": topic}]
+        if t == "add_word":
+            return self._add_word(msg)
         if t == "validate":
             enabled = msg.get("enabled")
             if not isinstance(enabled, bool):
@@ -267,6 +271,21 @@ class Session:
             elif ev.kind == "pause" and self.mode == "translate":
                 out += await self._sentence()
         return out + self._pausing()
+
+    def _add_word(self, msg: dict) -> list[dict]:
+        """Palabra deletreada en la web (alfabeto manual): entra a `pending` fija y ya confirmada (la persona la
+        acaba de construir). Arma la pausa de oración desde cero, como si fuera una seña recién cerrada."""
+        word = msg.get("word")
+        word = canonical(word) if isinstance(word, str) else ""
+        if self.mode != "translate" or msg.get("spelled") is not True or not WORD_RE.fullmatch(word):
+            return [{"type": "error", "message": "add_word inválido: word de 1 a 24 letras, spelled true, en Interpretación"}]
+        item = {"gloss": word, "top3": [], "confident": True, "confirmed": True, "spelled": True}
+        self.pending.append(item)
+        self.segmenter.interrupt()
+        self.segmenter.pending += 1
+        log.info("palabra deletreada letras=%d", len(word))  # nunca el texto: suele ser un nombre
+        return [{"type": "sign", "index": len(self.pending) - 1, "gloss": word, "top3": [], "confident": True,
+                 "spelled": True, "confirmed": True}]
 
     def _unvalidated(self) -> bool:
         """Con "Validar cada seña", True si alguna seña pendiente no la confirmó la persona."""

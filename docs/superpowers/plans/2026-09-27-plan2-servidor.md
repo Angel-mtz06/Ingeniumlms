@@ -36,6 +36,7 @@
 | `remove_gloss` | `index: int` | Borra una etiqueta pendiente |
 | `build_sentence` | — | Fuerza la oración con las etiquetas pendientes |
 | `reset` | — | Limpia buffers y párrafo |
+| `add_word` | `word: str` (1–24 letras A–Z/Ñ; se normaliza con `canonical`, sin acentos), `spelled: true` | Palabra deletreada en la web (ver nota de deletreo); responde un `sign` |
 | `validate` | `enabled: bool` | "Validar cada seña" en Interpretación (ver nota de validación); responde `{"type":"validate","enabled":…}` |
 | `topic` | `topic: "todo"\|"saludos"\|"salud"\|"emergencias"` | Tema de la conversación en Interpretación (ver nota de tema); responde `{"type":"topic","topic":…}` |
 
@@ -55,7 +56,7 @@ no afecta a los rasgos del modelo). Registro de diagnóstico en `logs/lsm.log` (
 | `ready` | `mode`, `target`, `has_reference: bool` |
 | `live` | `fingers: [[s×5],[s×5]]` (−1 sin uso, 0 bien, 1 regular, 2 mal), `hands: [bool,bool]`, `segment: "idle"\|"active"` |
 | `evaluation` | `target`, `recognized: [[gloss,p]…]`, `scores: {configuracion, ubicacion, movimiento, orientacion}`, `total`, `tips: [str]`, `fingers`, `evaluable: bool` — `false` si una mano que la seña requiere no se vio (el puntaje no es comparable; mostrar el consejo) o si no hay referencia; sin referencia llegan `scores: {}`, `total: 0`, `fingers: []` |
-| `sign` | `index`, `gloss`, `top3: [[gloss,p]…]`, `confident: bool`, `reranked?: true` (el contexto cambió el top-1; ver nota de contexto) |
+| `sign` | `index`, `gloss`, `top3: [[gloss,p]…]`, `confident: bool`, `reranked?: true` (el contexto cambió el top-1; ver nota de contexto), `spelled?: true` y `confirmed?: true` (palabra deletreada con `add_word`: `top3: []`, `confident: true`) |
 | `pending` | `glosses: [str]`, `confirmed: [bool]` (cuáles confirmó la persona con `confirm_gloss`), `awaiting_validation?: true` (ver nota de validación). También responde a `build_sentence` sin glosas pendientes, con `glosses: []` |
 | `sentence` | `glosses` (las elegidas), `text`, `paragraph`, `source: "llm"\|"template"`, `corrected: [int]` (índices de `glosses` que cambiaron respecto a las señas mostradas; ver nota de contexto) |
 | `calibration` | `step`, `status` o `sides: {"L": bool, "R": bool}` |
@@ -120,6 +121,19 @@ activo, mientras alguna seña pendiente no tenga `confirmed` (lo pone `confirm_g
 Con todo confirmado, la pausa y `build_sentence` forman la oración como siempre, solo con las señas confirmadas y en
 su orden; las confirmadas van **fijas** al LLM (sin candidatas, ver nota de contexto). La web deja de mandar cuadros
 mientras hay señas sin validar, así no se cuela otra seña; esta regla del servidor es la red de seguridad.
+
+Nota (aditiva, 2026-09-29, deletreo): en Interpretación el botón "Deletrear" (tecla D) de la web reconoce las letras
+del alfabeto manual **en el navegador**, con el mismo reconocedor de la pantalla Alfabeto (`useAlphabetRecognition`
+en modo libre: k-NN con las poses del cartel SEP y detección de movimiento para J, Ñ, Q, X y Z). Mientras deletrea,
+la web **no manda cuadros** (el segmentador del servidor no ve nada). La palabra termina al bajar las manos ~1 s o
+al apagar "Deletrear", y llega como `{"type":"add_word","word":"ANGEL","spelled":true}`: entra a `pending` como
+`{"gloss": "ANGEL", "top3": [], "confident": true, "confirmed": true, "spelled": true}` (ya validada) y el servidor
+responde `sign` con `spelled: true, confirmed: true`. `add_word` descarta el segmento activo (`Segmenter.interrupt`)
+y arma la pausa de oración desde cero. En la oración la posición deletreada va **fija** (`n) ANGEL (deletreo)` y
+`Deletreadas: ANGEL` al LLM, que la escribe como nombre propio con acento si es obvio y usa "soy …" / "me llamo …");
+la plantilla la capitaliza, Viterbi no la cambia y el contexto de bigramas la trata como `<NOMBRE>`. `remove_gloss`
+la quita como a cualquier seña. Fuera de Interpretación o con una palabra inválida responde `error`. El registro
+anota solo cuántas letras tuvo (nunca el texto).
 
 ## Estructura de archivos
 
