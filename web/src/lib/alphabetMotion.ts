@@ -36,10 +36,12 @@ export type MotionResult = {
  * gancho de la J o los tres trazos de la Z quedan con 1–2 cuadros por tramo, y la forma sería
  * interpolación, no medición.
  */
-export const MIN_ACTIVE_FRAMES = 10;
+export const MIN_ACTIVE_FRAMES = 7;
 /** Seguimiento en vivo: pose inicial sostenida, inicio, fin por quietud y duración máxima. */
-export const READY_HOLD_MS = 500, ONSET_PALMS = .15, STILL_MS = 450, STILL_PALMS = .12, MAX_MOVE_MS = 4000, RESULT_MS = 2500, PREROLL_FRAMES = 4;
-const SHAPE_ERROR = .18;
+export const READY_HOLD_MS = 300, ONSET_PALMS = .15, STILL_MS = 450, STILL_PALMS = .12, MAX_MOVE_MS = 4000, RESULT_MS = 2500, PREROLL_FRAMES = 4;
+/** Tolerancia de forma (RMS tras normalizar). La misma para el avance en vivo y el juicio final:
+ * si el medidor llegó a 100 %, el resultado no puede decir lo contrario. */
+export const SHAPE_ERROR = .32;
 
 const dist = (a: number[], b: number[]) => Math.hypot(a[0]-b[0], a[1]-b[1]);
 const length = (points: number[][]) => points.slice(1).reduce((s,p,i) => s+dist(p,points[i]),0);
@@ -139,16 +141,30 @@ function activeSpan(points: number[][], t: number[]): {frames: number; ms: numbe
   return {frames: b-a+1, ms: t[b]-t[a]};
 }
 
+/**
+ * X: ir y volver en CUALQUIER dirección (la plantilla horizontal fallaba si el movimiento iba en
+ * diagonal o hacia la cámara). Devuelve 0–1: 0.5 al alejarse lo suficiente, 1 al regresar.
+ */
+export const X_MIN_OUT = .4;
+function outAndBack(points: number[][]): number {
+  if (points.length < 3) return 0;
+  const d = points.map((p)=>dist(p, points[0]));
+  const far = Math.max(...d);
+  if (far < X_MIN_OUT) return 0;
+  const back = 1 - d.at(-1)!/far;               // 0 = sigue lejos, 1 = regresó al inicio
+  return Math.min(1, .5 + .5*Math.min(1, back/.6)); // regresar al 40 % de la distancia ya cuenta
+}
+
 /** Rule-specific evidence beyond the overall shape (kept from the original analyzer). */
 function ruleGates(letter: string, points: number[][], span: number, travelled: number): boolean {
-  if (span < .55 || span > 4 || travelled/span > 5) return false;
+  if (span < .4 || span > 5 || travelled/span > 6) return false;
   if (letter === "Ñ" || letter === "Q") {
     const a=points[0], b=points.at(-1)!, chord=dist(a,b);
     const bend=Math.max(...points.map((p)=>chord ? Math.abs((b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]))/chord : 0));
-    if (chord < span*.7 || bend/span < .12) return false;
+    if (chord < span*.4 || bend/span < .05) return false;
   }
-  if (letter === "X" && (dist(points[0],points.at(-1)!) > span*.25 || travelled/span < 1.7)) return false;
-  if (letter === "Z" && travelled/span < 2.6) return false;
+  if (letter === "X" && (dist(points[0],points.at(-1)!) > span*.5 || travelled/span < 1.3)) return false;
+  if (letter === "Z" && travelled/span < 1.8) return false;
   return true;
 }
 
@@ -211,7 +227,7 @@ export function analyzeMotionFor(frames: MotionFrame[], target: string, options:
   const problem = sequenceProblem(frames, r, options);
   if (problem) return problem;
   const supporting = frames.filter((f)=>frameStartOk(f, target));
-  if (supporting.length/frames.length < .6) {
+  if (supporting.length/frames.length < .45) {
     // Qué dedo se desvió: la corrección más frecuente en los cuadros que perdieron la pose.
     const counts = new Map<string, number>();
     for (const f of frames) if (!frameStartOk(f, target)) {
@@ -227,8 +243,13 @@ export function analyzeMotionFor(frames: MotionFrame[], target: string, options:
   const active = activeSpan(points, t);
   const out = {...r, travel: travelled, activeFrames: active.frames, activeMs: active.ms};
   if (span < .25) return withIssue(out, "no_motion");
-  if (span < .55) return withIssue(out, "too_small");
+  if (span < .4) return withIssue(out, "too_small");
   if (active.frames < MIN_ACTIVE_FRAMES) return withIssue(out, "too_fast");
+  if (target === "X") {
+    const x = outAndBack(points);
+    if (x >= .95) return {...withIssue(out, "ok"), prediction: [target, Math.max(CONF_THRESHOLD, supporting.length/frames.length)]};
+    return withIssue(out, "incomplete", x >= .5 ? "Regresa la mano al punto donde empezaste." : "Aleja más la mano antes de regresar.");
+  }
   const error = shapeError(points, rule.path);
   if (ruleGates(target, points, span, travelled) && error <= SHAPE_ERROR) {
     const poseScore = supporting.reduce((s,f)=>s+(f.pose?.[1] ?? CONF_THRESHOLD),0)/frames.length;
@@ -267,10 +288,15 @@ export function analyzeMotion(frames: MotionFrame[]): MotionResult {
   let tooFast = false;
   for (const rule of RULES) {
     const supporting = frames.filter((f)=>f.pose && rule.poses.includes(f.pose[0]) && f.pose[1]>=CONF_THRESHOLD);
-    if (supporting.length/frames.length < .6) continue;
+    if (supporting.length/frames.length < .45) continue;
     const {points, t} = normalizedPath(frames,rule.tip);
     const span = extent(points), travelled = length(points);
     result.travel = Math.max(result.travel, travelled);
+    if (rule.letter === "X") {
+      const active = activeSpan(points, t);
+      if (outAndBack(points) >= .95 && active.frames >= MIN_ACTIVE_FRAMES) candidates.push(["X", Math.max(CONF_THRESHOLD, supporting.reduce((s,f)=>s+f.pose![1],0)/frames.length)]);
+      continue;
+    }
     if (!ruleGates(rule.letter, points, span, travelled)) continue;
     const active = activeSpan(points, t);
     result.activeFrames = Math.max(result.activeFrames, active.frames);
@@ -309,6 +335,7 @@ export function trajectoryProgress(frames: MotionFrame[], target: string): numbe
   const rule = RULES.find((r)=>r.letter===target);
   if (!rule) return 0;
   const {points} = normalizedPath(frames, rule.tip);
+  if (target === "X") return outAndBack(points);
   if (extent(points) < .2) return 0;
   // La fracción del recorrido cuya forma se parece MÁS a lo hecho hasta ahora.
   let best = {f: 0, error: Infinity};
@@ -316,8 +343,11 @@ export function trajectoryProgress(frames: MotionFrame[], target: string): numbe
     const e = shapeError(points, prefix(rule.path, Math.min(f, 1)));
     if (e < best.error) best = {f: Math.min(f, 1), error: e};
   }
-  return best.error <= .25 ? best.f : 0;
+  return best.error <= SHAPE_ERROR ? best.f : 0;
 }
+
+export const DONE_GRACE_MS = 150;
+const KEEP_WHEN_DONE = new Set<MotionIssue>(["capture_short", "camera_pause", "hand_lost", "out_of_frame", "too_fast"]);
 
 export type LivePhase = "pose" | "ready" | "moving" | "result";
 export interface LiveMotionState {
@@ -344,10 +374,13 @@ export class LiveMotion {
   private since = 0;
   private lastT: number | null = null;
   private progress = 0;
+  /** Cuadros acumulados cuando el avance llegó al recorrido completo (se juzga hasta ahí). */
+  private doneAt: number | null = null;
+  private doneT: number | null = null;
   private result: MotionResult | null = null;
   private target: string;
   constructor(target: string) { this.target = target; }
-  reset() { this.phase = "pose"; this.readySince = null; this.buffer = []; this.frames = []; this.progress = 0; this.result = null; }
+  reset() { this.phase = "pose"; this.readySince = null; this.buffer = []; this.frames = []; this.progress = 0; this.doneAt = null; this.doneT = null; this.result = null; }
   private state(t: number): LiveMotionState {
     return {phase: this.phase, progress: this.progress, elapsed: this.phase === "moving" ? t-this.since : 0, result: this.result};
   }
@@ -375,7 +408,7 @@ export class LiveMotion {
       if (this.buffer.length >= 3 && Math.max(extent(normalizedPath(this.buffer, rule.tip).points), extent(normalizedPath(this.buffer, 0).points)) > ONSET_PALMS) {
         this.frames = this.buffer.slice(-PREROLL_FRAMES-1);
         this.buffer = [];
-        this.phase = "moving"; this.since = this.frames[0].t; this.progress = 0;
+        this.phase = "moving"; this.since = this.frames[0].t; this.progress = 0; this.doneAt = null; this.doneT = null;
       }
       return this.state(t);
     }
@@ -384,9 +417,22 @@ export class LiveMotion {
     const gap = t-(this.frames.at(-2)?.t ?? t);
     const missing = !frame.hand || gap > 250;
     const timedOut = t-this.since > MAX_MOVE_MS;
-    if (!missing) this.progress = Math.max(this.progress, trajectoryProgress(this.frames, this.target));
-    if (missing || timedOut || movementEnded(this.frames, rule.tip)) {
-      this.result = analyzeMotionFor(this.frames, this.target, {live: true, timedOut});
+    if (!missing) {
+      this.progress = Math.max(this.progress, trajectoryProgress(this.frames, this.target));
+      if (this.progress >= .95 && this.doneAt === null) { this.doneAt = this.frames.length; this.doneT = t; }
+    }
+    // Recorrido completo: se califica a los 150 ms, sin esperar a que la mano se quede quieta.
+    const finished = this.doneT !== null && t-this.doneT >= DONE_GRACE_MS;
+    if (missing || timedOut || finished || movementEnded(this.frames, rule.tip)) {
+      // Lo que la mano hace DESPUÉS de completar el recorrido (bajar, acomodarse) no cuenta.
+      const judged = this.doneAt !== null && !missing ? this.frames.slice(0, this.doneAt+3) : this.frames;
+      const r = analyzeMotionFor(judged, this.target, {live: true, timedOut: timedOut && this.doneAt === null});
+      // Si el avance en vivo llegó al recorrido completo (con la pose inicial ya verificada), el
+      // juicio final no puede contradecirlo por reglas que el medidor no muestra. Solo se mantienen
+      // los problemas de captura y "demasiado rápido para observarlo".
+      this.result = this.doneAt !== null && !missing && !KEEP_WHEN_DONE.has(r.issue)
+        ? {...r, issue: "ok", reason: MESSAGES.ok, prediction: [this.target, Math.max(CONF_THRESHOLD, this.progress)]}
+        : r;
       this.phase = "result"; this.since = t;
     }
     return this.state(t);

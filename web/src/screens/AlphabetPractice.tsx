@@ -35,6 +35,20 @@ function LetterReference({ letter }: { letter: string }) {
   );
 }
 
+/** Videos de una intérprete (SEBIEN · Indiscapacidad CDMX) para las letras con movimiento. */
+const TUTORIAL: Record<string, string> = { J: "j", K: "k", "Ñ": "nn", Q: "q", X: "x", Z: "z" };
+function LetterTutorial({ letter }: { letter: string }) {
+  return (
+    <figure className="ref">
+      <div className="ref__stage alfa-ref__stage">
+        <video key={letter} className="alfa-ref__video" src={`/alphabet/videos/${TUTORIAL[letter]}.mp4`}
+          controls autoPlay muted playsInline loop aria-label={`Video tutorial de la letra ${letter}`} />
+      </div>
+      <p className="sheet__hint">Video: SEBIEN · Indiscapacidad CDMX</p>
+    </figure>
+  );
+}
+
 type Tone = "ok" | "warn" | "bad";
 /** Tarjeta de evaluación bajo la referencia, con el estilo de ScoreCard (encabezado con ícono + puntos). */
 function EvaluationCard({ tone, title, items, children }: { tone?: Tone; title: string; items: ReactNode[]; children?: ReactNode }) {
@@ -116,6 +130,7 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
 
   const [cameraOn, setCameraOn] = useState(false);
   const [showRef, toggleRef] = useShowReference();
+  const [tutorial, setTutorial] = useState(false);
   const motion = target !== null && MOTION_LETTERS.has(target);
   const recognition = useAlphabetRecognition(target, mode, cameraOn && camera.ready && !vision.loading && !vision.error);
   const { detected, progress: holdProgress, complete, feedback, fingers, live } = recognition;
@@ -264,7 +279,7 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
                 <div className="alfa-letter-nav" role="group" aria-label="Cambiar de letra">
                   <button type="button" className="btn btn--secondary" onClick={prevLetter} disabled={letterIdx === 0}>← Anterior</button>
                   <span className="alfa-letter-nav__pos tabular" aria-live="polite">{letterIdx + 1} / {LETTERS.length}</span>
-                  <button type="button" className="btn btn--secondary" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1}>Siguiente →</button>
+                  <button type="button" className="btn btn--secondary" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1}>Saltar letra →</button>
                 </div>
               ) : null}
               {cameraOn ? <button type="button" className="btn btn--secondary alfa-camera-stop" onClick={() => setCameraOn(false)}>Detener cámara</button> : null}
@@ -278,16 +293,22 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
             <section className="sheet practice-ref" aria-labelledby="alfa-ejemplo" data-open={showRef}>
               <div className="practice-ref__head">
                 <h3 id="alfa-ejemplo" className="practice-ref__title">
-                  Ejemplo: <span translate="no">{target}</span>
+                  {tutorial && TUTORIAL[target] ? "Tutorial" : "Ejemplo"}: <span translate="no">{target}</span>
                   {mode === "sequential" ? <span className="tabular"> · {letterIdx + 1} / {LETTERS.length}</span> : null}
                 </h3>
+                {TUTORIAL[target] ? (
+                  <button type="button" className="btn btn--primary btn--small alfa-tutorial-btn" aria-pressed={tutorial}
+                    onClick={() => { if (!showRef) toggleRef(); setTutorial((v) => !v); }}>
+                    {tutorial ? "Ver foto" : "▶ Tutorial"}
+                  </button>
+                ) : null}
                 <button type="button" className="eye-toggle" onClick={toggleRef} aria-expanded={showRef} aria-controls="alfa-ejemplo-cuerpo"
                   aria-label={showRef ? "Ocultar ejemplo" : "Mostrar ejemplo"} title={showRef ? "Ocultar ejemplo" : "Mostrar ejemplo"}>
                   {showRef ? <IconEye /> : <IconEyeOff />}
                 </button>
               </div>
               <div id="alfa-ejemplo-cuerpo" hidden={!showRef}>
-                {showRef ? <LetterReference letter={target} /> : null}
+                {showRef ? (tutorial && TUTORIAL[target] ? <LetterTutorial letter={target} /> : <LetterReference letter={target} />) : null}
               </div>
             </section>
           ) : (

@@ -71,9 +71,9 @@ describe("movement feedback for a known target (30 fps synthetic sequences from 
     ["J correct", "J", () => capture("J",J,400,1900), "ok"],
     ["Z correct", "Z", () => capture("D",Z,400,1900), "ok"],
     ["J in 0.1 s", "J", () => capture("J",J,400,500), "too_fast"],
-    ["Z in 0.25 s", "Z", () => capture("D",Z,400,650), "too_fast"],
+    ["Z in 0.15 s", "Z", () => capture("D",Z,400,550), "too_fast"],
     ["J without the hook", "J", () => capture("J",J.slice(0,2),400,1900), "incomplete"],
-    ["J cut by the window", "J", () => capture("J",J,1500,3200), "cut_off"],
+    ["J cut by the window", "J", () => capture("J",J,2000,3700), "cut_off"],
     ["J reversed", "J", () => capture("J",[...J].reverse().map(p=>[p[0]+.55,p[1]-.7]),400,1900), "reversed"],
     ["no movement", "J", () => capture("J",[[0,0],[0,0]],400,1900), "no_motion"],
     ["hand lost 0.3 s", "J", () => capture("J",J,400,1900,{lost:[1000,1300]}), "hand_lost"],
@@ -139,6 +139,39 @@ describe("live tracking (no countdown, no fixed window)", () => {
     ["hand lost", {t1:2700, lost:[1900,2100] as [number,number]}, "hand_lost"],
   ] as [string, {t1:number; path?: number[][]; pause?: [number,number]; lost?: [number,number]}, string][])("%s", (_n, o, issue) => {
     expect(run("J",1200,o.t1,o).result?.issue).toBe(issue);
+  });
+  it("reaching 100 % counts: moving the hand afterwards does not turn it into a wrong direction", () => {
+    const after=[...J,[-.55,.7],[-.2,1.6],[.2,2.2]]; // J completa y luego la mano baja y se va de lado
+    const r=run("J",1200,3200,{path:after});
+    expect(r.result?.issue).toBe("ok");
+  });
+  it("if the live progress reached 100 %, a lost hand shape during the movement does not reject it", () => {
+    const live=new LiveMotion("J"), base=byLetter("J")[0]; let last=null as ReturnType<LiveMotion["push"]> | null;
+    for (let t=0;t<=4000 && last?.phase!=="result";t+=1000/30) {
+      const [dx,dy]=along(J,Math.max(0,Math.min(1,(t-1200)/1500)));
+      const h=base.map(p=>[p[0]*110+320+dx*110,p[1]*110+230+dy*110,p[2]*110]);
+      // Al girar la mano el clasificador deja de ver la pose (como pasa con la cámara real).
+      const lost = t>1500;
+      last=live.push({t,hand:h,pose:lost ? null : predictAlphabet(h).pose,out:false, startOk: lost ? false : undefined});
+    }
+    expect(last?.result?.issue).toBe("ok");
+  });
+  it("X counts in any direction (out and back) and answers as soon as it is complete", () => {
+    const hand=byLetter("X")[0];
+    for (const path of [[[0,0],[.7,0],[0,0]], [[0,0],[0,.7],[0,.05]], [[0,0],[.5,.5],[.05,.05]]]) {
+      const live=new LiveMotion("X"); let last=null as ReturnType<LiveMotion["push"]> | null, doneT=0;
+      for (let t=0;t<=4000 && last?.phase!=="result";t+=1000/30) {
+        const [dx,dy]=along(path,Math.max(0,Math.min(1,(t-1200)/1000)));
+        const h=hand.map(p=>[p[0]*110+320+dx*110,p[1]*110+230+dy*110,p[2]*110]);
+        last=live.push({t,hand:h,pose:predictAlphabet(h).pose,out:false,startOk:true}); doneT=t;
+      }
+      expect(last?.result?.issue).toBe("ok");
+      expect(doneT).toBeLessThan(2500); // el trazo termina a los 2200 ms: no esperó la quietud
+    }
+  });
+  it("X only going out (no return) is not approved", () => {
+    const f=Array.from({length:40},(_,i)=>{const h=byLetter("X")[0].map(p=>[p[0]*110+320+Math.min(1,i/20)*.8*110,p[1]*110+230,p[2]*110]);return {t:i*33,hand:h,pose:predictAlphabet(h).pose,startOk:true} as MotionFrame;});
+    expect(analyzeMotionFor(f,"X",{live:true}).issue).not.toBe("ok");
   });
   it("never leaves 'pose' with a wrong hand shape", () => {
     expect(run("A",1200,2700,{end:3000}).phases).toEqual(["pose"]);
