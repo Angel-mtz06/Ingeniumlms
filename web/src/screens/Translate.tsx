@@ -62,7 +62,7 @@ function HoldIndicator({ n, left }: { n: number; left: number | null }) {
   return (
     <div className="overlay-pill overlay-pill--hold" aria-hidden="true">
       <span>{n === 1 ? "Elige la palabra para seguir" : `Elige las ${n} palabras para seguir`}</span>
-      {left !== null ? <span className="spell-hint">Si no eliges, en {left} s queda la de mayor %</span> : null}
+      {left !== null ? <span className="spell-hint">Si no eliges, en {left} s queda la de mayor % · si haces otra seña, se descarta</span> : null}
     </div>
   );
 }
@@ -101,10 +101,8 @@ export function Translate() {
   const { session, translate, translateDispatch, topic, setTopic, validate, setValidate } = useApp();
   const v = validation(translate.chips);
   // "Validar cada seña": con señas sin validar no se mandan cuadros (no se cuela otra seña) ni corre la pausa.
-  // Si la persona ya empezó otra seña, la espera de esas señas se salta (`released`): se eligen solas.
-  const pend = pendingKeys(translate.chips);
-  const [released, setReleased] = useState<ReadonlySet<string>>(() => new Set());
-  const holding = validate && pend.some((p) => !released.has(p.key));
+  // Si la persona ya empezó otra seña sin elegir, esas señas se descartan (como si no se hubieran guardado).
+  const holding = validate && v.unvalidated > 0;
   const [voice, setVoice] = useState(readVoice);
   const [confirmClear, setConfirmClear] = useState(false);
   const clearBtn = useRef<HTMLButtonElement | null>(null);
@@ -150,8 +148,16 @@ export function Translate() {
   const holdSince = useRef<number | null>(null);
   const newSign = useRef(new NewSignDetector());
   const held = useRef<FramePayload[]>([]);
-  const pendRef = useRef(pend);
-  pendRef.current = pend;
+  const chipsRef = useRef(translate.chips);
+  chipsRef.current = translate.chips;
+  /** Quita las señas sin validar (de la última a la primera: así los índices siguen valiendo). */
+  const discardPending = () => {
+    const chips = chipsRef.current;
+    for (const p of pendingKeys(chips).reverse()) {
+      translateDispatch({ kind: "remove", index: p.index });
+      session.send({ type: "remove_gloss", index: serverIndex(chips, p.index) });
+    }
+  };
   useEffect(() => {
     holdSince.current = holding ? performance.now() : null;
     newSign.current.start(performance.now());
@@ -169,8 +175,9 @@ export function Translate() {
       held.current.push(f);
       held.current = held.current.filter((x) => t - (x.t ?? t) <= 900);
       if (newSign.current.push(t, f.hands)) {
+        // Ya empezó otra seña sin elegir: la anterior se descarta y la nueva llega completa al servidor.
         holdRef.current = false;
-        setReleased(new Set(pendRef.current.map((p) => p.key)));
+        discardPending();
         held.current.forEach((x) => session.send(x));
         held.current = [];
       }
@@ -263,13 +270,7 @@ export function Translate() {
   useEffect(() => {
     const pend = pendingKeys(translate.chips);
     const keys = new Set(pend.map((p) => p.key));
-    // Las saltadas que ya no esperan (validadas, quitadas) salen de la lista.
-    if ([...released].some((k) => !keys.has(k))) setReleased(new Set([...released].filter((k) => keys.has(k))));
     if (!validate || !pend.length) { arrivedAt.current.clear(); setAutoLeft(null); return; }
-    // Espera saltada y ya llegó la siguiente seña: esa se queda con la de mayor % en este momento.
-    const skipped = pend.find((p) => released.has(p.key)
-      && translate.chips.slice(p.index + 1).some((c) => !c.removed && !c.spelled));
-    if (skipped) { confirmRef.current(skipped.index, bestCandidate(translate.chips[skipped.index])); return; }
     const now = performance.now();
     for (const k of [...arrivedAt.current.keys()]) if (!keys.has(k)) arrivedAt.current.delete(k);
     for (const k of keys) if (!arrivedAt.current.has(k)) arrivedAt.current.set(k, now);
@@ -283,7 +284,7 @@ export function Translate() {
     const id = window.setInterval(tick, 250);
     tick();
     return () => window.clearInterval(id);
-  }, [translate.chips, validate, released]);
+  }, [translate.chips, validate]);
 
   const remove = (index: number) => {
     const at = serverIndex(translate.chips, index);
