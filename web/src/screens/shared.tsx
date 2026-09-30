@@ -230,7 +230,7 @@ export function GloveControls({ compact = false }: { compact?: boolean }) {
             {gloves.connecting ? "Conectando…" : connectedCount === 0 ? "Conectar guantes" : "Conectar otro guante"}
           </button>
         )}
-        {compact ? null : <p className="gloves__hint">Conecta cada guante por separado. Se identifica solo como derecho o izquierdo.</p>}
+        {compact ? null : <p className="gloves__hint">La app reconoce solo cuál es el derecho y cuál el izquierdo.</p>}
       </div>
       <ul className="gloves__list" hidden={connectedCount === 0}>
         {sides.map(({ side, label }) => {

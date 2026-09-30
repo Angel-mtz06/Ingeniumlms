@@ -2108,9 +2108,9 @@
   gap: var(--space-3);
 }
 
+/* Ícono de trazo como en las entradas de Inicio (usa .entry__icon). */
 .game-card__icon {
-  font-size: 2.5rem;
-  line-height: 1;
+  justify-self: start;
 }
 
 .game-card__actions,

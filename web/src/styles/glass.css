@@ -109,6 +109,33 @@ body::after {
   letter-spacing: -0.035em;
 }
 
+/* Logo (mano con ondas): reemplaza el texto "LSM"; su alt conserva el nombre para lectores de pantalla. */
+.brand {
+  align-items: center;
+}
+
+.brand__logo {
+  display: block;
+  width: auto;
+  height: 2.5rem;
+}
+
+@media (max-width: 767px) {
+  .brand__logo {
+    height: 2rem;
+  }
+}
+
+/* Nombre "SingLink" junto al logo: marca de texto, visible en todos los anchos (es corto). */
+.app-header .brand__name {
+  display: inline;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-heading);
+}
+
 .brand__name {
   letter-spacing: -0.005em;
 }
@@ -1511,5 +1538,85 @@ h4,
     max-width: 52px;
     opacity: 0.85;
     filter: var(--sticker-shadow);
+  }
+}
+
+/* ---------- Inicio y Juegos: ícono grande en recuadro suave y textos cortos ----------
+   El recuadro teñido del acento hace que el ícono se lea como "botón de app", no como adorno. */
+.entry,
+.game-card {
+  gap: var(--space-2);
+}
+
+.entry {
+  min-height: 0;
+}
+
+.entry__icon {
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--space-2);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.entry__text,
+.game-card .sheet__hint {
+  font-size: var(--text-md);
+}
+
+.game-card__actions {
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 767px) {
+  .entry__icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 17px;
+  }
+
+  .entry__icon .icon {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+/* ---------- Liquid Glass de las secciones (tarjetas) ----------
+   Solo tarjetas: botones y menú conservan su radio. Capas del vidrio, de arriba abajo: brillo diagonal
+   sobre el relleno translúcido; canto iluminado, bisel, resplandor interior, contorno y sombra. */
+.sheet,
+.sentence,
+.entry,
+.panel {
+  border-radius: var(--radius-card);
+  background: var(--glass-sheen), var(--glass-fill);
+  box-shadow: var(--glass-rim), var(--glass-highlight), var(--glass-caustic), 0 0 0 1px var(--glass-edge), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur-card);
+  backdrop-filter: var(--glass-blur-card);
+}
+
+.entry:hover {
+  background: var(--glass-sheen), var(--glass-fill-strong);
+  box-shadow: var(--glass-rim), var(--glass-highlight), var(--glass-caustic), 0 0 0 1px var(--glass-edge), var(--glass-shadow-float);
+}
+
+@media (max-width: 767px) {
+  .sheet,
+  .sentence,
+  .entry,
+  .panel {
+    border-radius: 18px;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sheet,
+  .sentence,
+  .entry,
+  .panel {
+    background: var(--glass-fill);
   }
 }
