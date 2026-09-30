@@ -2285,7 +2285,7 @@
 
 .race-lane__road {
   position: relative;
-  height: 2.6rem;
+  height: 3.2rem;
   border-radius: var(--radius-md);
   background:
     repeating-linear-gradient(90deg, transparent 0 18px, color-mix(in srgb, var(--color-text-muted) 35%, transparent) 18px 30px) center / 100% 2px no-repeat,
@@ -2300,11 +2300,33 @@
 .race-car {
   position: absolute;
   top: 50%;
-  font-size: 1.7rem;
-  line-height: 1;
-  /* El emoji mira a la izquierda: se voltea para que avance hacia la meta. */
-  transform: translate(-50%, -50%) scaleX(-1);
+  width: 3.4rem;
+  height: 3.4rem;
+  object-fit: contain;
+  /* Las imágenes ya miran a la derecha, hacia la meta. */
+  transform: translate(-50%, -50%);
   transition: left 300ms linear;
+  pointer-events: none;
+}
+
+/* Galope mientras corre: rebote y balanceo en lugar de un segundo cuadro del sprite. Cada carril
+   lleva un desfase para que no salten al mismo tiempo. */
+.race-car[data-running] {
+  animation: race-gallop 420ms ease-in-out infinite;
+}
+.race-lane:nth-child(2) .race-car { animation-delay: -110ms; }
+.race-lane:nth-child(3) .race-car { animation-delay: -220ms; }
+.race-lane:nth-child(4) .race-car { animation-delay: -330ms; }
+
+@keyframes race-gallop {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg) scale(1, 1); }
+  25% { transform: translate(-50%, -64%) rotate(-7deg) scale(1.03, 0.97); }
+  50% { transform: translate(-50%, -54%) rotate(0deg) scale(0.98, 1.03); }
+  75% { transform: translate(-50%, -46%) rotate(5deg) scale(1.02, 0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .race-car[data-running] { animation: none; }
 }
 
 .race-lane__goal {
@@ -2613,9 +2635,21 @@
 }
 
 @media (max-width: 640px) {
+  /* Teléfono: nombre y porcentaje arriba, la pista a todo lo ancho abajo. */
   .race-lane {
-    grid-template-columns: 5.5rem minmax(0, 1fr) 2.8rem;
-    gap: var(--space-2);
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name pct" "road road";
+    gap: 2px var(--space-2);
+  }
+  .race-lane__name { grid-area: name; }
+  .race-lane__pct { grid-area: pct; }
+  .race-lane__road {
+    grid-area: road;
+    height: 2.8rem;
+  }
+  .race-car {
+    width: 3rem;
+    height: 3rem;
   }
   .race-lane__name small {
     display: none;

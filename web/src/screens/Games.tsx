@@ -19,7 +19,7 @@ type Game = "menu" | "letras" | "senas" | "carrera" | "wordle-letras" | "wordle-
 
 /**
  * Juegos: "Completa la palabra" (con letras del alfabeto o con señas de palabras), "Carrera" (deletrear
- * un texto para que avance tu carro), "Wordle LSM" y "Simón dice" (ambos con letras o con señas). Las letras usan el mismo reconocedor que Alfabeto con la letra
+ * un texto para que avance tu leopardo), "Wordle LSM" y "Simón dice" (ambos con letras o con señas). Las letras usan el mismo reconocedor que Alfabeto con la letra
  * objetivo (el modo más preciso); las palabras, el servidor en modo Práctica (una seña por toma).
  */
 export default function Games() {
@@ -54,9 +54,9 @@ export default function Games() {
           </ul>
         </section>
         <section className="sheet game-card" aria-labelledby="juego-carrera">
-          <p className="game-card__icon" aria-hidden="true">🏎️</p>
+          <p className="game-card__icon" aria-hidden="true">🐆</p>
           <h3 id="juego-carrera" className="sheet__title">Carrera de letras</h3>
-          <p className="sheet__hint">Deletrea el texto lo más rápido que puedas: cada letra correcta hace avanzar tu carro. Compite contra tres rivales.</p>
+          <p className="sheet__hint">Deletrea el texto lo más rápido que puedas: cada letra correcta hace avanzar tu leopardo. Compite contra tres rivales.</p>
           <div className="game-card__actions">
             <button type="button" className="btn btn--primary" onClick={() => open("carrera")}>Jugar</button>
           </div>
@@ -273,7 +273,8 @@ function SignGame({ onBack }: { onBack(): void }) {
 
 /* ------------------------------ Carrera ------------------------------ */
 
-const CARS = ["🚗", "🚙", "🚕", "🚓"];
+/** Corredores: el leopardo es el jugador; los rivales usan el resto en orden de carril. */
+const RUNNERS = ["leopardo", "perro", "aguila", "tiburon"];
 const LEVEL_ICON: Record<RaceLevel, string> = { "fácil": "🐢", normal: "🐴", "difícil": "🐆", experto: "🚀" };
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 
@@ -335,7 +336,7 @@ function RaceGame({ onBack }: { onBack(): void }) {
 
   return (
     <div className="screen">
-      <GameHead title="Carrera de letras" lead="Deletrea el texto: cada letra correcta avanza tu carro. Gana quien llegue primero a la meta." onBack={onBack}
+      <GameHead title="Carrera de letras" lead="Deletrea el texto: cada letra correcta avanza tu leopardo. Gana quien llegue primero a la meta." onBack={onBack}
         right={phase === "racing" ? <span className="game-score tabular">⏱ {seconds(elapsed)}</span>
           : <span className="game-score">{LEVEL_ICON[level]} {cfg.label}</span>} />
 
@@ -367,7 +368,9 @@ function RaceGame({ onBack }: { onBack(): void }) {
             <div key={r.name} className="race-lane" data-you={r.you || undefined}>
               <span className="race-lane__name">{r.name}{r.you ? "" : <small> · {cfg.rivals[i - 1].lpm} l/min</small>}</span>
               <div className="race-lane__road">
-                <span className="race-car" style={{ left: `calc(1.2rem + (100% - 3rem) * ${r.progress.toFixed(4)})` }} aria-hidden="true">{CARS[i]}</span>
+                <img className="race-car" src={`/race/${RUNNERS[i]}.png`} alt="" draggable={false}
+                  data-running={(phase === "racing" && r.progress < 1) || undefined}
+                  style={{ left: `calc(1.7rem + (100% - 4rem) * ${r.progress.toFixed(4)})` }} />
                 <span className="race-lane__goal" aria-hidden="true">🏁</span>
               </div>
               <span className="race-lane__pct tabular">{Math.round(r.progress * 100)} %</span>

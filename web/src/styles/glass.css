@@ -1012,3 +1012,321 @@ h4,
 :focus-visible {
   outline-color: var(--color-accent);
 }
+
+/* ---------- Teléfono: barra de navegación inferior (App.tsx MobileNav) ----------
+   Bajo 768 px las 7 pestañas no caben arriba: el encabezado queda solo con la marca y la navegación
+   baja al pulgar. La zona segura (env) evita la barra de inicio del iPhone. */
+.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .app-header .tabs,
+  .brand__name {
+    display: none;
+  }
+
+  .app-header__inner {
+    padding-block: var(--space-3);
+  }
+
+  .app-main {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  .bottom-nav {
+    position: fixed;
+    inset: auto var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom));
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--space-1);
+    padding: var(--space-1);
+    border: 1px solid var(--glass-border);
+    border-radius: 22px;
+    background: var(--glass-fill-strong);
+    -webkit-backdrop-filter: var(--glass-blur-strong);
+    backdrop-filter: var(--glass-blur-strong);
+    box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-edge), var(--glass-shadow-float);
+  }
+
+  .bottom-nav__item {
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    min-height: 56px;
+    padding: var(--space-2) 0 6px;
+    border: 0;
+    border-radius: 18px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.1;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 200ms ease, color 200ms ease, transform 150ms ease;
+  }
+
+  .bottom-nav__item span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bottom-nav__item:active {
+    transform: scale(0.94);
+  }
+
+  .bottom-nav__item[aria-current="page"],
+  .bottom-nav__item[data-active],
+  .bottom-nav__item[aria-expanded="true"] {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    font-weight: 600;
+  }
+
+  .bottom-nav__item:focus-visible,
+  .bottom-nav__menu-item:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: -3px;
+  }
+
+  .bottom-nav__menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + var(--space-2));
+    display: grid;
+    min-width: 12rem;
+    padding: var(--space-1);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    background: var(--glass-fill-strong);
+    -webkit-backdrop-filter: var(--glass-blur-strong);
+    backdrop-filter: var(--glass-blur-strong);
+    box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-edge), var(--glass-shadow-float);
+  }
+
+  .bottom-nav__menu-item {
+    min-height: 48px;
+    padding: var(--space-2) var(--space-4);
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    text-align: left;
+  }
+
+  .bottom-nav__menu-item[aria-current="page"] {
+    background: var(--color-surface-2);
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .bottom-nav__item {
+    transition: none;
+  }
+}
+
+/* ---------- Teléfono: Práctica y Alfabeto dan prioridad al ejemplo y a las manos ----------
+   Arriba, lado a lado: el ejemplo (más ancho) y los dedos en vivo (manos apiladas). Debajo, la cámara.
+   Avisos y medidor de porcentaje más compactos para no tapar el video. */
+@media (max-width: 767px) {
+  /* iOS acerca la página al enfocar un campo con letra menor a 16 px. */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+
+  .practice-stage {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .practice-side {
+    order: -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .practice-side .sheet {
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .practice-ref .ref__stage,
+  .alfa-screen .practice-ref .ref__stage {
+    block-size: clamp(14rem, 42dvh, 20rem);
+  }
+
+  .practice-ref[data-open="true"] .practice-ref__head {
+    inset: calc(var(--space-2) + 6px) calc(var(--space-2) + 6px) auto;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .practice-ref .eye-toggle {
+    width: 30px;
+    height: 30px;
+  }
+
+  .alfa-tutorial-btn {
+    min-height: 30px;
+    padding: 2px var(--space-2);
+    font-size: var(--text-xs);
+  }
+
+  .practice-side .hands-panel {
+    align-content: start;
+  }
+
+  .practice-side .hands-panel .sheet__title {
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+
+  .practice-side .hands-panel__pair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .practice-side .hand {
+    gap: 2px;
+  }
+
+  .practice-side .hand__svg,
+  .alfa-screen .practice-side .hand__svg {
+    max-width: 88px;
+  }
+
+  .practice-side .hand__caption {
+    gap: 0;
+    font-size: 0.6875rem;
+    line-height: 1.25;
+  }
+
+  /* Avisos sobre el video */
+  .camera__slot {
+    inset: auto var(--space-2) var(--space-2) var(--space-2);
+  }
+
+  .camera__slot .overlay-pill,
+  .camera__slot .overlay-count {
+    padding: var(--space-1) var(--space-3);
+    border-radius: 16px;
+    font-size: var(--text-xs);
+    line-height: 1.3;
+  }
+
+  .camera__slot .overlay-pill .icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .camera__slot .overlay-count__n {
+    font-size: var(--text-lg);
+  }
+
+  .camera__fps {
+    padding: 2px var(--space-1);
+    font-size: 0.6875rem;
+  }
+
+  /* Medidor de porcentaje */
+  .gauge {
+    gap: var(--space-1);
+    padding: 2px var(--space-2) 2px 2px;
+  }
+
+  .gauge__ring {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .gauge__num {
+    font-size: var(--text-sm);
+  }
+
+  .gauge__pct {
+    font-size: 0.625rem;
+  }
+
+  .gauge__label,
+  .gauge[data-kind="idle"] .gauge__label,
+  .gauge[data-kind="guide"] .gauge__label {
+    font-size: var(--text-sm);
+  }
+
+  .gauge__detail {
+    font-size: 0.6875rem;
+  }
+
+  /* Avisos en la página y la sugerencia bajo la cámara */
+  .notice {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .notice .icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .practice-note {
+    font-size: var(--text-sm);
+  }
+}
+
+/* ---------- Teléfono: cámara más chica y cabecera delgada del Alfabeto ---------- */
+@media (max-width: 767px) {
+  /* La cámara cede espacio: 80 % del ancho, centrada (misma proporción, los puntos siguen alineados). */
+  .camera {
+    width: 80%;
+    justify-self: center;
+    margin-inline: auto;
+  }
+
+  /* Alfabeto: sin la guía; título y "Volver" en una fila y los modos en una fila de tres. */
+  .alfa-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .screen:has(> .alfa-head) {
+    gap: var(--space-2);
+  }
+
+  .alfa-head .screen__lead {
+    display: none;
+  }
+
+  .alfa-head .screen__title {
+    font-size: var(--text-md);
+  }
+
+  .alfa-head > .btn--change {
+    min-height: 32px;
+    padding: 2px var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  .alfa-head .alfa-mode-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+
+  .alfa-mode-row .btn {
+    min-height: 34px;
+    padding: 2px var(--space-2);
+    font-size: var(--text-xs);
+  }
+}

@@ -90,6 +90,19 @@
   --orb-4: rgb(255 234 140 / 0.35);               /* luz calida */
 }
 
+/* Teléfono: escala tipográfica un paso más chica (pantalla angosta, se lee de cerca). */
+@media (max-width: 767px) {
+  :root {
+    --text-xs: 0.75rem;     /* 12 */
+    --text-sm: 0.875rem;    /* 14 */
+    --text-md: 1rem;        /* 16 */
+    --text-lg: 1.0625rem;   /* 17 */
+    --text-xl: 1.25rem;     /* 20 */
+    --text-2xl: 1.5rem;     /* 24 */
+    --text-3xl: 1.875rem;   /* 30 */
+  }
+}
+
 /* Oscuro: Modal original, terminal de fosforo. (El diseño previo a las paletas está en el tag ui-antes-verde.) */
 @media (prefers-color-scheme: dark) {
   :root {

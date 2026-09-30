@@ -20,8 +20,10 @@ export function LetterReference({ letter }: { letter: string }) {
   );
 }
 
-/** Videos de una intérprete (SEBIEN · Indiscapacidad CDMX) para las letras con movimiento. */
-export const TUTORIAL: Record<string, string> = { J: "j", K: "k", "Ñ": "nn", Q: "q", X: "x", Z: "z" };
+/** Videos de una intérprete (SEBIEN · Indiscapacidad CDMX): uno por letra; la Ñ usa "nn" en el nombre de archivo. */
+export const TUTORIAL: Record<string, string> = Object.fromEntries(
+  [..."ABCDEFGHIJKLMNÑOPQRSTUVWXYZ"].map((l) => [l, l === "Ñ" ? "nn" : l.toLowerCase()]),
+);
 export function LetterTutorial({ letter }: { letter: string }) {
   return (
     <figure className="ref">
