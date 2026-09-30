@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import unicodedata
 from typing import Awaitable, Callable, Sequence
 
 from lsm.context import ContextModel, viterbi
@@ -53,6 +54,20 @@ TIME = {"AYER": "Ayer", "HOY": "Hoy", "MAÑANA": "Mañana", "AHORA": "Ahora", "A
 YO_VERBS = {"IR": "voy a ir a", "TENER": "tengo", "NECESITAR": "necesito", "QUERER": "quiero",
             "GUSTAR": "me gusta", "ESTAR": "estoy", "COMER": "como", "DORMIR": "duermo", "AYUDA": "necesito ayuda",
             "NO_ENTENDER": "no entiendo", "NO_PODER": "no puedo", "SENTIR": "siento"}
+# Las glosas se guardan sin acentos (lsm.vocab.canonical); en la oración van acentuadas (MAMA → mamá). La misma lista
+# que la web (web/src/lib/ui.ts, ACCENTED).
+_ACCENTED = """DÍA DÍAS MAMÁ PAPÁ BEBÉ CÓMO DÓNDE CUÁNTO QUÉ SÍ ÉL TÚ MÁS ADIÓS PERDÓN AHÍ PRÓXIMO TELÉFONO CORAZÓN
+   ESTÓMAGO INFECCIÓN PRESIÓN OPRESIÓN PALPITACIÓN VÓMITO CÁNCER DIFÍCIL POLICÍA EXPLOSIÓN QUÍMICOS OÍDO
+   CALIFICACIÓN LECCIÓN LÁPIZ AUTOBÚS CAMIÓN AVIÓN HELICÓPTERO MIÉRCOLES SÁBADO CAFETERÍA MÉXICO MICHOACÁN
+   LEÓN QUERÉTARO POTOSÍ YUCATÁN MECÁNICO PANTALÓN""".split()
+ACCENTED = {unicodedata.normalize("NFD", w).encode("ascii", "ignore").decode(): w for w in _ACCENTED}
+
+
+def word_of(gloss: str) -> str:
+    """Glosa → palabra en minúsculas y con acentos: "MAMA" → "mamá", "BUENOS_DIAS" → "buenos días"."""
+    return " ".join(ACCENTED.get(w, w) for w in gloss.split("_")).lower()
+
+
 Llm = Callable[[str, str], Awaitable[str]]
 log = logging.getLogger(__name__)
 
@@ -76,7 +91,7 @@ def template_sentence(glosses: list[str], spelled=()) -> str:
     verbs = [g for g in rest if has_yo and g in YO_VERBS]
     others = [g for g in rest if g not in verbs]
     words = [YO_VERBS[v] for v in verbs] + [o.capitalize() if o in spelled
-                                            else spelled_word(o) or o.lower().replace("_", " ") for o in others]
+                                            else spelled_word(o) or word_of(o) for o in others]
     if has_yo and not verbs:
         words = ["yo"] + words
     body = " ".join(words)

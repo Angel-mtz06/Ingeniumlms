@@ -11,6 +11,7 @@ from collections import deque
 import numpy as np
 
 from lsm.classifier.disambiguate import distinguish_hola_no
+from lsm.classifier.boost import sign_boost
 from lsm.classifier.infer import predict_focus
 from lsm.context import LOCK_P, MIN_P, START, ContextModel, rerank, token
 from lsm.context import context_weight as env_context_weight
@@ -137,6 +138,7 @@ class Session:
         self.ctx_weight = env_context_weight() if context_weight is None else max(0.0, float(context_weight))
         self.none_min = env_none_min()
         self.tta = env_tta()
+        self.boost = sign_boost()  # sensibilidad por seña (LSM_SIGN_BOOST)
         # LSM_CONTEXT_LLM=0: al formar la oración el LLM solo recibe la glosa mostrada (sin candidatas)
         self.llm_choose = os.environ.get("LSM_CONTEXT_LLM", "1").strip() != "0"
         # Tema de conversación (mensaje "topic"): sus glosas reciben log(boost) en el reordenamiento.
@@ -448,7 +450,7 @@ class Session:
         if not self.classifier:
             preds = []
         else:  # promedio de recortes del segmento (LSM_TTA=0 lo apaga); sin la mano de más si así sale más clara
-            preds, read = predict_focus(self.classifier, seq, k=TOP_K, tta=self.tta)
+            preds, read = predict_focus(self.classifier, seq, k=TOP_K, tta=self.tta, boost=self.boost)
             if self.mode != "practice":  # Práctica califica las manos que la referencia pide, tal como se vieron
                 seq = read
         top = [[g, round(float(p), 3)] for g, p in preds]
