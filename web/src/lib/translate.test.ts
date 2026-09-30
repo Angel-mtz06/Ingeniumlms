@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ServerMsg } from "./protocol";
-import { bestCandidate, lostMessage, newEvents, pausingFraction, pausingText, serverIndex, TRANSLATE_INITIAL, translateReducer, type TranslateState, validateKey, validation, validCorrected } from "./translate";
+import { bestCandidate, lostMessage, NEW_SIGN_GAP_MS, NewSignDetector, newEvents, pendingKeys, pausingFraction, pausingText, serverIndex, TRANSLATE_INITIAL, translateReducer, type TranslateState, validateKey, validation, validCorrected } from "./translate";
 
 const sign = (index: number, gloss: string, confident = true): ServerMsg => ({
   type: "sign",
@@ -268,6 +268,42 @@ describe("bestCandidate", () => {
   });
   it("sin candidatas se queda la glosa mostrada", () => {
     expect(bestCandidate({ gloss: "MARIO", top3: [] })).toBe("MARIO");
+  });
+});
+
+describe("NewSignDetector: saltar la espera de validación si ya empezó otra seña", () => {
+  // Una mano de 21 puntos con palma de ~80 px, centrada en (x, y).
+  const hand = (x: number, y: number) => Array.from({ length: 21 }, (_, j) => [x + (j % 5) * 6, y - Math.floor(j / 4) * 20, 0]);
+  const run = (at: (t: number) => number[][][], until = 2000) => {
+    const d = new NewSignDetector();
+    d.start(0);
+    for (let t = 0; t <= until; t += 67) if (d.push(t, at(t))) return t;
+    return null;
+  };
+  it("manos quietas (el final de la seña anterior) no cuentan", () => {
+    expect(run(() => [hand(300, 300)])).toBeNull();
+  });
+  it("sin manos (las bajó para elegir) no cuenta", () => {
+    expect(run(() => [])).toBeNull();
+  });
+  it("manos que se mueven después de la pausa: otra seña", () => {
+    const t = run((t) => [hand(300 + Math.max(0, t - 900) * 0.4, 300)]);
+    expect(t).not.toBeNull();
+    expect(t!).toBeGreaterThanOrEqual(NEW_SIGN_GAP_MS);
+  });
+  it("el movimiento justo al aparecer la seña (el final de la misma) no la salta", () => {
+    expect(run((t) => [hand(300 + Math.min(t, 500) * 0.4, 300)])).toBeNull();
+  });
+});
+
+describe("pendingKeys", () => {
+  it("solo las vivas sin validar, con su posición en el servidor", () => {
+    const k = pendingKeys([
+      { gloss: "HOLA", top3: [["HOLA", 0.9]], confident: true, confirmed: true },
+      { gloss: "NO", top3: [["NO", 0.5], ["SI", 0.3]], confident: false, removed: true },
+      { gloss: "SI", top3: [["SI", 0.6]], confident: false },
+    ]);
+    expect(k).toEqual([{ index: 2, key: "1|SI|SI" }]);
   });
 });
 

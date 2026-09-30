@@ -7,7 +7,8 @@ import { TopicPicker } from "../components/TopicPicker";
 import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
 import { freeGauge } from "../lib/alphabetView";
 import { SpellingTracker, type SpellEvent } from "../lib/spelling";
-import { bestCandidate, lostMessage, type Pausing, pausingFraction, pausingText, serverIndex, validation } from "../lib/translate";
+import { bestCandidate, lostMessage, NewSignDetector, type Pausing, pausingFraction, pausingText, pendingKeys, serverIndex, validation } from "../lib/translate";
+import type { FramePayload } from "../lib/protocol";
 import { LiveCamera } from "./LiveCamera";
 import { ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
@@ -100,7 +101,10 @@ export function Translate() {
   const { session, translate, translateDispatch, topic, setTopic, validate, setValidate } = useApp();
   const v = validation(translate.chips);
   // "Validar cada seña": con señas sin validar no se mandan cuadros (no se cuela otra seña) ni corre la pausa.
-  const holding = validate && v.unvalidated > 0;
+  // Si la persona ya empezó otra seña, la espera de esas señas se salta (`released`): se eligen solas.
+  const pend = pendingKeys(translate.chips);
+  const [released, setReleased] = useState<ReadonlySet<string>>(() => new Set());
+  const holding = validate && pend.some((p) => !released.has(p.key));
   const [voice, setVoice] = useState(readVoice);
   const [confirmClear, setConfirmClear] = useState(false);
   const clearBtn = useRef<HTMLButtonElement | null>(null);
@@ -144,12 +148,33 @@ export function Translate() {
   const alpha = useAlphabetRecognition(null, "free", true);
   const speller = useRef(new SpellingTracker());
   const holdSince = useRef<number | null>(null);
-  useEffect(() => { holdSince.current = holding ? performance.now() : null; }, [holding]);
+  const newSign = useRef(new NewSignDetector());
+  const held = useRef<FramePayload[]>([]);
+  const pendRef = useRef(pend);
+  pendRef.current = pend;
+  useEffect(() => {
+    holdSince.current = holding ? performance.now() : null;
+    newSign.current.start(performance.now());
+    held.current = [];
+  }, [holding]);
   const lettersOpen = () => !holdRef.current || holdSince.current === null || speller.current.active
     || performance.now() - holdSince.current < LETTER_GRACE_MS;
   useFrameSink((f) => {
     if (correcting.current) return;
     if (!holdRef.current) session.send(f);
+    else {
+      // Esperando la elección: se guardan los últimos cuadros por si la persona ya empezó otra seña; entonces
+      // la espera se salta y el servidor recibe también el inicio de esa seña (no se pierde).
+      const t = f.t ?? performance.now();
+      held.current.push(f);
+      held.current = held.current.filter((x) => t - (x.t ?? t) <= 900);
+      if (newSign.current.push(t, f.hands)) {
+        holdRef.current = false;
+        setReleased(new Set(pendRef.current.map((p) => p.key)));
+        held.current.forEach((x) => session.send(x));
+        held.current = [];
+      }
+    }
     if (lettersOpen()) alpha.onFrame(f);
   });
   const [letters, setLetters] = useState<string[]>([]);
@@ -236,24 +261,29 @@ export function Translate() {
   const arrivedAt = useRef(new Map<string, number>());
   const [autoLeft, setAutoLeft] = useState<number | null>(null);
   useEffect(() => {
-    const pend = translate.chips.map((c, i) => ({ c, i })).filter(({ c }) => !c.removed && !c.confirmed);
+    const pend = pendingKeys(translate.chips);
+    const keys = new Set(pend.map((p) => p.key));
+    // Las saltadas que ya no esperan (validadas, quitadas) salen de la lista.
+    if ([...released].some((k) => !keys.has(k))) setReleased(new Set([...released].filter((k) => keys.has(k))));
     if (!validate || !pend.length) { arrivedAt.current.clear(); setAutoLeft(null); return; }
-    const key = (c: (typeof pend)[number]["c"], i: number) => `${serverIndex(translate.chips, i)}|${c.gloss}|${c.top3.map((t) => t[0]).join(",")}`;
+    // Espera saltada y ya llegó la siguiente seña: esa se queda con la de mayor % en este momento.
+    const skipped = pend.find((p) => released.has(p.key)
+      && translate.chips.slice(p.index + 1).some((c) => !c.removed && !c.spelled));
+    if (skipped) { confirmRef.current(skipped.index, bestCandidate(translate.chips[skipped.index])); return; }
     const now = performance.now();
-    const keys = new Set(pend.map(({ c, i }) => key(c, i)));
     for (const k of [...arrivedAt.current.keys()]) if (!keys.has(k)) arrivedAt.current.delete(k);
     for (const k of keys) if (!arrivedAt.current.has(k)) arrivedAt.current.set(k, now);
-    const first = pend[0], firstKey = key(first.c, first.i);
+    const first = pend[0];
     const tick = () => {
       if (speller.current.active || correcting.current) { setAutoLeft(null); return; }
-      const left = (arrivedAt.current.get(firstKey) ?? performance.now()) + AUTO_PICK_MS - performance.now();
-      if (left <= 0) { window.clearInterval(id); confirmRef.current(first.i, bestCandidate(first.c)); return; }
+      const left = (arrivedAt.current.get(first.key) ?? performance.now()) + AUTO_PICK_MS - performance.now();
+      if (left <= 0) { window.clearInterval(id); confirmRef.current(first.index, bestCandidate(translate.chips[first.index])); return; }
       setAutoLeft(Math.ceil(left / 1000));
     };
     const id = window.setInterval(tick, 250);
     tick();
     return () => window.clearInterval(id);
-  }, [translate.chips, validate]);
+  }, [translate.chips, validate, released]);
 
   const remove = (index: number) => {
     const at = serverIndex(translate.chips, index);

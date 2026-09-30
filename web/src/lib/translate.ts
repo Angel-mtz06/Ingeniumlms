@@ -204,6 +204,44 @@ export function bestCandidate(chip: Pick<ChipItem, "gloss" | "top3">): string {
   return best ? best[0] : chip.gloss;
 }
 
+/** Clave estable de cada seña viva sin validar (posición en el servidor, glosa y candidatas), en orden. */
+export function pendingKeys(chips: readonly ChipItem[]): { index: number; key: string }[] {
+  return chips.flatMap((c, i) => c.removed || c.confirmed ? []
+    : [{ index: i, key: `${serverIndex(chips, i)}|${c.gloss}|${c.top3.map((t) => t[0]).join(",")}` }]);
+}
+
+/** Tras aparecer una seña sin validar: no se cuenta como otra seña lo que pase en este tiempo (el final de la misma). */
+export const NEW_SIGN_GAP_MS = 700;
+/** Ventana en la que las manos deben verse todo el tiempo y moverse al menos NEW_SIGN_TRAVEL palmas. */
+export const NEW_SIGN_WINDOW_MS = 400, NEW_SIGN_TRAVEL = 0.5;
+
+/**
+ * "Validar cada seña": mientras se espera la elección no se mandan cuadros al servidor. Si la persona ya empezó
+ * OTRA seña (manos a la vista y moviéndose), no hay que hacerla esperar: la espera se salta. Recibe las manos en
+ * píxeles (como van al servidor); con las manos abajo o quietas no se dispara.
+ */
+export class NewSignDetector {
+  private since = 0;
+  private hist: { t: number; pts: number[][]; palm: number }[] = [];
+  start(t: number) { this.since = t; this.hist = []; }
+  push(t: number, hands: number[][][]): boolean {
+    if (t - this.since < NEW_SIGN_GAP_MS) return false; // el final de la misma seña no cuenta
+    const valid = hands.filter((h) => h.length >= 21);
+    if (!valid.length) { this.hist = []; return false; }
+    const pts = valid.map((h) => [0, 1].map((a) => [0, 5, 9, 13, 17].reduce((s, j) => s + h[j][a], 0) / 5));
+    const palm = valid.reduce((s, h) => s + Math.hypot(h[9][0] - h[0][0], h[9][1] - h[0][1]), 0) / valid.length;
+    this.hist.push({ t, pts, palm: Math.max(palm, 1) });
+    this.hist = this.hist.filter((x) => t - x.t <= NEW_SIGN_WINDOW_MS);
+    if (this.hist.length < 4 || t - this.hist[0].t < NEW_SIGN_WINDOW_MS * 0.75) return false;
+    let travel = 0;
+    for (let i = 1; i < this.hist.length; i++) {
+      const a = this.hist[i - 1], b = this.hist[i];
+      travel += Math.max(...b.pts.map((p) => Math.min(...a.pts.map((q) => Math.hypot(p[0] - q[0], p[1] - q[1]))))) / b.palm;
+    }
+    return travel >= NEW_SIGN_TRAVEL;
+  }
+}
+
 /** Resumen de "Validar cada seña". */
 export function validation(chips: readonly ChipItem[]): Validation {
   const live = chips.filter((c) => !c.removed);
