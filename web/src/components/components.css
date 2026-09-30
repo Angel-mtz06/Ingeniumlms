@@ -1161,6 +1161,55 @@
   outline-offset: -3px;
 }
 
+/* Tema de la conversación (Interpretación): control segmentado con radios nativos ocultos. */
+.topic-picker {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.topic-picker__legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.topic-picker__options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-self: start;
+  max-width: 100%;
+}
+
+.topic-picker__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.topic-picker__item:has(input:checked) {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 700;
+  box-shadow: var(--shadow-1), inset 0 0 0 1px var(--color-border);
+}
+
+.topic-picker__item:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: -3px;
+}
+
+.topic-picker__hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 /* ---------- Movimiento reducido: fuera transiciones y el pulso de los esqueletos ---------- */
 @media (prefers-reduced-motion: reduce) {
   .btn,

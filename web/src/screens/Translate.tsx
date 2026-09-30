@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { GlossChips } from "../components/GlossChips";
 import { IconSpeaker, IconWarning } from "../components/icons";
 import { SentencePanel } from "../components/SentencePanel";
+import { TopicPicker } from "../components/TopicPicker";
 import { lostMessage, type Pausing, pausingFraction, pausingText } from "../lib/translate";
 import { LiveCamera } from "./LiveCamera";
 import { ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
@@ -51,7 +52,7 @@ function PauseIndicator({ pausing }: { pausing: Pausing }) {
  * oración nueva se lee en voz alta si el interruptor "Voz" está activo.
  */
 export function Translate() {
-  const { session, translate, translateDispatch } = useApp();
+  const { session, translate, translateDispatch, topic, setTopic } = useApp();
   const [voice, setVoice] = useState(readVoice);
   const [confirmClear, setConfirmClear] = useState(false);
   const clearBtn = useRef<HTMLButtonElement | null>(null);
@@ -162,6 +163,7 @@ export function Translate() {
           <h3 id="traduccion-senas" className="sheet__title" tabIndex={-1}>
             Señas reconocidas
           </h3>
+          <TopicPicker value={topic} onChange={setTopic} />
           <p className="sheet__hint">Toca una seña para cambiarla o quitarla. Las dudosas dicen “¿revisar?”.</p>
           {translate.chips.length > 0 ? (
             <p className="sheet__hint">Forma la oración antes de practicar o calibrar: al cambiar de modo, las señas sin oración se borran.</p>

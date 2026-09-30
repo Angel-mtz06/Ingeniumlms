@@ -1,4 +1,6 @@
 export type Mode = "practice" | "translate";
+/** Tema de la conversación en Interpretación: sus glosas reciben un empujón al reordenar las candidatas. */
+export type Topic = "todo" | "saludos" | "salud" | "emergencias";
 export type Glosses = [string, number][];
 
 export interface FramePayload {
@@ -20,7 +22,9 @@ export type ClientMsg =
   | { type: "confirm_gloss"; index: number; gloss: string }
   | { type: "remove_gloss"; index: number }
   | { type: "build_sentence" }
-  | { type: "reset" };
+  | { type: "reset" }
+  /** Preferencia de la conexión (sobrevive a hello y reset); el socket la reenvía tras `hello` al reconectar. */
+  | { type: "topic"; topic: Topic };
 
 export type Scores = { configuracion: number; ubicacion: number; movimiento: number; orientacion: number };
 
@@ -38,4 +42,5 @@ export type ServerMsg =
   /** Cuenta regresiva de la pausa de oración (cada ~0.5 s); `remaining: null` la cancela (subió las manos). */
   | { type: "pausing"; remaining: number; total: number }
   | { type: "pausing"; remaining: null; total?: number }
+  | { type: "topic"; topic: Topic }
   | { type: "error"; message: string };

@@ -581,9 +581,14 @@ body::after {
   transition: background-color 200ms ease, color 200ms ease, box-shadow 200ms ease, transform 160ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
 
-.segmented__item[aria-pressed="true"] {
+.segmented__item[aria-pressed="true"],
+.topic-picker__item:has(input:checked) {
   background: var(--glass-fill-strong);
   box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-border), var(--glass-shadow);
+}
+
+.topic-picker__item:active {
+  transform: scale(0.95);
 }
 
 .switch {
@@ -800,7 +805,8 @@ body::after {
   .option:active,
   .pick:active,
   .switch:active:not(:disabled),
-  .segmented__item:active:not(:disabled) {
+  .segmented__item:active:not(:disabled),
+  .topic-picker__item:active {
     transform: none;
   }
 }

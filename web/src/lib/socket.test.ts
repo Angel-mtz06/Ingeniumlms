@@ -74,6 +74,32 @@ describe("SessionSocket", () => {
     }
   });
 
+  it("el tema es persistente: se manda al abrir tras hello y se reenvía (solo el último) al reconectar", () => {
+    vi.useFakeTimers();
+    try {
+      const s = new SessionSocket("ws://x/ws", () => {}, { WebSocketImpl: FakeWS as unknown as typeof WebSocket, retryMs: 100 });
+      s.send({ type: "hello", mode: "translate", target: null });
+      s.send({ type: "topic", topic: "salud" });
+      s.send({ type: "topic", topic: "saludos" });
+      FakeWS.last.openNow();
+      expect(FakeWS.last.sent.map((x) => JSON.parse(x))).toEqual([
+        { type: "hello", mode: "translate", target: null },
+        { type: "topic", topic: "saludos" },
+      ]);
+      expect(s.send({ type: "topic", topic: "emergencias" })).toBe(true);
+      FakeWS.last.close();
+      vi.advanceTimersByTime(100);
+      FakeWS.last.openNow();
+      expect(FakeWS.last.sent.map((x) => JSON.parse(x))).toEqual([
+        { type: "hello", mode: "translate", target: null },
+        { type: "topic", topic: "emergencias" },
+      ]);
+      s.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("close cancela la reconexión", () => {
     vi.useFakeTimers();
     try {
