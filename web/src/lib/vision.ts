@@ -1,4 +1,5 @@
 import { FaceLandmarker, FilesetResolver, HandLandmarker, type NormalizedLandmark, PoseLandmarker } from "@mediapipe/tasks-vision";
+import { realHands } from "./body";
 import { buildFrame } from "./frame";
 import type { FramePayload } from "./protocol";
 
@@ -33,11 +34,13 @@ export async function createVision(base = "/mediapipe", delegate: Delegate = "GP
   return {
     detect(video, tsMs, gloves) {
       const h = hands.detectForVideo(video, tsMs);
-      lastHands = h.landmarks;
       if (n % 2 === 0) lastPose = pose.detectForVideo(video, tsMs).landmarks[0] ?? null;
       if (n % 3 === 0) lastFace = face.detectForVideo(video, tsMs).faceLandmarks[0] ?? null;
       n++;
-      return buildFrame({ w: video.videoWidth, h: video.videoHeight, hands: h.landmarks, pose: lastPose, face: lastFace, gloves, t: tsMs });
+      // Sin las "manos" que en realidad son la cara, el cuello o la ropa (no llegan al servidor ni al alfabeto).
+      const w = video.videoWidth, vh = video.videoHeight;
+      lastHands = realHands(h.landmarks, lastPose, lastFace, w, vh);
+      return buildFrame({ w, h: vh, hands: lastHands, pose: lastPose, face: lastFace, gloves, t: tsMs });
     },
     lastHands: () => lastHands,
     close() { hands.close(); pose.close(); face.close(); },
