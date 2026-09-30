@@ -11,7 +11,7 @@ from collections import deque
 import numpy as np
 
 from lsm.classifier.disambiguate import distinguish_hola_no
-from lsm.classifier.infer import predict_tta
+from lsm.classifier.infer import predict_focus
 from lsm.context import LOCK_P, MIN_P, START, ContextModel, rerank, token
 from lsm.context import context_weight as env_context_weight
 from lsm.evaluator.feedback import messages
@@ -447,8 +447,10 @@ class Session:
         # k=5: NINGUNA nunca se muestra como alternativa; quitándola quedan ≥4 para el contexto
         if not self.classifier:
             preds = []
-        else:  # promedio de recortes del segmento (LSM_TTA=0 lo apaga)
-            preds = predict_tta(self.classifier, seq, k=TOP_K) if self.tta else self.classifier.predict(seq, k=TOP_K)
+        else:  # promedio de recortes del segmento (LSM_TTA=0 lo apaga); sin la mano de más si así sale más clara
+            preds, read = predict_focus(self.classifier, seq, k=TOP_K, tta=self.tta)
+            if self.mode != "practice":  # Práctica califica las manos que la referencia pide, tal como se vieron
+                seq = read
         top = [[g, round(float(p), 3)] for g, p in preds]
         top = distinguish_hola_no(top, seq, self.references)
         self._last_top = top  # para el registro (incluye NINGUNA si salió)

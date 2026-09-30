@@ -7,11 +7,17 @@ import { TopicPicker } from "../components/TopicPicker";
 import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
 import { freeGauge } from "../lib/alphabetView";
 import { SpellingTracker, type SpellEvent } from "../lib/spelling";
-import { lostMessage, type Pausing, pausingFraction, pausingText, serverIndex, validation } from "../lib/translate";
+import { bestCandidate, lostMessage, NewSignDetector, type Pausing, pausingFraction, pausingText, pendingKeys, serverIndex, validation } from "../lib/translate";
+import type { FramePayload } from "../lib/protocol";
 import { LiveCamera } from "./LiveCamera";
 import { ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
 const VOICE_KEY = "lsm.voz";
+/** "Validar cada seña": si nadie elige, a los AUTO_PICK_MS se queda la candidata de mayor %. */
+const AUTO_PICK_MS = 5000;
+/** Una seña que era en realidad la 1a letra de un deletreo (p. ej. SÍ con la S): durante este tiempo tras
+ *  aparecer, las letras siguen leyéndose; si empieza el deletreo, el servidor la aparta. */
+const LETTER_GRACE_MS = 2500;
 
 function readVoice(): boolean {
   try {
@@ -52,10 +58,11 @@ function PauseIndicator({ pausing }: { pausing: Pausing }) {
 }
 
 /** Aviso sobre el video mientras hay señas sin validar: la app no manda cuadros hasta que se elija. */
-function HoldIndicator({ n }: { n: number }) {
+function HoldIndicator({ n, left }: { n: number; left: number | null }) {
   return (
     <div className="overlay-pill overlay-pill--hold" aria-hidden="true">
       <span>{n === 1 ? "Elige la palabra para seguir" : `Elige las ${n} palabras para seguir`}</span>
+      {left !== null ? <span className="spell-hint">Si no eliges, en {left} s queda la de mayor % · si haces otra seña, se descarta</span> : null}
     </div>
   );
 }
@@ -94,6 +101,7 @@ export function Translate() {
   const { session, translate, translateDispatch, topic, setTopic, validate, setValidate } = useApp();
   const v = validation(translate.chips);
   // "Validar cada seña": con señas sin validar no se mandan cuadros (no se cuela otra seña) ni corre la pausa.
+  // Si la persona ya empezó otra seña sin elegir, esas señas se descartan (como si no se hubieran guardado).
   const holding = validate && v.unvalidated > 0;
   const [voice, setVoice] = useState(readVoice);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -133,14 +141,49 @@ export function Translate() {
   const correcting = useRef(false);
   const holdRef = useRef(holding);
   holdRef.current = holding;
-  // Letras: siempre activas, junto con las palabras del servidor (salvo mientras se elige una seña).
+  // Letras: siempre activas, junto con las palabras del servidor. Mientras se elige una seña no se leen,
+  // salvo en los primeros LETTER_GRACE_MS (esa "seña" pudo ser la 1a letra) o si ya se está deletreando.
   const alpha = useAlphabetRecognition(null, "free", true);
-  useFrameSink((f) => {
-    if (correcting.current || holdRef.current) return;
-    session.send(f);
-    alpha.onFrame(f);
-  });
   const speller = useRef(new SpellingTracker());
+  const holdSince = useRef<number | null>(null);
+  const newSign = useRef(new NewSignDetector());
+  const held = useRef<FramePayload[]>([]);
+  const chipsRef = useRef(translate.chips);
+  chipsRef.current = translate.chips;
+  /** Quita las señas sin validar (de la última a la primera: así los índices siguen valiendo). */
+  const discardPending = () => {
+    const chips = chipsRef.current;
+    for (const p of pendingKeys(chips).reverse()) {
+      translateDispatch({ kind: "remove", index: p.index });
+      session.send({ type: "remove_gloss", index: serverIndex(chips, p.index) });
+    }
+  };
+  useEffect(() => {
+    holdSince.current = holding ? performance.now() : null;
+    newSign.current.start(performance.now());
+    held.current = [];
+  }, [holding]);
+  const lettersOpen = () => !holdRef.current || holdSince.current === null || speller.current.active
+    || performance.now() - holdSince.current < LETTER_GRACE_MS;
+  useFrameSink((f) => {
+    if (correcting.current) return;
+    if (!holdRef.current) session.send(f);
+    else {
+      // Esperando la elección: se guardan los últimos cuadros por si la persona ya empezó otra seña; entonces
+      // la espera se salta y el servidor recibe también el inicio de esa seña (no se pierde).
+      const t = f.t ?? performance.now();
+      held.current.push(f);
+      held.current = held.current.filter((x) => t - (x.t ?? t) <= 900);
+      if (newSign.current.push(t, f.hands)) {
+        // Ya empezó otra seña sin elegir: la anterior se descarta y la nueva llega completa al servidor.
+        holdRef.current = false;
+        discardPending();
+        held.current.forEach((x) => session.send(x));
+        held.current = [];
+      }
+    }
+    if (lettersOpen()) alpha.onFrame(f);
+  });
   const [letters, setLetters] = useState<string[]>([]);
   const [spelling, setSpelling] = useState(false);
   const sessionRef = useRef(session);
@@ -151,11 +194,12 @@ export function Translate() {
   const sendSpellRef = useRef(sendSpell);
   sendSpellRef.current = sendSpell;
   const liveLetter = useRef({ stable: null as string | null, busy: false });
-  // Mientras se elige una seña el reconocedor no recibe cuadros: su última letra no cuenta (el deletreo termina).
-  liveLetter.current = holding ? { stable: null, busy: false } : { stable: alpha.stable?.[0] ?? null, busy: alpha.phase === "capturing" };
+  liveLetter.current = { stable: alpha.stable?.[0] ?? null, busy: alpha.phase === "capturing" };
   useEffect(() => {
     const id = window.setInterval(() => {
-      speller.current.push(performance.now(), liveLetter.current.stable, liveLetter.current.busy).forEach((ev) => sendSpellRef.current(ev));
+      // Mientras se elige una seña (pasada la gracia) el reconocedor no recibe cuadros: su última letra no cuenta.
+      const l = lettersOpen() ? liveLetter.current : { stable: null, busy: false };
+      speller.current.push(performance.now(), l.stable, l.busy).forEach((ev) => sendSpellRef.current(ev));
       syncSpell();
     }, 100);
     return () => {
@@ -217,6 +261,31 @@ export function Translate() {
     session.send({ type: "confirm_gloss", index: at, gloss });
   };
 
+  // "Validar cada seña" sin elegir: a los AUTO_PICK_MS la seña pendiente más antigua se queda con la de mayor %
+  // (no mientras se deletrea ni con el panel de corrección abierto). Cada seña cuenta desde que apareció.
+  const confirmRef = useRef(confirm);
+  confirmRef.current = confirm;
+  const arrivedAt = useRef(new Map<string, number>());
+  const [autoLeft, setAutoLeft] = useState<number | null>(null);
+  useEffect(() => {
+    const pend = pendingKeys(translate.chips);
+    const keys = new Set(pend.map((p) => p.key));
+    if (!validate || !pend.length) { arrivedAt.current.clear(); setAutoLeft(null); return; }
+    const now = performance.now();
+    for (const k of [...arrivedAt.current.keys()]) if (!keys.has(k)) arrivedAt.current.delete(k);
+    for (const k of keys) if (!arrivedAt.current.has(k)) arrivedAt.current.set(k, now);
+    const first = pend[0];
+    const tick = () => {
+      if (speller.current.active || correcting.current) { setAutoLeft(null); return; }
+      const left = (arrivedAt.current.get(first.key) ?? performance.now()) + AUTO_PICK_MS - performance.now();
+      if (left <= 0) { window.clearInterval(id); confirmRef.current(first.index, bestCandidate(translate.chips[first.index])); return; }
+      setAutoLeft(Math.ceil(left / 1000));
+    };
+    const id = window.setInterval(tick, 250);
+    tick();
+    return () => window.clearInterval(id);
+  }, [translate.chips, validate]);
+
   const remove = (index: number) => {
     const at = serverIndex(translate.chips, index);
     if (at < 0) return;
@@ -265,7 +334,7 @@ export function Translate() {
             {spelling ? (
               <SpellIndicator word={word} />
             ) : holding ? (
-              <HoldIndicator n={v.unvalidated} />
+              <HoldIndicator n={v.unvalidated} left={autoLeft} />
             ) : translate.pausing ? (
               <PauseIndicator pausing={translate.pausing} />
             ) : null}

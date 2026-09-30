@@ -7,6 +7,7 @@ import {
   FREE_MOTION_LETTERS, FreeMotion, LiveMotion, motionBaseLetter, motionStartOk, RESULT_MS, StaticGate,
   type LiveMotionState, type MotionFrame, type MotionResult,
 } from "../lib/alphabetMotion";
+import { LetterHandPicker, sideOf } from "../lib/letterHand";
 import type { FramePayload } from "../lib/protocol";
 
 export type AlphabetMode = "sequential" | "specific" | "free";
@@ -21,9 +22,7 @@ const START_READY: Feedback = { correct: true, type: "ok", issue: "start_ready",
  */
 export function handSide(f: FramePayload): "derecha" | "izquierda" | null {
   const hand = f.hands.length === 1 ? f.hands[0] : null;
-  if (!hand) return null;
-  const cx = f.face?.[0]?.[0] ?? f.w / 2;
-  return hand[0][0] < cx ? "derecha" : "izquierda";
+  return hand ? sideOf(hand, f.face, f.w) : null;
 }
 
 const EMPTY = { pose: null, static: null, ranking: [] as Prediction[], shares: [] as number[], letterDistance: [] as number[] };
@@ -72,6 +71,8 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
   const freeMotion = useRef(new FreeMotion());
   const staticGate = useRef(new StaticGate());
   const tracker = useRef<LiveMotion | null>(null);
+  /** Con dos manos a la vista, cuál hace la letra (la otra abajo, sin forma, o la dominante). */
+  const picker = useRef(new LetterHandPicker());
   const state = useRef({phase:"idle" as MotionPhase, since:0, lastFrame:0, completed:false, hidden:false, failedAt:null as number | null});
   const dynamic = target !== null && MOTION_LETTERS.has(target);
 
@@ -81,6 +82,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
 
   const restart = useCallback(() => {
     hold.current.reset(); stabilizer.current.reset(); freeMotion.current.reset(); staticGate.current.reset(); monitor.current.reset(); messages.current.reset();
+    picker.current.reset();
     tracker.current = dynamic && mode !== "free" ? new LiveMotion(target!) : null;
     state.current.completed=false; state.current.lastFrame=0;
     setDetected(null); setRanking([]); setFeedback(null); setFingers([]); setSide(null); setTargetShare(0); setStable(null);
@@ -120,11 +122,14 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
     const s=state.current, now=performance.now(), t=f.t ?? now;
     s.lastFrame=now;
     // 1–3: mano presente, completa, de tamaño suficiente y estable. Solo después se analizan dedos.
-    const capture = monitor.current.push(t, f.hands, f.w, f.h);
-    const hand=f.hands.length===1 && alphabetFeatures(f.hands[0]) ? f.hands[0] : null;
-    const prediction=hand ? predictAlphabet(hand) : EMPTY;
+    // Con dos manos se elige la que hace la letra; con letra objetivo, la que más se parece a ella.
+    const want = target ? LETTERS_ORDER.indexOf(motionBaseLetter(target) ?? target) : -1;
+    const pick = picker.current.pick(f, t, want >= 0 ? (p) => p.shares[want] ?? 0 : undefined);
+    const capture = monitor.current.push(t, pick.hand ? [pick.hand] : f.hands, f.w, f.h);
+    const hand=pick.hand && alphabetFeatures(pick.hand) ? pick.hand : null;
+    const prediction=hand ? pick.prediction ?? predictAlphabet(hand) : EMPTY;
     setRanking(prediction.ranking);
-    setSide(handSide(f));
+    setSide(pick.side);
     const frame: MotionFrame={t,hand,pose:prediction.pose,out:hand ? outOfFrame(hand,f.w,f.h).out : false};
 
     if (tracker.current && target) {
