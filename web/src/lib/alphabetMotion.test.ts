@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeMotion, analyzeMotionFor, CAPTURE_MS, FREE_MOTION_LETTERS, FreeMotion, LiveMotion, motionBaseLetter, PREPARE_MS, significantMotion, startPoseOk, trajectoryProgress, type MotionFrame } from "./alphabetMotion";
+import { analyzeMotion, analyzeMotionFor, BASE_EXTRA_MS, CAPTURE_MS, FREE_MOTION_LETTERS, FreeMotion, HAND_GAP_MS, LiveMotion, MOTION_START_POSES, STATIC_EXTRA_MS, StaticGate, motionBaseLetter, PREPARE_MS, significantMotion, startPoseOk, trajectoryProgress, type MotionFrame } from "./alphabetMotion";
 import { MOTION_LETTERS, predictAlphabet } from "./alphabet";
 import { outOfFrame, targetMatches } from "./alphabetFeedback";
 import references from "../data/alphabet_references.json";
@@ -136,7 +136,7 @@ describe("live tracking (no countdown, no fixed window)", () => {
     ["too fast", {t1:1350}, "too_fast"],
     ["stops halfway (0.8 s pause)", {t1:3500, pause:[1900,2700] as [number,number]}, "incomplete"],
     ["no hook", {t1:2200, path:J.slice(0,2)}, "incomplete"],
-    ["hand lost", {t1:2700, lost:[1900,2100] as [number,number]}, "hand_lost"],
+    ["hand lost (0.6 s: no es un cuadro perdido)", {t1:2700, lost:[1900,2500] as [number,number]}, "hand_lost"],
   ] as [string, {t1:number; path?: number[][]; pause?: [number,number]; lost?: [number,number]}, string][])("%s", (_n, o, issue) => {
     expect(run("J",1200,o.t1,o).result?.issue).toBe(issue);
   });
@@ -255,5 +255,52 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
     expect(runFree("J", [[0,0],[0,0]], 1200, 2400).letter).toBeNull();
     expect(runFree("A", PATHS.Z, 1200, 2400).letter).toBeNull();
     expect(runFree("B", PATHS["Ñ"], 1200, 2400).letter).toBeNull();
+  });
+});
+
+describe("Libre: cuándo se da por hecha una letra estática (StaticGate)", () => {
+  const handOf = (s: number[]) => Array.from({length:21},(_,i)=>s.slice(i*3,i*3+3));
+  const byLetter = (l: string) => samples.samples.filter((_,i)=>samples.letters[samples.labels[i]]===l).map(handOf);
+  const at = (h: number[][], dx=0) => h.map(p=>[p[0]*100+300+dx*100,p[1]*100+220,p[2]*100]);
+  it("con la mano quieta sí; moviéndose no", () => {
+    const g=new StaticGate(), a=byLetter("A")[0];
+    let still=false;
+    for (let t=0;t<=600;t+=66) still=g.observe({t,hand:at(a),pose:null}).still;
+    expect(still).toBe(true);
+    for (let t=666;t<=1200;t+=66) still=g.observe({t,hand:at(a,(t-666)/300),pose:null}).still;
+    expect(still).toBe(false);
+  });
+  it("I, N y D esperan más que las demás (puede venir J, Ñ o Z)", () => {
+    expect(MOTION_START_POSES).toEqual(new Set(["I","N","D"]));
+    const g=new StaticGate();
+    expect(g.gate(0, ["A",.9])).toBeNull();
+    expect(g.gate(STATIC_EXTRA_MS, ["A",.9])?.[0]).toBe("A");
+    expect(g.gate(STATIC_EXTRA_MS+10, ["I",.9])).toBeNull();
+    expect(g.gate(STATIC_EXTRA_MS+10+STATIC_EXTRA_MS, ["I",.9])).toBeNull();
+    expect(g.gate(STATIC_EXTRA_MS+10+BASE_EXTRA_MS, ["I",.9])?.[0]).toBe("I");
+  });
+  it("perder la mano un instante no cuenta como que se fue", () => {
+    const g=new StaticGate(), a=byLetter("A")[0];
+    g.observe({t:0,hand:at(a),pose:null});
+    expect(g.observe({t:200,hand:null,pose:null}).present).toBe(true);
+    expect(g.observe({t:200+HAND_GAP_MS+100,hand:null,pose:null}).present).toBe(false);
+  });
+});
+
+describe("cámara real: MediaPipe pierde la mano un cuadro a media letra", () => {
+  const handOf = (s: number[]) => Array.from({length:21},(_,i)=>s.slice(i*3,i*3+3));
+  const byLetter = (l: string) => samples.samples.filter((_,i)=>samples.letters[samples.labels[i]]===l).map(handOf);
+  it("una J con 2 cuadros sin mano en medio sigue siendo J", () => {
+    const J=[[0,0],[0,.8],[-.1,1],[-.35,1.1],[-.55,.95],[-.55,.7]];
+    const seg=J.slice(1).map((p,i)=>Math.hypot(p[0]-J[i][0],p[1]-J[i][1])), tot=seg.reduce((a,b)=>a+b,0);
+    const along=(u:number)=>{let d=u*tot;for(let i=0;i<seg.length;i++){if(d<=seg[i]||i===seg.length-1){const r=Math.min(1,d/seg[i]);return [0,1].map(a=>J[i][a]+(J[i+1][a]-J[i][a])*r);}d-=seg[i];}return J.at(-1)!;};
+    const live=new LiveMotion("J"), hand=byLetter("J")[0]; let last=null as ReturnType<LiveMotion["push"]> | null;
+    for (let t=0;t<=4000 && last?.phase!=="result";t+=1000/15) {
+      const [dx,dy]=along(Math.max(0,Math.min(1,(t-1200)/800)));
+      const lost=t>1500 && t<1650;
+      const h=lost ? null : hand.map(p=>[p[0]*100+300+dx*100,p[1]*100+200+dy*100,p[2]*100]);
+      last=live.push({t,hand:h,pose:h?predictAlphabet(h).pose:null,out:false,startOk:!lost});
+    }
+    expect(last?.result?.issue).toBe("ok");
   });
 });

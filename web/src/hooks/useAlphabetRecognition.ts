@@ -4,7 +4,7 @@ import {
   CaptureMonitor, FeedbackStabilizer, fingerStates, outOfFrame, poseFeedback, targetMatches, type Feedback,
 } from "../lib/alphabetFeedback";
 import {
-  FREE_MOTION_LETTERS, FreeMotion, LiveMotion, motionBaseLetter, RESULT_MS, startPoseOk,
+  FREE_MOTION_LETTERS, FreeMotion, LiveMotion, motionBaseLetter, RESULT_MS, startPoseOk, StaticGate,
   type LiveMotionState, type MotionFrame, type MotionResult,
 } from "../lib/alphabetMotion";
 import type { FramePayload } from "../lib/protocol";
@@ -70,6 +70,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
   const monitor = useRef(new CaptureMonitor());
   const messages = useRef(new FeedbackStabilizer());
   const freeMotion = useRef(new FreeMotion());
+  const staticGate = useRef(new StaticGate());
   const tracker = useRef<LiveMotion | null>(null);
   const state = useRef({phase:"idle" as MotionPhase, since:0, lastFrame:0, completed:false, hidden:false, failedAt:null as number | null});
   const dynamic = target !== null && MOTION_LETTERS.has(target);
@@ -79,7 +80,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
   }, []);
 
   const restart = useCallback(() => {
-    hold.current.reset(); stabilizer.current.reset(); freeMotion.current.reset(); monitor.current.reset(); messages.current.reset();
+    hold.current.reset(); stabilizer.current.reset(); freeMotion.current.reset(); staticGate.current.reset(); monitor.current.reset(); messages.current.reset();
     tracker.current = dynamic && mode !== "free" ? new LiveMotion(target!) : null;
     state.current.completed=false; state.current.lastFrame=0;
     setDetected(null); setRanking([]); setFeedback(null); setFingers([]); setSide(null); setTargetShare(0); setStable(null);
@@ -105,7 +106,7 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
         if (!s.completed) { setProgress(0); setFeedback(null); }
       }
       if (s.phase === "result" && now-s.since > RESULT_MS) {
-        freeMotion.current.reset(); stabilizer.current.reset(); setStable(null); setMotionResult(null);
+        freeMotion.current.reset(); stabilizer.current.reset(); staticGate.current.reset(); setStable(null); setMotionResult(null);
         transition("idle",now);
       }
       // Libre: el aviso de un intento no aprobado se muestra RESULT_MS sin pausar el reconocimiento.
@@ -163,7 +164,11 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
       }
       if (motion.failed) { s.failedAt=now; setMotionResult(motion.failed); }
       if (motion.moving !== (s.phase === "capturing")) transition(motion.moving ? "capturing" : "idle", now);
-      const shown = stabilizer.current.push(t,prediction.static,hand!==null);
+      // Letra estática: solo con la mano quieta y sin una letra con movimiento en curso; I/N/D esperan
+      // un poco más por si viene su movimiento (StaticGate). Perder la mano un instante no la reinicia.
+      const { still, present } = staticGate.current.observe(frame);
+      const steady = stabilizer.current.push(t, still && motion.progress === 0 ? prediction.static : null, present);
+      const shown = staticGate.current.gate(t, steady);
       setStable(shown);
       // Libre: sin objetivo, los dedos se comparan con la letra que la app YA reconoció (verde = coincide).
       setFingers(hand && !capture && shown && !motion.moving ? fingerStates(hand, shown[0]) : []);

@@ -225,9 +225,11 @@ export interface MotionOptions { live?: boolean; timedOut?: boolean }
 
 function sequenceProblem(frames: MotionFrame[], r: MotionResult, o: MotionOptions = {}): MotionResult | null {
   if (o.live ? frames.length < 6 || (frames.length-1)*1000/Math.max(r.duration, 1) < 8 : frames.length < 12 || r.duration < 2200) return withIssue(r, "capture_short");
-  if (frames.some((f,i)=>i>0 && (f.t<=frames[i-1].t || f.t-frames[i-1].t>250))) return withIssue(r, "camera_pause");
+  // En vivo, los cuadros en que MediaPipe perdió la mano un momento (≤ HAND_GAP_MS) ya no llegan aquí.
+  const maxGap = o.live ? HAND_GAP_MS+100 : 250;
+  if (frames.some((f,i)=>i>0 && (f.t<=frames[i-1].t || f.t-frames[i-1].t>maxGap))) return withIssue(r, "camera_pause");
   if (frames.some((f)=>!f.hand)) return withIssue(r, "hand_lost");
-  if (frames.filter((f)=>f.out).length > frames.length*.1) return withIssue(r, "out_of_frame");
+  if (frames.filter((f)=>f.out).length > frames.length*(o.live ? .3 : .1)) return withIssue(r, "out_of_frame");
   return null;
 }
 
@@ -405,6 +407,11 @@ export function trajectoryProgress(frames: MotionFrame[], target: string): numbe
 }
 
 export const DONE_GRACE_MS = 150;
+/**
+ * En un movimiento rápido, a ~15 cuadros/s, MediaPipe pierde la mano uno o dos cuadros (desenfoque).
+ * Hasta HAND_GAP_MS sin mano el intento sigue (esos cuadros se ignoran); más tiempo = se perdió la mano.
+ */
+export const HAND_GAP_MS = 350;
 /** Estando "lista", cuánto puede perderse la pose inicial (un cuadro dudoso de MediaPipe) sin volver a empezar. */
 export const READY_LOST_MS = 600;
 const KEEP_WHEN_DONE = new Set<MotionIssue>(["capture_short", "camera_pause", "hand_lost", "out_of_frame", "too_fast"]);
@@ -429,6 +436,7 @@ export class LiveMotion {
   private phase: LivePhase = "pose";
   private readySince: number | null = null;
   private lastOk = 0;
+  private lastHand = 0;
   private buffer: MotionFrame[] = [];
   private frames: MotionFrame[] = [];
   private since = 0;
@@ -461,7 +469,9 @@ export class LiveMotion {
     }
     if (this.phase === "ready") {
       if (ok) this.lastOk = t;
-      else if (!frame.hand || t-this.lastOk > READY_LOST_MS) { this.reset(); return this.state(t); }
+      else if (t-this.lastOk > READY_LOST_MS) { this.reset(); return this.state(t); }
+      if (!frame.hand) return this.state(t); // un cuadro sin mano: se ignora (READY_LOST_MS decide)
+      this.lastHand = t;
       this.buffer.push(frame);
       this.buffer = this.buffer.filter((f)=>t-f.t <= 600);
       // Inicio: la punta o la muñeca se alejan del punto de reposo (primer cuadro del búfer).
@@ -473,9 +483,11 @@ export class LiveMotion {
       return this.state(t);
     }
     // moving
+    if (!frame.hand && t-this.lastHand <= HAND_GAP_MS) return this.state(t); // desenfoque de un momento
     this.frames.push(frame);
+    if (frame.hand) this.lastHand = t;
     const gap = t-(this.frames.at(-2)?.t ?? t);
-    const missing = !frame.hand || gap > 250;
+    const missing = !frame.hand || gap > HAND_GAP_MS+100;
     const timedOut = t-this.since > MAX_MOVE_MS;
     if (!missing) {
       this.progress = Math.max(this.progress, trajectoryProgress(this.frames, this.target));
@@ -553,6 +565,43 @@ export class FreeMotion {
     done.sort((a, b) => (score[b.prediction![0]] ?? 0)-(score[a.prediction![0]] ?? 0) || b.prediction![1]-a.prediction![1]);
     this.reset();
     return {moving: false, progress: 1, result: {...done[0], reason: MESSAGES.ok}, ready: [], failed: null};
+  }
+}
+
+/**
+ * Cuándo se da por hecha una letra ESTÁTICA en Libre e Interpretación (sin letra objetivo):
+ *  - solo con la mano quieta (STATIC_STILL_PALMS en los últimos STATIC_STILL_MS) y sin una letra con
+ *    movimiento en curso: al trazar una Z con la forma de D no se escribe una D a media Z;
+ *  - I, N y D (poses iniciales de J, Ñ y Z) esperan BASE_EXTRA_MS más, por si viene su movimiento;
+ *    las demás, STATIC_EXTRA_MS más que la estabilidad (StableLetter, 0.6 s);
+ *  - perder la mano menos de HAND_GAP_MS no reinicia la letra.
+ */
+export const STATIC_STILL_MS = 350, STATIC_STILL_PALMS = .15, STATIC_EXTRA_MS = 150, BASE_EXTRA_MS = 600;
+export const MOTION_START_POSES = new Set(RULES.filter((r)=>r.base !== r.letter).map((r)=>r.base));
+export class StaticGate {
+  private recent: MotionFrame[] = [];
+  private letter: string | null = null;
+  private since = 0;
+  private lastHand = -Infinity;
+  reset() { this.recent = []; this.letter = null; this.lastHand = -Infinity; }
+  /** ¿La mano está quieta? (llamar en cada cuadro, antes de `gate`). */
+  observe(frame: MotionFrame): {still: boolean; present: boolean} {
+    if (frame.hand) {
+      this.lastHand = frame.t;
+      this.recent.push(frame);
+      this.recent = this.recent.filter((f)=>frame.t-f.t <= STATIC_STILL_MS);
+    }
+    const present = !!frame.hand || frame.t-this.lastHand <= HAND_GAP_MS;
+    const still = this.recent.length >= 2 && frame.t-this.recent[0].t >= STATIC_STILL_MS*.6
+      && Math.max(extent(normalizedPath(this.recent, 8).points), extent(normalizedPath(this.recent, 0).points)) < STATIC_STILL_PALMS;
+    return {still, present};
+  }
+  /** La letra estable de StableLetter pasa solo después de su espera extra. */
+  gate(t: number, stable: Prediction | null): Prediction | null {
+    const l = stable?.[0] ?? null;
+    if (l !== this.letter) { this.letter = l; this.since = t; }
+    if (!stable) return null;
+    return t-this.since >= (MOTION_START_POSES.has(stable[0]) ? BASE_EXTRA_MS : STATIC_EXTRA_MS) ? stable : null;
   }
 }
 
