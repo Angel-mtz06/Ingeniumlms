@@ -560,18 +560,34 @@ export interface FreeMotionState {
  * se intentaba), y esa letra vuelve a esperar su pose de inmediato.
  */
 export const FREE_MOTION_LETTERS = RULES.map((r) => r.letter);
-/** La ida de una X se parece al arco de una Q: si la Q termina mientras la X ya fue y puede regresar,
- *  la Q espera hasta X_OVER_Q_MS; si la mano regresa, es X. */
+/** La ida de una X se parece al arco de una Q: si la Q termina mientras la X ya fue y puede regresar, y la mano
+ *  se parece más a la X, la Q espera hasta X_OVER_Q_MS; si la mano regresa sin detenerse, es X. */
 export const X_OVER_Q_MS = 800;
+/** Mientras la Q espera: si la mano se detiene este tiempo (más lento que Q_STOP_SPEED palmas/s), era Q. La X da la
+ *  vuelta sin detenerse; una Q termina, se detiene y quizá después regresa la mano a su lugar. */
+export const Q_STOP_MS = 200, Q_STOP_SPEED = 0.8;
 export class FreeMotion {
   private trackers = new Map(FREE_MOTION_LETTERS.map((l) => [l, new LiveMotion(l)]));
   /** Avance de cada letra en el cuadro anterior (el resultado ya no lo trae). */
   private progress = new Map<string, number>();
   /** Q terminada que espera a ver si en realidad era la ida de una X. */
   private heldQ: {result: MotionResult; until: number} | null = null;
+  /** Última vez que la punta del índice se movió (≥ Q_STOP_SPEED): para saber si la mano se detuvo. */
+  private moveT = 0;
+  private lastTip: {t: number; tip: number[]} | null = null;
   reset() { for (const t of this.trackers.values()) t.reset(); this.progress.clear(); this.heldQ = null; }
+  private track(frame: MotionFrame) {
+    const hand = frame.hand;
+    if (!hand) return;
+    const tip = hand[8], palm = Math.max(Math.hypot(hand[9][0]-hand[0][0], hand[9][1]-hand[0][1]), 1e-6);
+    const last = this.lastTip;
+    if (!last || frame.t <= last.t) this.moveT = frame.t;
+    else if (Math.hypot(tip[0]-last.tip[0], tip[1]-last.tip[1])/palm/((frame.t-last.t)/1000) >= Q_STOP_SPEED) this.moveT = frame.t;
+    this.lastTip = {t: frame.t, tip};
+  }
   /** `score`: desempate cuando dos letras terminan en el mismo cuadro (p. ej. Ñ y Q, mismo arco). */
   push(frame: MotionFrame, startOk: Record<string, boolean>, score: Record<string, number> = {}): FreeMotionState {
+    this.track(frame);
     const done: MotionResult[] = [], ready: string[] = [];
     let moving = false, progress = 0, failed: {result: MotionResult; progress: number} | null = null;
     for (const [letter, tracker] of this.trackers) {
@@ -600,12 +616,14 @@ export class FreeMotion {
     };
     if (this.heldQ) {
       if (x) return finish(x);
-      if (xGoing && frame.t < this.heldQ.until) return {moving: true, progress, result: null, ready, failed: null};
+      const stopped = frame.t-this.moveT >= Q_STOP_MS;
+      if (xGoing && !stopped && frame.t < this.heldQ.until) return {moving: true, progress, result: null, ready, failed: null};
       return finish(this.heldQ.result);
     }
     if (!done.length) return {moving, progress, result: null, ready, failed: failed?.result ?? null};
     done.sort((a, b) => (score[b.prediction![0]] ?? 0)-(score[a.prediction![0]] ?? 0) || b.prediction![1]-a.prediction![1]);
-    if (done[0].prediction![0] === "Q" && xGoing) {
+    // Solo si la mano se parece más a la X que a la Q: si no, una Q que después regresa a su lugar sería X.
+    if (done[0].prediction![0] === "Q" && xGoing && (score.X ?? 0) > (score.Q ?? 0) && frame.t-this.moveT < Q_STOP_MS) {
       this.heldQ = {result: done[0], until: frame.t + X_OVER_Q_MS};
       return {moving: true, progress, result: null, ready, failed: null};
     }
