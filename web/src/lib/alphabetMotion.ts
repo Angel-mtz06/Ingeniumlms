@@ -128,10 +128,13 @@ function normalizedPath(frames: MotionFrame[], tip: number): {points: number[][]
   // wrist here would erase the very trajectory we need to measure.
   const points = valid.map((f) => [0,1].map((axis)=>(f.hand![tip][axis]-origin[axis])/scale));
   // Median of three points suppresses landmark jitter without reversing time.
-  return {
-    points: points.map((p,i) => i===0 || i===points.length-1 ? p : [0,1].map((a)=>[points[i-1][a],p[a],points[i+1][a]].sort((x,y)=>x-y)[1])),
-    t: valid.map((f) => f.t),
-  };
+  const smooth = points.map((p,i) => i===0 || i===points.length-1 ? p : [0,1].map((a)=>[points[i-1][a],p[a],points[i+1][a]].sort((x,y)=>x-y)[1]));
+  // La mediana aplana el punto más lejano cuando el giro dura un solo cuadro (una X rápida o chica ya no
+  // "salía" lo suficiente y nunca se completaba): ese punto se conserva tal cual.
+  let far = 0;
+  points.forEach((p,i) => { if (Math.hypot(p[0],p[1]) > Math.hypot(points[far][0],points[far][1])) far = i; });
+  smooth[far] = points[far];
+  return { points: smooth, t: valid.map((f) => f.t) };
 }
 
 function extent(points: number[][]): number {
@@ -557,11 +560,16 @@ export interface FreeMotionState {
  * se intentaba), y esa letra vuelve a esperar su pose de inmediato.
  */
 export const FREE_MOTION_LETTERS = RULES.map((r) => r.letter);
+/** La ida de una X se parece al arco de una Q: si la Q termina mientras la X ya fue y puede regresar,
+ *  la Q espera hasta X_OVER_Q_MS; si la mano regresa, es X. */
+export const X_OVER_Q_MS = 800;
 export class FreeMotion {
   private trackers = new Map(FREE_MOTION_LETTERS.map((l) => [l, new LiveMotion(l)]));
   /** Avance de cada letra en el cuadro anterior (el resultado ya no lo trae). */
   private progress = new Map<string, number>();
-  reset() { for (const t of this.trackers.values()) t.reset(); this.progress.clear(); }
+  /** Q terminada que espera a ver si en realidad era la ida de una X. */
+  private heldQ: {result: MotionResult; until: number} | null = null;
+  reset() { for (const t of this.trackers.values()) t.reset(); this.progress.clear(); this.heldQ = null; }
   /** `score`: desempate cuando dos letras terminan en el mismo cuadro (p. ej. Ñ y Q, mismo arco). */
   push(frame: MotionFrame, startOk: Record<string, boolean>, score: Record<string, number> = {}): FreeMotionState {
     const done: MotionResult[] = [], ready: string[] = [];
@@ -584,10 +592,24 @@ export class FreeMotion {
         }
       }
     }
+    const xGoing = (this.progress.get("X") ?? 0) >= .45; // la X ya fue y puede regresar
+    const x = done.find((r) => r.prediction![0] === "X");
+    const finish = (r: MotionResult): FreeMotionState => {
+      this.reset();
+      return {moving: false, progress: 1, result: {...r, reason: MESSAGES.ok}, ready: [], failed: null};
+    };
+    if (this.heldQ) {
+      if (x) return finish(x);
+      if (xGoing && frame.t < this.heldQ.until) return {moving: true, progress, result: null, ready, failed: null};
+      return finish(this.heldQ.result);
+    }
     if (!done.length) return {moving, progress, result: null, ready, failed: failed?.result ?? null};
     done.sort((a, b) => (score[b.prediction![0]] ?? 0)-(score[a.prediction![0]] ?? 0) || b.prediction![1]-a.prediction![1]);
-    this.reset();
-    return {moving: false, progress: 1, result: {...done[0], reason: MESSAGES.ok}, ready: [], failed: null};
+    if (done[0].prediction![0] === "Q" && xGoing) {
+      this.heldQ = {result: done[0], until: frame.t + X_OVER_Q_MS};
+      return {moving: true, progress, result: null, ready, failed: null};
+    }
+    return finish(done[0]);
   }
 }
 

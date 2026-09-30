@@ -238,6 +238,26 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
     expect(r.letter).toBe(letter);
     expect(r.moving.some(Boolean)).toBe(true);
   });
+  it("la ida de una X (algo curva) no se vuelve Q: la Q espera a ver si la mano regresa", () => {
+    // Antes esta X salía Q en todas las manos: la ida curva completaba el arco de la Q.
+    const curved=[[0,0],[.35,.1],[.7,0],[.35,-.08],[0,0]];
+    const got=[0,3,6,9,12,15].map((k)=>runFree("X", curved, 1200, 1800, k, 15).letter);
+    expect(got).toEqual(["X","X","X","X","X","X"]);
+  });
+  it("una X chica y rápida se completa (el giro de un solo cuadro no se aplana)", () => {
+    // Ida y vuelta de 0.3 palmas en 13 cuadros: el punto más lejano dura un solo cuadro.
+    const h=byLetter("X")[0], frames: MotionFrame[]=[];
+    for (let k=0;k<=12;k++) {
+      const dx=(k<=6 ? k/6 : 2-k/6)*.3;
+      frames.push({t:k*67, hand:h.map(p=>[p[0]*85+320+dx*85,p[1]*85+220,p[2]*85]), pose:null, out:false});
+    }
+    expect(trajectoryProgress(frames, "X")).toBeGreaterThanOrEqual(.9);
+  });
+  it("la Q sigue saliendo Q aunque espere a la X", () => {
+    const got=[0,3,6,9,12,15].map((k)=>runFree("Q", [[0,0],[.25,.09],[.5,.12],[.75,.09],[1,0]], 1200, 2200, k, 15).letter);
+    expect(got.filter((l)=>l==="Q").length).toBeGreaterThanOrEqual(4);
+    expect(got.includes("X")).toBe(false);
+  });
   it("un movimiento corto (0.7 s) también cuenta: ya no exige 2.2 s de grabación", () => {
     expect(runFree("Ñ", PATHS["Ñ"], 1200, 1900).letter).toBe("Ñ");
   });
