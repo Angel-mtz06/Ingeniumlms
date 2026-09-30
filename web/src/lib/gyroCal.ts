@@ -34,11 +34,11 @@ export function gyroCalText(cal: GyroCal): string {
   switch (cal.phase) {
     case "idle": return "";
     case "waiting": return "Enviando…";
-    case "measuring": return "Midiendo: no muevas la mano.";
-    case "ok": return `Calibrado y guardado en el guante (variación ${cal.spread.toFixed(1)} °/s).`;
+    case "measuring": return "Midiendo: no muevas la pulsera.";
+    case "ok": return `Calibrado: la mesa es el cero de la inclinación (variación ${cal.spread.toFixed(1)} °/s).`;
     case "error": {
       const where = cal.imu !== null && IMU_NAMES[cal.imu] ? ` (${IMU_NAMES[cal.imu]})` : "";
-      if (cal.reason === "movimiento") return `Se movió un sensor${where}: apoya la mano y repite sin moverla.`;
+      if (cal.reason === "movimiento") return `Se movió un sensor${where}: deja la pulsera plana en la mesa y repite sin moverla.`;
       if (cal.reason === "no_responde") return `Un sensor no responde${where}: revisa su cable y repite.`;
       if (cal.reason === "sin_iniciar") return "El guante todavía espera el WiFi: sus sensores aún no arrancan.";
       if (cal.reason === "sin_respuesta") return "El guante no respondió: carga el firmware 1.1 o más nuevo.";

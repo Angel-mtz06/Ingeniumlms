@@ -6,15 +6,16 @@ type Side = "L" | "R";
 const SIDES: readonly Side[] = ["R", "L"];
 const SIDE_NAME: Record<Side, string> = { R: "derecha", L: "izquierda" };
 const REFRESH_MS = 100;
-/** Grados que llevan la burbuja al borde del nivel. */
-const FULL_TILT = 90;
-/** °/s a partir de los que la muñeca cuenta como en movimiento (el ruido quieto ronda 1–3 °/s tras calibrar). */
-const MOVING = 15;
-/** °/s que llenan la barra de velocidad. */
-const FULL_SPEED = 300;
+/**
+ * Sentido del eje en pantalla: 1 = gira como el giro lateral que manda la pulsera, -1 = al revés. Si en la cámara
+ * el eje se inclina hacia el lado contrario que la mano, se cambia aquí.
+ */
+const AXIS_SIGN = 1;
 
 export interface WristReading {
+  /** Inclinación (grados, 0 = plana sobre la mesa al calibrar). */
   pitch: number;
+  /** Giro lateral (grados, 0 = plana sobre la mesa al calibrar). */
   roll: number;
   /** Velocidad de giro total (°/s). */
   speed: number;
@@ -28,12 +29,17 @@ export function readWrist(line: string | null | undefined): WristReading | null 
   return { pitch: d.pitch[0], roll: d.roll[0], speed: Math.hypot(gx, gy, gz) };
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+/** "−12°" con signo menos tipográfico. */
+export function formatTilt(deg: number): string {
+  const n = Math.round(deg);
+  return `${n < 0 ? "−" : ""}${Math.abs(n)}°`;
+}
 
 /**
- * Nivel de la muñeca sobre la cámara, por cada pulsera con datos: burbuja (inclinación y giro lateral respecto a la
- * gravedad), los dos ángulos y la velocidad de giro. Los valores cambian 10 veces por segundo y se escriben directo
- * en el DOM; React solo re-renderiza cuando aparece o desaparece una pulsera.
+ * Eje de inclinación de la muñeca en la parte de abajo de la cámara, por cada pulsera con datos: una línea que gira
+ * con el giro lateral de la muñeca sobre una referencia horizontal (la mesa donde se calibró) y los grados. Los valores
+ * cambian 10 veces por segundo y se escriben directo en el DOM; React solo re-renderiza cuando aparece o desaparece
+ * una pulsera.
  */
 export function WristLevel({ read }: { read: () => FramePayload["gloves"] }) {
   const [present, setPresent] = useState<Record<Side, boolean>>({ L: false, R: false });
@@ -50,21 +56,11 @@ export function WristLevel({ read }: { read: () => FramePayload["gloves"] }) {
         next[side] = w !== null;
         const el = nodes.current[side];
         if (!w || !el) continue;
-        const x = clamp(w.roll / FULL_TILT, -1, 1);
-        const y = clamp(-w.pitch / FULL_TILT, -1, 1);
-        el.style.setProperty("--bubble-x", x.toFixed(3));
-        el.style.setProperty("--bubble-y", y.toFixed(3));
-        const moving = w.speed >= MOVING;
-        // Quieta: la barra desaparece (el ruido de 1–3 °/s no se dibuja).
-        el.style.setProperty("--speed", moving ? clamp(w.speed / FULL_SPEED, 0, 1).toFixed(3) : "0");
-        el.dataset.moving = String(moving);
-        const set = (k: string, text: string) => {
-          const n = el.querySelector(`[data-v="${k}"]`);
-          if (n && n.textContent !== text) n.textContent = text;
-        };
-        set("pitch", `${Math.round(w.pitch)}°`);
-        set("roll", `${Math.round(w.roll)}°`);
-        set("speed", w.speed >= MOVING ? `${Math.round(w.speed)} °/s` : "quieta");
+        const deg = Math.max(-90, Math.min(90, w.roll)) * AXIS_SIGN;
+        el.style.setProperty("--tilt", `${deg.toFixed(1)}deg`);
+        const label = el.querySelector("[data-v]");
+        const text = formatTilt(w.roll);
+        if (label && label.textContent !== text) label.textContent = text;
       }
       setPresent((p) => (p.L === next.L && p.R === next.R ? p : next));
     };
@@ -74,30 +70,19 @@ export function WristLevel({ read }: { read: () => FramePayload["gloves"] }) {
   }, []);
 
   if (!present.L && !present.R) return null;
+  const both = present.L && present.R;
   return (
-    <div className="wrist">
+    <div className="tilt">
       {SIDES.filter((s) => present[s]).map((side) => (
-        <div key={side} ref={(el) => { nodes.current[side] = el; }} className="wrist__card" role="group"
-          aria-label={`Nivel de la muñeca ${SIDE_NAME[side]}`}>
-          <p className="wrist__title">Muñeca {side === "R" ? "der." : "izq."}</p>
-          <span className="wrist__level" aria-hidden="true">
-            <span className="wrist__bubble" />
+        <div key={side} ref={(el) => { nodes.current[side] = el; }} className="tilt__item" role="group"
+          aria-label={`Inclinación de la muñeca ${SIDE_NAME[side]}`}>
+          <span className="tilt__axis" aria-hidden="true">
+            <span className="tilt__line" />
           </span>
-          <dl className="wrist__values">
-            <div>
-              <dt>Inclinación</dt>
-              <dd className="tabular" data-v="pitch">…</dd>
-            </div>
-            <div>
-              <dt>Giro</dt>
-              <dd className="tabular" data-v="roll">…</dd>
-            </div>
-            <div>
-              <dt>Velocidad</dt>
-              <dd className="tabular" data-v="speed">…</dd>
-            </div>
-          </dl>
-          <span className="wrist__speed" aria-hidden="true" />
+          <span className="tilt__value">
+            {both ? <span className="tilt__side">{side === "R" ? "Der." : "Izq."}</span> : null}
+            <span className="tabular" data-v>…</span>
+          </span>
         </div>
       ))}
     </div>

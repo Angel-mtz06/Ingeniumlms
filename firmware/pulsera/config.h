@@ -45,7 +45,7 @@ static const uint8_t CANAL_IMU[] = {2};
 // ---------- Envío ----------
 #define PERIODO_MS 20       // 50 lecturas por segundo
 #define SERIAL_BAUDIOS 921600
-#define FIRMWARE "1.3"
+#define FIRMWARE "1.4"
 
 // Filtro complementario: peso del giroscopio (0–1). Más alto = más suave, más bajo = responde más rápido.
 #define ALFA_GIRO 0.96f

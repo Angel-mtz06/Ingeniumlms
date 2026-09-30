@@ -1374,151 +1374,116 @@
   }
 }
 
-/* ---------- WristLevel (nivel de la muñeca de las pulseras, esquina inferior izquierda) ---------- */
+/* ---------- WristLevel (eje de inclinación de la muñeca, abajo al centro de la cámara) ---------- */
 .camera__gauge {
   position: absolute;
+  inset-inline: var(--space-3);
   inset-block-end: var(--space-3);
-  inset-inline-start: var(--space-3);
-  max-width: calc(100% - 2 * var(--space-3));
+  display: flex;
+  justify-content: center;
   pointer-events: none;
 }
 
-.wrist {
-  display: grid;
-  gap: var(--space-2);
+/* Los avisos suben para no quedar encima del eje. */
+.camera:has(.camera__gauge) .camera__slot {
+  inset-block-end: calc(var(--space-3) + 4.5rem);
 }
 
-.wrist__card {
-  --bubble-x: 0;
-  --bubble-y: 0;
-  --speed: 0;
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-template-areas:
-    "title title"
-    "level values"
-    "speed speed";
-  align-items: center;
-  column-gap: var(--space-3);
-  row-gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  box-shadow: var(--shadow-1);
-  font-size: var(--text-xs);
-}
-
-.wrist__title {
-  grid-area: title;
-  margin: 0;
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-/* Nivel de burbuja: el punto se aleja del centro según la inclinación y el giro lateral. */
-.wrist__level {
-  grid-area: level;
-  position: relative;
-  --level: 44px;
-  display: block;
-  inline-size: var(--level);
-  block-size: var(--level);
-  border-radius: 50%;
-  border: 1px solid var(--color-border);
-  background:
-    linear-gradient(var(--color-hairline), var(--color-hairline)) center / 1px 100% no-repeat,
-    linear-gradient(var(--color-hairline), var(--color-hairline)) center / 100% 1px no-repeat;
-}
-
-.wrist__bubble {
-  position: absolute;
-  inset: 50% auto auto 50%;
-  inline-size: 12px;
-  block-size: 12px;
-  margin: -6px 0 0 -6px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  box-shadow: 0 0 0 2px var(--color-accent-contrast);
-  --travel: calc(var(--level) / 2 - 8px);
-  transform: translate(calc(var(--bubble-x) * var(--travel)), calc(var(--bubble-y) * var(--travel)));
-}
-
-.wrist__values {
-  grid-area: values;
-  display: grid;
-  gap: 2px;
-  margin: 0;
-}
-
-.wrist__values div {
+.tilt {
   display: flex;
-  justify-content: space-between;
   gap: var(--space-3);
 }
 
-.wrist__values dt {
+.tilt__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-1);
+}
+
+/* Referencia horizontal (la mesa donde se calibró) y encima el eje que gira con la muñeca. */
+.tilt__axis {
+  position: relative;
+  display: block;
+  inline-size: 7rem;
+  block-size: 2.25rem;
+  background: linear-gradient(var(--color-hairline), var(--color-hairline)) center / 100% 1px no-repeat;
+}
+
+.tilt__line {
+  position: absolute;
+  inset: 50% 0 auto;
+  block-size: 4px;
+  margin-block-start: -2px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent-contrast);
+  transform: rotate(var(--tilt, 0deg));
+}
+
+/* Punto de giro al centro del eje. */
+.tilt__line::after {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  inline-size: 10px;
+  block-size: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-contrast);
+}
+
+.tilt__value {
+  display: grid;
+  justify-items: end;
+  min-inline-size: 3.5ch;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.tilt__side {
+  font-size: var(--text-xs);
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
-.wrist__values dd {
-  margin: 0;
-  font-weight: 600;
-}
-
-.wrist__card[data-moving="true"] [data-v="speed"] {
-  color: var(--color-accent);
-}
-
-/* Velocidad de giro: barra que crece desde la izquierda (sin carril de fondo). */
-.wrist__speed {
-  grid-area: speed;
-  display: block;
-  block-size: 3px;
-  border-radius: 2px;
-  background: var(--color-accent);
-  transform-origin: left center;
-  transform: scaleX(var(--speed));
-}
-
 @media (prefers-reduced-motion: no-preference) {
-  .wrist__bubble,
-  .wrist__speed {
+  .tilt__line {
     transition: transform 100ms linear;
   }
 }
 
 @media (max-width: 767px) {
   .camera__gauge {
+    inset-inline: var(--space-2);
     inset-block-end: var(--space-2);
-    inset-inline-start: var(--space-2);
   }
 
-  /* En el teléfono solo el nivel y la barra: las fichas van una junto a otra y no tapan la cámara. */
-  .wrist {
-    grid-auto-flow: column;
-    justify-content: start;
+  .camera:has(.camera__gauge) .camera__slot {
+    inset-block-end: calc(var(--space-2) + 3.75rem);
   }
 
-  .wrist__card {
-    grid-template-columns: auto;
-    grid-template-areas:
-      "title"
-      "level"
-      "speed";
-    justify-items: center;
-    padding: var(--space-1) var(--space-2);
+  .tilt {
+    gap: var(--space-2);
   }
 
-  .wrist__values {
-    display: none;
+  .tilt__item {
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
   }
 
-  .wrist__level {
-    --level: 36px;
+  .tilt__axis {
+    inline-size: 3.5rem;
+    block-size: 1.75rem;
   }
 
-  .wrist__speed {
-    justify-self: stretch;
+  .tilt__value {
+    font-size: var(--text-md);
   }
 }

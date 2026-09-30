@@ -14,6 +14,9 @@
 // CAL,<L|R>,error,<movimiento|no_responde>,<imu>. Al encender se mide de nuevo solo si la mano está quieta;
 // si no, se usa el sesgo guardado.
 //
+// CAL se hace con la pulsera plana sobre una mesa: además del sesgo, esa postura queda como el cero de la
+// inclinación y del giro lateral (también se guarda). Los ángulos que se envían son relativos a ese cero.
+//
 // Modo de prueba: el comando PRUEBA (monitor serie) activa/desactiva un resumen legible cada 0.5 s (Hz, WiFi,
 // clientes, estado, ángulos y giro de cada IMU). Mientras está activo no se
 // imprimen las líneas D por USB (por WiFi se siguen mandando). Los cambios de WiFi se avisan siempre con #.
@@ -51,6 +54,7 @@ struct Imu {
   float p = 0, r = 0;        // inclinación y giro filtrados (grados)
   float gx = 0, gy = 0, gz = 0;        // °/s sin sesgo
   float bx = 0, by = 0, bz = 0;        // sesgo del giroscopio (se mide al iniciar)
+  float p0 = 0, r0 = 0;      // cero: la postura plana sobre la mesa al calibrar (CAL)
   uint32_t ultimoIntento = 0;
 };
 
@@ -124,6 +128,7 @@ bool iniciarImu(int i) {
   if (sd <= CAL_MAX_STD || !sesgoGuardado(i, m)) {  // quieta (o sin nada guardado): sesgo medido ahora
     m.bx = sx / n; m.by = sy / n; m.bz = sz / n;
   }
+  ceroGuardado(i, m);
   if (!leerCrudo(ax, ay, az, gx, gy, gz)) return false;
   m.p = atan2f(-ax, az) * RAD_A_GRADOS;
   m.r = atan2f(ay, sqrtf(ax * ax + az * az)) * RAD_A_GRADOS;
@@ -152,6 +157,22 @@ bool sesgoGuardado(int i, Imu& m) {
   return true;
 }
 
+// Clave "z<i>": 2 floats (inclinación y giro lateral en grados) de la postura plana sobre la mesa.
+bool ceroGuardado(int i, Imu& m) {
+  char clave[3] = {'z', char('0' + i), 0};
+  float z[2];
+  if (memoria.getBytesLength(clave) != sizeof(z)) return false;
+  memoria.getBytes(clave, z, sizeof(z));
+  m.p0 = z[0]; m.r0 = z[1];
+  return true;
+}
+
+void guardarCero(int i, const Imu& m) {
+  char clave[3] = {'z', char('0' + i), 0};
+  float z[2] = {m.p0, m.r0};
+  memoria.putBytes(clave, z, sizeof(z));
+}
+
 void guardarSesgo(int i, const Imu& m) {
   char clave[3] = {'b', char('0' + i), 0};
   float b[3] = {m.bx, m.by, m.bz};
@@ -172,7 +193,7 @@ void calibrarGiroscopios() {
     return;
   }
   responder(pre + "midiendo," + CAL_MS);
-  double s[N_IMU][3] = {}, q[N_IMU][3] = {};
+  double s[N_IMU][3] = {}, q[N_IMU][3] = {}, a[N_IMU][3] = {};
   int n[N_IMU] = {};
   uint32_t t0 = millis();
   while (millis() - t0 < (uint32_t)CAL_MS) {
@@ -180,6 +201,7 @@ void calibrarGiroscopios() {
       float ax, ay, az, g[3];
       if (!seleccionarCanal(CANAL_IMU[i]) || !leerCrudo(ax, ay, az, g[0], g[1], g[2])) continue;
       for (int k = 0; k < 3; k++) { s[i][k] += g[k]; q[i][k] += (double)g[k] * g[k]; }
+      a[i][0] += ax; a[i][1] += ay; a[i][2] += az;
       n[i]++;
     }
     ws.loop();
@@ -199,6 +221,11 @@ void calibrarGiroscopios() {
     Imu& m = imus[i];
     m.bx = s[i][0] / n[i]; m.by = s[i][1] / n[i]; m.bz = s[i][2] / n[i];
     guardarSesgo(i, m);
+    // Postura de la mesa = cero de los ángulos (gravedad media durante la medición).
+    float ax = a[i][0] / n[i], ay = a[i][1] / n[i], az = a[i][2] / n[i];
+    m.p0 = atan2f(-ax, az) * RAD_A_GRADOS;
+    m.r0 = atan2f(ay, sqrtf(ax * ax + az * az)) * RAD_A_GRADOS;
+    guardarCero(i, m);
     iniciarDesdeAcelerometro(i);  // reinicia el filtro con el sesgo nuevo
   }
   responder(pre + "ok," + String(peor, 2));
@@ -209,6 +236,10 @@ float envolver(float a) {   // a −180…180
   while (a < -180.0f) a += 360.0f;
   return a;
 }
+
+// Ángulos que se envían: relativos a la postura plana de la mesa (CAL).
+float inclinacion(const Imu& m) { return envolver(m.p - m.p0); }
+float giroLateral(const Imu& m) { return m.r - m.r0; }
 
 // Filtro complementario: giroscopio a corto plazo + acelerómetro a largo plazo.
 void actualizarImu(int i, float dt) {
@@ -240,7 +271,7 @@ String lineaId() {
 int lineaDatos(char* buf, size_t n) {
   int k = snprintf(buf, n, "D,%c,%lu,%lu", LADO, (unsigned long)seq, (unsigned long)millis());
   for (int i = 0; i < IMU_PROTOCOLO; i++) {
-    if (i < N_IMU) k += snprintf(buf + k, n - k, ",%.1f,%.1f", imus[i].p, imus[i].r);
+    if (i < N_IMU) k += snprintf(buf + k, n - k, ",%.1f,%.1f", inclinacion(imus[i]), giroLateral(imus[i]));
     else k += snprintf(buf + k, n - k, ",0.0,0.0");  // dedo sin sensor (bit de status apagado)
   }
   uint8_t status = 0;
@@ -329,7 +360,7 @@ void imprimirPrueba() {
     }
     if (i == 0) {
       Serial.printf("#  %s %s  ok   inclinacion=%7.1f  giro lateral=%7.1f  vel=%6.1f %6.1f %6.1f\n", NOMBRES_IMU[i],
-                    textoCanal(i).c_str(), m.p, m.r, m.gx, m.gy, m.gz);
+                    textoCanal(i).c_str(), inclinacion(m), giroLateral(m), m.gx, m.gy, m.gz);
     } else {
       float flex = imus[0].ok ? envolver(m.p - imus[0].p) : NAN;
       Serial.printf("#  %s %s  ok   p=%7.1f  r=%7.1f  flexion=%7.1f\n", NOMBRES_IMU[i], textoCanal(i).c_str(), m.p, m.r, flex);

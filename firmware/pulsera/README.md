@@ -38,8 +38,8 @@ Las líneas que empiezan con `#` son mensajes de estado (IMU que responden, camb
 
 | Comando | Qué hace |
 |---|---|
-| `ID?` | Responde la identificación de la pulsera (`ID,R,fw=1.3,imus=1,…`). |
-| `CAL` | Calibra el giroscopio: mano apoyada y quieta 2 s. Responde `CAL,R,ok,…` o `CAL,R,error,movimiento,0`. Se guarda en el ESP32. |
+| `ID?` | Responde la identificación de la pulsera (`ID,R,fw=1.4,imus=1,…`). |
+| `CAL` | Con la pulsera **plana sobre una mesa** y quieta 2 s: calibra el giroscopio y esa postura queda como el cero de la inclinación y el giro lateral. Responde `CAL,R,ok,…` o `CAL,R,error,movimiento,0`. Se guarda en el ESP32. |
 | `PRUEBA` | Activa/desactiva el modo de prueba: cada 0.5 s un resumen legible (Hz, WiFi e IP, app conectada, muñeca ok o NO RESPONDE, inclinación, giro lateral y velocidad de giro). Mientras está activo no salen las líneas `D,…` por USB. |
 
 Fuera del modo de prueba, cada 20 ms sale una línea `D,…` (la que lee la app).

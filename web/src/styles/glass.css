@@ -1621,16 +1621,20 @@ h4,
   }
 }
 
-/* Nivel de la muñeca: isla de cristal opaca como el puntaje (se lee sobre cualquier imagen). */
-.wrist__card {
+/* Eje de la muñeca: isla de cristal opaca como el puntaje (se lee sobre cualquier imagen). */
+.tilt__item {
   background: var(--glass-fill-strong);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 
 @media (max-width: 767px) {
-  /* En Práctica del teléfono, arriba de la barra de navegación inferior (como los avisos). */
+  /* En Práctica del teléfono, arriba de la barra de navegación inferior; los avisos, encima del eje. */
   .practice-stage .camera__gauge {
     inset-block-end: calc(5.75rem + env(safe-area-inset-bottom));
+  }
+
+  .practice-stage .camera:has(.camera__gauge) .camera__slot {
+    inset-block-end: calc(5.75rem + env(safe-area-inset-bottom) + 3.75rem);
   }
 }

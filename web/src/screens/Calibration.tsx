@@ -363,10 +363,10 @@ function GyroCalibration() {
       <h3 id="calib-giro" className="sheet__title">
         Giroscopios de los guantes
       </h3>
-      <p className="sheet__hint">Apoya la mano en la mesa con los dedos estirados y no la muevas unos 5 s. Se guarda en el guante: basta con hacerlo una vez.</p>
+      <p className="sheet__hint">Deja la pulsera plana sobre una mesa y no la muevas unos 5 s: esa postura queda como el cero de la inclinación. Se guarda en la pulsera: basta con hacerlo una vez.</p>
       <div className="sheet__actions">
         <button type="button" className="btn btn--secondary" onClick={() => setLeft(GYRO_COUNTDOWN_S)} disabled={connected.length === 0 || busy}>
-          {left > 0 ? <>Apoya la mano: <span className="tabular">{left}</span></> : "Calibrar giroscopios"}
+          {left > 0 ? <>Pulsera en la mesa: <span className="tabular">{left}</span></> : "Calibrar giroscopios"}
         </button>
       </div>
       {connected.length === 0 ? <p className="sheet__hint">Conecta un guante para calibrarlo.</p> : null}
