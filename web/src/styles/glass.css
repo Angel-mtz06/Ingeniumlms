@@ -532,6 +532,21 @@ body::after {
   box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 
+/* Etiquetas dentro del chip y señas usadas en la oración: cápsulas de cristal sutil */
+.chip__tag,
+.sentence-gloss {
+  border-radius: var(--radius-pill);
+}
+
+.sentence-gloss {
+  background: var(--glass-fill-subtle);
+  box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-border);
+}
+
+.sentence-gloss[data-corrected="true"] {
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--glass-fill-strong));
+}
+
 .option[aria-pressed="true"] {
   background: color-mix(in srgb, var(--color-accent) 10%, var(--glass-fill-strong));
 }

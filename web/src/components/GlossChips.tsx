@@ -8,6 +8,8 @@ export interface GlossChipItem {
   gloss: string;
   top3: Glosses;
   confident: boolean;
+  /** El contexto (la seña anterior) eligió esta glosa sobre el top-1 del clasificador: etiqueta "por contexto". */
+  reranked?: boolean;
 }
 
 export interface GlossChipsProps {
@@ -107,6 +109,11 @@ export function GlossChips({ items, onConfirm, onRemove, onOpenChange }: GlossCh
             >
               {it.confident ? null : <IconWarning size={18} />}
               <span className="chip__gloss">{glossLabel(it.gloss)}</span>
+              {it.reranked ? (
+                <span className="chip__tag chip__tag--context" title="Elegida por la seña anterior; toca para ver las otras opciones">
+                  por contexto
+                </span>
+              ) : null}
               {it.confident ? null : <span className="chip__doubt">¿revisar?</span>}
             </button>
           </li>

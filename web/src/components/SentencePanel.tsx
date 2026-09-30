@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { glossLabel } from "../lib/ui";
 import { IconCheck, IconCopy, IconSpeaker } from "./icons";
 import "./components.css";
 
@@ -6,6 +7,10 @@ export interface SentencePanelProps {
   text: string;
   paragraph: string;
   source: "llm" | "template";
+  /** Glosas con que se formó la oración (las elegidas). */
+  glosses?: string[];
+  /** Índices de `glosses` que se corrigieron por contexto (se marcan "corregida por contexto"). */
+  corrected?: number[];
   onSpeak(): void;
   /** Puede devolver una promesa (portapapeles); al resolverse se muestra "Copiado". */
   onCopy(): void | Promise<void>;
@@ -23,8 +28,9 @@ const SOURCE_TEXT = {
  * Oración traducida en texto grande, con el párrafo ampliado debajo, la procedencia
  * ("Generado por IA" o "Plantilla") y las acciones para la persona oyente: leer en voz alta y copiar.
  */
-export function SentencePanel({ text, paragraph, source, onSpeak, onCopy }: SentencePanelProps) {
+export function SentencePanel({ text, paragraph, source, glosses = [], corrected = [], onSpeak, onCopy }: SentencePanelProps) {
   const [copied, setCopied] = useState<"ok" | "error" | null>(null);
+  const glossesLabel = useId();
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   useEffect(() => setCopied(null), [text]);
@@ -62,6 +68,21 @@ export function SentencePanel({ text, paragraph, source, onSpeak, onCopy }: Sent
             <span className="sentence__hint">{src.hint}</span>
           </p>
           <p className="sentence__text">{text}</p>
+          {glosses.length > 0 ? (
+            <div className="sentence__glosses">
+              <span className="sentence__glosses-label" id={glossesLabel}>
+                Señas usadas
+              </span>
+              <ol className="sentence-glosses" aria-labelledby={glossesLabel} translate="no">
+                {glosses.map((g, i) => (
+                  <li key={`${i}-${g}`} className="sentence-gloss" data-corrected={corrected.includes(i) || undefined}>
+                    <span className="sentence-gloss__text">{glossLabel(g)}</span>
+                    {corrected.includes(i) ? <span className="sentence-gloss__note">corregida por contexto</span> : null}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
           {paragraph && paragraph !== text ? <p className="sentence__paragraph">{paragraph}</p> : null}
         </>
       )}

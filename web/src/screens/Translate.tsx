@@ -223,6 +223,8 @@ export function Translate() {
           text={s?.text ?? ""}
           paragraph={s?.paragraph ?? ""}
           source={s?.source ?? "template"}
+          glosses={s?.glosses ?? []}
+          corrected={s?.corrected ?? []}
           onSpeak={() => s && speak(s.text)}
           onCopy={() => navigator.clipboard.writeText(s?.text ?? "")}
         />

@@ -28,9 +28,11 @@ export type ServerMsg =
   | { type: "ready"; mode: Mode; target: string | null; has_reference: boolean }
   | { type: "live"; fingers: number[][]; hands: boolean[]; segment: "idle" | "active" }
   | { type: "evaluation"; target: string; recognized: Glosses; evaluable: boolean; scores: Scores | Record<string, never>; total: number; tips: string[]; fingers: number[][] }
-  | { type: "sign"; index: number; gloss: string; top3: Glosses; confident: boolean }
+  /** `reranked`: el contexto (seña anterior) cambió el top-1 del clasificador; `top3` viene reordenado con las probabilidades originales. */
+  | { type: "sign"; index: number; gloss: string; top3: Glosses; confident: boolean; reranked?: boolean }
   | { type: "pending"; glosses: string[] }
-  | { type: "sentence"; glosses: string[]; text: string; paragraph: string; source: "llm" | "template" }
+  /** `glosses`: las elegidas al formar la oración; `corrected`: índices que cambiaron respecto a las señas mostradas. */
+  | { type: "sentence"; glosses: string[]; text: string; paragraph: string; source: "llm" | "template"; corrected?: number[] }
   | { type: "calibration"; step: string; status?: string; sides?: { L: boolean; R: boolean } }
   | { type: "warning"; code: string; message: string }
   /** Cuenta regresiva de la pausa de oración (cada ~0.5 s); `remaining: null` la cancela (subió las manos). */

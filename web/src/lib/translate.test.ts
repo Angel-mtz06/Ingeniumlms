@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ServerMsg } from "./protocol";
-import { lostMessage, newEvents, pausingFraction, pausingText, TRANSLATE_INITIAL, translateReducer, type TranslateState } from "./translate";
+import { lostMessage, newEvents, pausingFraction, pausingText, TRANSLATE_INITIAL, translateReducer, type TranslateState, validCorrected } from "./translate";
 
 const sign = (index: number, gloss: string, confident = true): ServerMsg => ({
   type: "sign",
@@ -120,5 +120,41 @@ describe("pausa de oración (pausing)", () => {
     expect(pausingFraction({ remaining: 1.75, total: 3.5 })).toBe(0.5);
     expect(pausingFraction({ remaining: 9, total: 3.5 })).toBe(1);
     expect(pausingFraction({ remaining: 1, total: 0 })).toBe(0);
+  });
+});
+
+describe("contexto", () => {
+  it("sign con reranked marca la etiqueta; confirmarla quita la marca", () => {
+    let s = run(TRANSLATE_INITIAL, sign(0, "HOLA"), {
+      type: "sign",
+      index: 1,
+      gloss: "YO",
+      top3: [["YO", 0.3], ["BOMBEROS", 0.4], ["NO", 0.1]],
+      confident: false,
+      reranked: true,
+    });
+    expect(s.chips.map((c) => c.reranked ?? false)).toEqual([false, true]);
+    s = translateReducer(s, { kind: "confirm", index: 1, gloss: "BOMBEROS" });
+    expect(s.chips[1]).toEqual({ gloss: "BOMBEROS", top3: [["YO", 0.3], ["BOMBEROS", 0.4], ["NO", 0.1]], confident: true });
+  });
+
+  it("sentence guarda las glosas elegidas y los índices corregidos", () => {
+    const s = run(TRANSLATE_INITIAL, sign(0, "HOLA"), sign(1, "BOMBEROS", false), {
+      type: "sentence",
+      glosses: ["HOLA", "YO"],
+      text: "Hola, yo.",
+      paragraph: "Hola, yo.",
+      source: "llm",
+      corrected: [1],
+    });
+    expect(s.chips).toEqual([]);
+    expect(s.sentence).toEqual({ text: "Hola, yo.", paragraph: "Hola, yo.", source: "llm", glosses: ["HOLA", "YO"], corrected: [1] });
+  });
+
+  it("sin corrected (servidor anterior) queda vacío; índices inválidos se descartan", () => {
+    const s = run(TRANSLATE_INITIAL, { type: "sentence", glosses: ["HOLA"], text: "Hola.", paragraph: "Hola.", source: "template" });
+    expect(s.sentence?.corrected).toEqual([]);
+    expect(validCorrected([2, 0, 0, -1, 1.5, 9, "1"], 3)).toEqual([0, 2]);
+    expect(validCorrected(null, 3)).toEqual([]);
   });
 });

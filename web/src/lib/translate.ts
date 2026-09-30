@@ -8,13 +8,18 @@ export interface ChipItem {
   gloss: string;
   top3: Glosses;
   confident: boolean;
+  /** El contexto (la seña anterior) eligió esta glosa en lugar del top-1 del clasificador. */
+  reranked?: boolean;
 }
 
 export interface Sentence {
   text: string;
   paragraph: string;
   source: "llm" | "template";
+  /** Glosas elegidas al formar la oración (pueden diferir de las señas mostradas). */
   glosses: string[];
+  /** Índices de `glosses` corregidos por contexto (el LLM o el prior de bigramas eligió otra candidata). */
+  corrected: number[];
 }
 
 export interface Pausing {
@@ -56,7 +61,12 @@ export function translateReducer(s: TranslateState, a: TranslateAction): Transla
     case "confirm":
       return {
         ...s,
-        chips: s.chips.map((c, i) => (i === a.index ? { ...c, gloss: a.gloss, confident: true } : c)),
+        // La persona eligió: ya no es una elección del contexto.
+        chips: s.chips.map((c, i) => {
+          if (i !== a.index) return c;
+          const { reranked: _, ...rest } = c;
+          return { ...rest, gloss: a.gloss, confident: true };
+        }),
       };
     case "remove":
       return { ...s, chips: s.chips.filter((_, i) => i !== a.index) };
@@ -81,6 +91,7 @@ function onMessage(s: TranslateState, m: ServerMsg): TranslateState {
     }
     case "sign": {
       const item: ChipItem = { gloss: m.gloss, top3: m.top3, confident: m.confident };
+      if (m.reranked) item.reranked = true;
       const chips = m.index <= s.chips.length ? [...s.chips.slice(0, m.index), item, ...s.chips.slice(m.index + 1)] : [...s.chips, item];
       return { ...s, chips, notice: null };
     }
@@ -99,7 +110,7 @@ function onMessage(s: TranslateState, m: ServerMsg): TranslateState {
         ...s,
         chips: [],
         pausing: null,
-        sentence: { text: m.text, paragraph: m.paragraph, source: m.source, glosses: m.glosses },
+        sentence: { text: m.text, paragraph: m.paragraph, source: m.source, glosses: m.glosses, corrected: validCorrected(m.corrected, m.glosses.length) },
         notice: null,
         awaitingBuild: false,
       };
@@ -108,6 +119,12 @@ function onMessage(s: TranslateState, m: ServerMsg): TranslateState {
     default:
       return s;
   }
+}
+
+/** Índices corregidos válidos (enteros dentro de `glosses`, sin repetir); [] si el servidor no los manda. */
+export function validCorrected(corrected: unknown, n: number): number[] {
+  if (!Array.isArray(corrected)) return [];
+  return [...new Set(corrected.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < n))].sort((a, b) => a - b);
 }
 
 /** Texto visible del indicador de pausa ("Formando oración en 3 s… sube las manos para seguir"). */
