@@ -52,14 +52,29 @@ def active_model_path() -> Path:
     return MODELS / f"{active_model_name()}.pt"
 
 
+def base_model(model: str) -> str:
+    """Modelo del que salen las referencias y el catálogo. `<base>e` (p. ej. classifier_v2e) es un ensamble de
+    semillas de `<base>` (mismas clases): usa lo de `<base>` si existe models/<base>.pt. Cualquier otro: él mismo."""
+    if model.endswith("e") and (MODELS / f"{model[:-1]}.pt").exists():
+        return model[:-1]
+    return model
+
+
 def active_references_path(model: str) -> Path:
-    """Referencias de Práctica del modelo: models/references_<modelo>.json si existe; si no, references.json
-    (las de classifier_v1, que tools/retrain.sh nunca reescribe)."""
-    own = MODELS / f"references_{model}.json"
-    return own if own.exists() else MODELS / "references.json"
+    """Referencias de Práctica del modelo: models/references_<modelo>.json si existe (o las de su modelo base, si
+    es un ensamble); si no, references.json (las de classifier_v1, que tools/retrain.sh nunca reescribe)."""
+    for name in dict.fromkeys((model, base_model(model))):
+        own = MODELS / f"references_{name}.json"
+        if own.exists():
+            return own
+    return MODELS / "references.json"
 
 
 def active_vocab_path(model: str) -> Path:
-    """Catálogo del modelo: datasets/processed_<modelo>/vocab.csv si existe; si no, el de PROCESSED."""
-    own = DATASETS / f"processed_{model}" / "vocab.csv"
-    return own if own.exists() else PROCESSED / "vocab.csv"
+    """Catálogo del modelo: datasets/processed_<modelo>/vocab.csv si existe (o el de su modelo base, si es un
+    ensamble); si no, el de PROCESSED."""
+    for name in dict.fromkeys((model, base_model(model))):
+        own = DATASETS / f"processed_{name}" / "vocab.csv"
+        if own.exists():
+            return own
+    return PROCESSED / "vocab.csv"

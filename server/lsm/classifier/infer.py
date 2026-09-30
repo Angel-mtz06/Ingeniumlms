@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 import torch
@@ -10,20 +11,64 @@ from lsm.features import featurize
 from lsm.normalize import NormSequence
 
 
+def _from_ckpt(ck: dict) -> "Classifier":
+    model = SignTransformer(len(ck["labels"]), **ck["config"])
+    model.load_state_dict(ck["state_dict"])
+    return Classifier(model, list(ck["labels"]), np.asarray(ck["feat_mean"]), np.asarray(ck["feat_std"]))
+
+
 class Classifier:
     def __init__(self, model: SignTransformer, labels: list[str], mean: np.ndarray, std: np.ndarray):
         self.model, self.labels, self.mean, self.std = model.eval(), labels, mean, std
 
     @classmethod
-    def load(cls, path: str | Path) -> "Classifier":
+    def load(cls, path: str | Path) -> "Classifier | EnsembleClassifier":
+        """Un checkpoint de train.py, o un ensamble de semillas guardado con `save_ensemble` ({"ensemble": [...]})."""
         ck = torch.load(path, map_location="cpu", weights_only=False)
-        model = SignTransformer(len(ck["labels"]), **ck["config"])
-        model.load_state_dict(ck["state_dict"])
-        return cls(model, list(ck["labels"]), np.asarray(ck["feat_mean"]), np.asarray(ck["feat_std"]))
+        if "ensemble" in ck:
+            return EnsembleClassifier([_from_ckpt(c) for c in ck["ensemble"]])
+        return _from_ckpt(ck)
 
     @torch.no_grad()
-    def predict(self, norm: NormSequence, k: int = 3) -> list[tuple[str, float]]:
+    def probs(self, norm: NormSequence) -> np.ndarray:
         x = (featurize(norm) - self.mean) / self.std
-        p = torch.softmax(self.model(torch.from_numpy(x.astype(np.float32))[None]), 1)[0].numpy()
-        top = np.argsort(-p)[:k]
-        return [(self.labels[i], float(p[i])) for i in top]
+        return torch.softmax(self.model(torch.from_numpy(x.astype(np.float32))[None]), 1)[0].numpy()
+
+    def predict(self, norm: NormSequence, k: int = 3) -> list[tuple[str, float]]:
+        return _top(self.probs(norm), self.labels, k)
+
+
+class EnsembleClassifier:
+    """Promedia las probabilidades de varios clasificadores con las mismas etiquetas en el mismo orden (p. ej. el
+    mismo modelo entrenado con distintas semillas). Cada miembro normaliza los rasgos con su media y desviación."""
+
+    def __init__(self, members: Sequence[Classifier]):
+        if not members:
+            raise ValueError("ensamble vacío")
+        labels = members[0].labels
+        for m in members[1:]:
+            if m.labels != labels:
+                raise ValueError("los miembros del ensamble no tienen las mismas etiquetas en el mismo orden")
+        self.members, self.labels = list(members), list(labels)
+
+    def probs(self, norm: NormSequence) -> np.ndarray:
+        return np.mean([m.probs(norm) for m in self.members], axis=0)
+
+    def predict(self, norm: NormSequence, k: int = 3) -> list[tuple[str, float]]:
+        return _top(self.probs(norm), self.labels, k)
+
+
+def _top(p: np.ndarray, labels: list[str], k: int) -> list[tuple[str, float]]:
+    top = np.argsort(-p)[:k]
+    return [(labels[i], float(p[i])) for i in top]
+
+
+def save_ensemble(paths: Sequence[str | Path], out: str | Path, **meta) -> None:
+    """Junta checkpoints de train.py (mismas etiquetas, mismo orden) en un solo archivo que `Classifier.load` abre
+    como `EnsembleClassifier`. `meta` se guarda tal cual (p. ej. de qué semillas sale y sus métricas)."""
+    cks = [torch.load(p, map_location="cpu", weights_only=False) for p in paths]
+    for c in cks[1:]:
+        if list(c["labels"]) != list(cks[0]["labels"]):
+            raise ValueError("los checkpoints no tienen las mismas etiquetas en el mismo orden")
+    torch.save({"ensemble": cks, "labels": list(cks[0]["labels"]), "members": [Path(p).name for p in paths], **meta},
+               out)

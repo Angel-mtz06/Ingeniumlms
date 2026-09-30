@@ -70,3 +70,14 @@
   última; bajar la mano 1 s termina la palabra, que entra ya validada ("A·N·G·E·L", etiqueta "deletreo"). Evitar
   mover mucho la muñeca entre letras: un movimiento grande se analiza como letra con movimiento y pausa el
   reconocimiento ~2–3 s.
+
+## Ensamble de semillas (opcional, NO activado)
+- `models/classifier_v2e.pt` promedia las probabilidades de classifier_v2 (semilla 1) y sus gemelos de semilla 0 y 2
+  (`logs/model_v2/augnone_s{0,1,2}.pt`, mismas 122 clases en el mismo orden). Usa las referencias y el catálogo de
+  classifier_v2 (`paths.base_model`: `<base>e` = ensamble de `<base>`).
+- Medido con `training/ensemble_eval.py` (test = persona g02, 121 señas y 146 NINGUNA): exactitud 82.6 % → 82.6 %
+  (igual), top-3 92.6 % → 95.0 % (+2.5), NINGUNA colada 30.8 % → 31.5 %; val (g03): exactitud 94.2 → 95.8, top-3
+  98.3 → 99.2. ~31 ms por seña en vez de ~10 ms. Ayuda sobre todo a que la seña correcta aparezca entre las 3
+  candidatas de "Validar cada seña"; no mejora el top-1.
+- Activarlo: `LSM_MODEL=classifier_v2e` en `.env` (o `classifier_v2e` en `models/ACTIVE_MODEL`) y reiniciar el
+  servidor; al arrancar imprime "modelo activo: classifier_v2e". Volver: quitar la línea o poner `classifier_v2`.
