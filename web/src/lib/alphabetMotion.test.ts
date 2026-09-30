@@ -199,9 +199,10 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
     X: [[0,0],[0,.7],[0,.05]],
   };
   /** Igual que el hook: pose inicial de cada letra por clasificador o por verificación de la base. */
-  function runFree(sampleLetter: string, path: number[][], t0: number, t1: number, sample = 0) {
-    const free=new FreeMotion(), hand=byLetter(sampleLetter)[sample], moving: boolean[]=[];
-    for (let t=0;t<=t1+1500;t+=1000/30) {
+  function runFree(sampleLetter: string, path: number[][], t0: number, t1: number, sample = 0, fps = 30) {
+    const free=new FreeMotion(), hand=byLetter(sampleLetter)[sample], moving: boolean[]=[], ready=new Set<string>();
+    let failed: string | null = null;
+    for (let t=0;t<=t1+1500;t+=1000/fps) {
       const [dx,dy]=along(path,Math.max(0,Math.min(1,(t-t0)/(t1-t0))));
       const h=hand.map(p=>[p[0]*110+320+dx*110,p[1]*110+230+dy*110,p[2]*110]);
       const prediction=predictAlphabet(h), startOk: Record<string, boolean> = {}, score: Record<string, number> = {};
@@ -211,10 +212,11 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
         score[l]=prediction.shares[samples.letters.indexOf(base)] ?? 0;
       }
       const st=free.push({t,hand:h,pose:prediction.pose,out:outOfFrame(h,640,480).out},startOk,score);
-      moving.push(st.moving);
-      if (st.result) return {letter: st.result.prediction?.[0] ?? null, t, moving};
+      moving.push(st.moving); st.ready.forEach((l)=>ready.add(l));
+      if (st.failed) failed=st.failed.issue;
+      if (st.result) return {letter: st.result.prediction?.[0] ?? null, t, moving, ready, failed};
     }
-    return {letter: null, t: Infinity, moving};
+    return {letter: null, t: Infinity, moving, ready, failed};
   }
   it.each([["J","J"],["Ñ","Ñ"],["Z","D"],["X","X"]])("reconoce la %s (hecha desde su pose inicial)", (letter, poseOf) => {
     const r=runFree(poseOf, PATHS[letter], 1200, 2400);
@@ -223,6 +225,31 @@ describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo
   });
   it("un movimiento corto (0.7 s) también cuenta: ya no exige 2.2 s de grabación", () => {
     expect(runFree("Ñ", PATHS["Ñ"], 1200, 1900).letter).toBe("Ñ");
+  });
+  it.each(["J","Ñ","Q","Z","X"])("cámara a 15 cuadros/s: la %s hecha en 0.45 s se reconoce", (letter) => {
+    const pose={J:"J","Ñ":"Ñ",Q:"Q",Z:"D",X:"X"}[letter]!;
+    expect(runFree(pose, PATHS[letter] ?? PATHS["Ñ"], 1200, 1650, 0, 15).letter).toBe(letter);
+  });
+  it("X lenta (1.5 s): la vuelta en el punto más lejano no la corta", () => {
+    expect(runFree("X", [[0,0],[.5,.4],[.05,.05]], 1200, 2700, 0, 15).letter).toBe("X");
+  });
+  it("bajar la mano con la pose de I (a descansar) no es J; la J necesita su curva final", () => {
+    expect(runFree("J", [[0,0],[0,1.2]], 1200, 2000).letter).toBeNull();
+    expect(runFree("J", [[0,0],[.05,1.6]], 1200, 2200, 0, 15).letter).toBeNull();
+    expect(runFree("J", PATHS.J, 1200, 2000, 0, 15).letter).toBe("J");
+  });
+  it("una Z hecha inclinada (20°) sigue siendo Z", () => {
+    const r=.35, z=PATHS.Z.map(([x,y])=>[x*Math.cos(r)-y*Math.sin(r), x*Math.sin(r)+y*Math.cos(r)]);
+    expect(runFree("D", z, 1200, 2000, 0, 15).letter).toBe("Z");
+  });
+  it("la X va y regresa por la misma línea: un cuadrado que vuelve al inicio no es X", () => {
+    expect(runFree("X", [[0,0],[.6,0],[.6,.6],[0,.6],[0,0]], 1200, 2400, 0, 15).letter).toBeNull();
+  });
+  it("avisa qué pose inicial está lista y por qué no se aceptó un intento", () => {
+    expect([...runFree("J", PATHS.J, 1200, 2400).ready]).toContain("J");
+    const quick=runFree("D", PATHS.Z, 1200, 1350); // Z en 0.15 s
+    expect(quick.letter).toBeNull();
+    expect(quick.failed).toBe("too_fast");
   });
   it("una pose sin movimiento, o una letra estática que se desplaza, no se vuelven letras con movimiento", () => {
     expect(runFree("J", [[0,0],[0,0]], 1200, 2400).letter).toBeNull();
