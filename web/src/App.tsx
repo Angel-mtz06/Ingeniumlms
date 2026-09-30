@@ -5,7 +5,7 @@ import { useGloves } from "./hooks/useGloves";
 import { useSession } from "./hooks/useSession";
 import { useVision } from "./hooks/useVision";
 import { CALIBRATION_INITIAL, calibrationReducer } from "./lib/calibration";
-import type { FramePayload, Mode, ServerMsg } from "./lib/protocol";
+import type { FramePayload, Mode, ServerMsg, Topic } from "./lib/protocol";
 import { newEvents, TRANSLATE_INITIAL, translateReducer } from "./lib/translate";
 import { Calibration } from "./screens/Calibration";
 import { Diagnostics } from "./screens/Diagnostics";
@@ -59,6 +59,24 @@ export default function App() {
   const [translate, translateDispatch] = useReducer(translateReducer, TRANSLATE_INITIAL);
   const [calibration, calibrationDispatch] = useReducer(calibrationReducer, CALIBRATION_INITIAL);
   const [takes, setTakes] = useState<SavedTake[]>([]);
+  // Tema de Interpretación: el socket lo recuerda y lo reenvía tras `hello` si se reconecta.
+  const [topic, setTopicState] = useState<Topic>("todo");
+  const sendRef = useRef(session.send);
+  sendRef.current = session.send;
+  const setTopic = useCallback((t: Topic) => {
+    setTopicState(t);
+    sendRef.current({ type: "topic", topic: t });
+  }, []);
+  // "Validar cada seña": activado por defecto; el servidor arranca apagado, así que se avisa al conectar
+  // (el socket lo guarda y lo reenvía tras cada hello).
+  const [validate, setValidateState] = useState(true);
+  const setValidate = useCallback((on: boolean) => {
+    setValidateState(on);
+    sendRef.current({ type: "validate", enabled: on });
+  }, []);
+  useEffect(() => {
+    sendRef.current({ type: "validate", enabled: true });
+  }, []);
 
   // Las etiquetas y la oración de Traducción se derivan de todos los mensajes, aunque la pestaña no esté abierta.
   const lastSeen = useRef<ServerMsg | null>(null);
@@ -129,13 +147,17 @@ export default function App() {
       setSessionMode,
       translate,
       translateDispatch,
+      topic,
+      setTopic,
+      validate,
+      setValidate,
       calibration,
       takes,
       addTake,
       go,
       health,
     }),
-    [camera, vision, gloves, session, cameraStatus, vocab, vocabError, setFrameSink, setSessionMode, translate, calibration, takes, addTake, go, health],
+    [camera, vision, gloves, session, cameraStatus, vocab, vocabError, setFrameSink, setSessionMode, translate, topic, setTopic, validate, setValidate, calibration, takes, addTake, go, health],
   );
 
   useEffect(() => {

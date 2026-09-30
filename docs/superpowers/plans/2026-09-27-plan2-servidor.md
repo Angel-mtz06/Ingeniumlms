@@ -36,6 +36,9 @@
 | `remove_gloss` | `index: int` | Borra una etiqueta pendiente |
 | `build_sentence` | — | Fuerza la oración con las etiquetas pendientes |
 | `reset` | — | Limpia buffers y párrafo |
+| `add_word` | `word: str` (1–24 letras A–Z/Ñ; se normaliza con `canonical`, sin acentos), `spelled: true` | Palabra deletreada en la web (ver nota de deletreo); responde un `sign` |
+| `validate` | `enabled: bool` | "Validar cada seña" en Interpretación (ver nota de validación); responde `{"type":"validate","enabled":…}` |
+| `topic` | `topic: "todo"\|"saludos"\|"salud"\|"emergencias"` | Tema de la conversación en Interpretación (ver nota de tema); responde `{"type":"topic","topic":…}` |
 
 Nota (aditiva, 2026-09-28): `frame.t` es la marca de tiempo en ms del cuadro (la misma, monótona, que se pasa
 a MediaPipe). El servidor estima los FPS con la media móvil de los dt de los últimos 30 cuadros (acotada a
@@ -53,12 +56,84 @@ no afecta a los rasgos del modelo). Registro de diagnóstico en `logs/lsm.log` (
 | `ready` | `mode`, `target`, `has_reference: bool` |
 | `live` | `fingers: [[s×5],[s×5]]` (−1 sin uso, 0 bien, 1 regular, 2 mal), `hands: [bool,bool]`, `segment: "idle"\|"active"` |
 | `evaluation` | `target`, `recognized: [[gloss,p]…]`, `scores: {configuracion, ubicacion, movimiento, orientacion}`, `total`, `tips: [str]`, `fingers`, `evaluable: bool` — `false` si una mano que la seña requiere no se vio (el puntaje no es comparable; mostrar el consejo) o si no hay referencia; sin referencia llegan `scores: {}`, `total: 0`, `fingers: []` |
-| `sign` | `index`, `gloss`, `top3: [[gloss,p]…]`, `confident: bool` |
-| `pending` | `glosses: [str]` (también responde a `build_sentence` sin glosas pendientes, con `glosses: []`) |
-| `sentence` | `glosses`, `text`, `paragraph`, `source: "llm"\|"template"` |
+| `sign` | `index`, `gloss`, `top3: [[gloss,p]…]`, `confident: bool`, `reranked?: true` (el contexto cambió el top-1; ver nota de contexto), `spelled?: true` y `confirmed?: true` (palabra deletreada con `add_word`: `top3: []`, `confident: true`) |
+| `pending` | `glosses: [str]`, `confirmed: [bool]` (cuáles confirmó la persona con `confirm_gloss`), `awaiting_validation?: true` (ver nota de validación). También responde a `build_sentence` sin glosas pendientes, con `glosses: []` |
+| `sentence` | `glosses` (las elegidas), `text`, `paragraph`, `source: "llm"\|"template"`, `corrected: [int]` (índices de `glosses` que cambiaron respecto a las señas mostradas; ver nota de contexto) |
 | `calibration` | `step`, `status` o `sides: {"L": bool, "R": bool}` |
 | `warning` | `code`, `message` |
 | `error` | `message` |
+| `pausing` | `remaining: number\|null` (s, 1 decimal), `total: number` (s) — ver nota de pausa |
+| `topic` | `topic` (acuse del mensaje `topic`; un valor inválido responde `error`) |
+| `validate` | `enabled` (acuse del mensaje `validate`; un valor que no sea bool responde `error`) |
+
+Nota (aditiva, 2026-09-28, pausa de oración): en Traducción la oración se forma tras `LSM_PAUSE_S` segundos
+(por defecto **3.5**, rango 1.5–10; antes 45 cuadros ≈ 1.5 s) con las manos en reposo, medidos desde que la mano
+bajó, si hubo al menos una seña desde la última oración. Mientras hay glosas pendientes y las manos están en
+reposo, el servidor emite `pausing` cada ~0.5 s con los segundos que faltan (`remaining`) y la pausa total
+(`total`). Si la persona sube las manos antes de terminar, emite `{"type":"pausing","remaining":null}` (sin
+`total`) para cancelar el aviso. Cuando llega `sentence` no se emite cancelación: la oración reemplaza al aviso.
+
+Nota (aditiva, 2026-09-29, contexto): el clasificador ve cada seña aislada; Interpretación (modo `translate`) usa el
+contexto en dos pasos.
+1) **En vivo** (`lsm.context`): un modelo de bigramas de glosas (Kneser-Ney interpolado) entrenado con
+`server/lsm/data/corpus_glosas.txt` (oraciones LSM escritas a mano con glosas del vocabulario y `<NOMBRE>` para un
+nombre propio; `<s>` marca el inicio de oración). NINGUNA no forma parte del prior. Al cerrar una seña se piden k=5
+candidatas al clasificador (sin NINGUNA) y, dentro de ellas, se ordena por `log p_clf + λ·log p_ctx(glosa | previa)`.
+La glosa previa es la última pendiente o `<s>` si no hay: el contexto vuelve a empezar tras cada oración y con
+`reset` (el párrafo sigue). Límites: solo compiten el top-1 y las candidatas con p ≥ 0.05, y un top-1 con p ≥ 0.7
+nunca se cambia. `top3` llega reordenado con las **probabilidades originales**, `confident` se calcula con la p de la
+elegida y `reranked: true` aparece solo si cambió el top-1. λ = `LSM_CONTEXT_WEIGHT` (por defecto 0.5, rango 0–3;
+**0 lo desactiva**, igual que la falta del corpus). En Práctica no se reordena. El registro anota
+`contexto top1 A->B previa=X p=..->.. lambda=..`.
+2) **Al formar la oración**: cada posición pasa con sus candidatas (la mostrada primero y las alternativas con
+p ≥ 0.05; sin alternativas si la persona la confirmó con `confirm_gloss` o si su p ≥ 0.7). El LLM (por defecto
+`gpt-4o`; `SENTENCES_MODEL` lo cambia) recibe `1) HOLA 0.36 | NO 0.08 | BOMBEROS 0.08` por posición, elige una
+candidata por posición y redacta; responde JSON `{"glosas": [...], "oracion": "..."}` (OpenAI con
+`response_format: json_object`; Anthropic por instrucción). El prompt pide priorizar la coherencia cuando p < 0.5 y
+conjugar los verbos. Cada glosa elegida se valida contra las candidatas de su posición (si no está o falta, queda la
+mostrada). Si el JSON no sirve, el LLM falla o no hay LLM (timeout 5 s, sin reintentos), se elige con Viterbi sobre
+las candidatas con el mismo prior y se usa la plantilla (`source: "template"`). `sentence.glosses` son las elegidas
+y `corrected` los índices que cambiaron (la web los marca "corregida por contexto"). `LSM_CONTEXT_LLM=0` manda al
+LLM solo la glosa mostrada (sin candidatas). El registro anota `oración corregida por contexto fuente=... cambios=i:A->B`
+(nunca el texto).
+
+Nota (aditiva, 2026-09-29, tema): `{"type":"topic","topic":"saludos"|"salud"|"emergencias"|"todo"}` elige el tema
+de la conversación. Es una preferencia de la **conexión** (no un campo de `hello`): sobrevive a `hello` y `reset`, así
+cambiar de pestaña no la borra; como cada conexión es una `Session` nueva, la web la reenvía después de `hello` al
+reconectar. Por defecto `todo` (sin efecto). En Interpretación, las glosas del tema suman `log(boost)` al puntaje del
+reordenamiento en vivo (el mismo de la nota de contexto, con los mismos límites: solo dentro del top-5, sin NINGUNA,
+p ≥ 0.05 y un top-1 con p ≥ 0.7 no cambia; no se inventan glosas) y del Viterbi de respaldo; al LLM se le dice
+"Tema de la conversación: <tema>". `boost` = `LSM_TOPIC_BOOST` (por defecto 3, rango 1–20; 1 = sin empujón).
+Temas (`lsm.topics`, a partir de `lsm.themes`): saludos = Saludos y cortesía + Personas + Preguntas + Respuestas y
+descripciones + Comunicación + Tiempo; salud = Salud y síntomas + Cuerpo + Profesiones + Lugares + Acciones + Tiempo;
+emergencias = Emergencias + Profesiones + Lugares + Acciones + Salud y síntomas. Todos suman las palabras núcleo YO MI
+SU EL SI NO COMO DONDE CUANTO AHORA AYUDA NECESITAR TENER IR POR_FAVOR GRACIAS. `reranked: true` aparece también si
+el cambio de top-1 lo causó el tema; el registro anota `tema=<tema>` en la línea `contexto top1`.
+
+Nota (aditiva, 2026-09-29, validación): `{"type":"validate","enabled":true}` activa "Validar cada seña" (la web lo
+activa por defecto y lo reenvía tras `hello` al reconectar, igual que `topic`; el servidor arranca en `false`, así un
+cliente anterior se comporta como antes). Es una preferencia de la conexión: sobrevive a `hello` y `reset`. Con él
+activo, mientras alguna seña pendiente no tenga `confirmed` (lo pone `confirm_gloss`; `remove_gloss` la quita):
+- la pausa de oración **no** llama al LLM ni a la plantilla: responde `{"type":"pending","glosses":[…],
+  "confirmed":[…],"awaiting_validation":true}` (la pausa se consume; la siguiente seña la vuelve a armar);
+- `build_sentence` responde lo mismo en vez de `sentence`;
+- no se emite `pausing` (la cuenta regresiva solo corre con todo validado).
+Con todo confirmado, la pausa y `build_sentence` forman la oración como siempre, solo con las señas confirmadas y en
+su orden; las confirmadas van **fijas** al LLM (sin candidatas, ver nota de contexto). La web deja de mandar cuadros
+mientras hay señas sin validar, así no se cuela otra seña; esta regla del servidor es la red de seguridad.
+
+Nota (aditiva, 2026-09-29, deletreo): en Interpretación el botón "Deletrear" (tecla D) de la web reconoce las letras
+del alfabeto manual **en el navegador**, con el mismo reconocedor de la pantalla Alfabeto (`useAlphabetRecognition`
+en modo libre: k-NN con las poses del cartel SEP y detección de movimiento para J, Ñ, Q, X y Z). Mientras deletrea,
+la web **no manda cuadros** (el segmentador del servidor no ve nada). La palabra termina al bajar las manos ~1 s o
+al apagar "Deletrear", y llega como `{"type":"add_word","word":"ANGEL","spelled":true}`: entra a `pending` como
+`{"gloss": "ANGEL", "top3": [], "confident": true, "confirmed": true, "spelled": true}` (ya validada) y el servidor
+responde `sign` con `spelled: true, confirmed: true`. `add_word` descarta el segmento activo (`Segmenter.interrupt`)
+y arma la pausa de oración desde cero. En la oración la posición deletreada va **fija** (`n) ANGEL (deletreo)` y
+`Deletreadas: ANGEL` al LLM, que la escribe como nombre propio con acento si es obvio y usa "soy …" / "me llamo …");
+la plantilla la capitaliza, Viterbi no la cambia y el contexto de bigramas la trata como `<NOMBRE>`. `remove_gloss`
+la quita como a cualquier seña. Fuera de Interpretación o con una palabra inválida responde `error`. El registro
+anota solo cuántas letras tuvo (nunca el texto).
 
 ## Estructura de archivos
 

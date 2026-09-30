@@ -70,3 +70,23 @@ def test_fallback_is_logged(caplog):
     with caplog.at_level("WARNING", logger="lsm.sentences"):
         asyncio.run(SentenceBuilder(llm=boom).build(["HOLA"], []))
     assert any("plantilla" in r.getMessage() for r in caplog.records)
+
+
+def test_template_capitalizes_spelled_words():
+    assert template_sentence(["HOLA", "MI", "NOMBRE", "ANGEL"], spelled={"ANGEL"}) == "Hola mi nombre Angel."
+    assert template_sentence(["ANGEL", "SORDO"], spelled={"ANGEL"}) == "Angel sordo."
+
+
+def test_llm_gets_spelled_words_and_rule():
+    seen = {}
+
+    async def fake(system, user):
+        seen["system"], seen["user"] = system, user
+        return "Hola, me llamo Ángel."
+
+    text, src = asyncio.run(SentenceBuilder(llm=fake).build(["HOLA", "MI", "NOMBRE", "ANGEL"], [], spelled={"ANGEL"}))
+    assert (text, src) == ("Hola, me llamo Ángel.", "llm")
+    assert "Glosas: HOLA MI NOMBRE ANGEL" in seen["user"] and "Deletreadas: ANGEL" in seen["user"]
+    assert "deletreada" in SYSTEM_PROMPT.lower() and "Ángel" in SYSTEM_PROMPT
+    asyncio.run(SentenceBuilder(llm=fake).build(["HOLA"], []))
+    assert "Deletreadas" not in seen["user"]

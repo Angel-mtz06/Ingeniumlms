@@ -1,5 +1,11 @@
 import type { ClientMsg, ServerMsg } from "./protocol";
 
+/**
+ * Mensajes que fijan una preferencia de la conexión: se recuerda el último de cada tipo y se reenvía después
+ * de `hello` en cada conexión nueva (cada conexión es una Session nueva en el servidor).
+ */
+const STICKY: readonly ClientMsg["type"][] = ["topic", "validate"];
+
 /** Si el WebSocket acumula más de esto sin enviar, los cuadros se descartan (los de control nunca). */
 export const MAX_BUFFERED_BYTES = 64 * 1024;
 
@@ -7,6 +13,7 @@ export class SessionSocket {
   private ws: WebSocket | null = null;
   private queue: ClientMsg[] = [];
   private hello: ClientMsg | null = null;
+  private sticky = new Map<ClientMsg["type"], ClientMsg>();
   private closed = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly Impl: typeof WebSocket;
@@ -34,7 +41,7 @@ export class SessionSocket {
     this.ws = ws;
     ws.onopen = () => {
       this.openCount++;
-      const pending = this.hello ? [this.hello, ...this.queue] : this.queue;
+      const pending = [...(this.hello ? [this.hello] : []), ...this.sticky.values(), ...this.queue];
       this.queue = [];
       pending.forEach((m) => ws.send(JSON.stringify(m)));
     };
@@ -48,13 +55,15 @@ export class SessionSocket {
 
   send(m: ClientMsg): boolean {
     if (m.type === "hello") this.hello = m;
+    const sticky = STICKY.includes(m.type);
+    if (sticky) this.sticky.set(m.type, m);
     if (this.open) {
       // Red lenta: un cuadro viejo no sirve; mejor soltarlo que acumular latencia.
       if (m.type === "frame" && (this.ws!.bufferedAmount ?? 0) > MAX_BUFFERED_BYTES) return false;
       this.ws!.send(JSON.stringify(m));
       return true;
     }
-    if (m.type !== "frame" && m.type !== "hello") this.queue.push(m);
+    if (m.type !== "frame" && m.type !== "hello" && !sticky) this.queue.push(m);
     return false;
   }
 

@@ -693,6 +693,23 @@
   border-color: var(--color-text);
 }
 
+/* Etiqueta pequeña dentro de un chip. "por contexto": neutra con borde punteado; el texto la explica. */
+.chip__tag {
+  padding: 0 var(--space-2);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.chip__tag--context {
+  background: transparent;
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-muted);
+}
+
 .chip__doubt {
   font-size: var(--text-sm);
   font-weight: 500;
@@ -755,6 +772,140 @@
   gap: var(--space-2);
 }
 
+/* ---------- Validar cada seña: una fila por seña con sus candidatas ---------- */
+.validate-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.validate-item__row {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 2px dashed var(--color-warn);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-warn) 8%, var(--color-surface));
+}
+
+.validate-item__row:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.validate-item[data-state="confirmed"] .validate-item__row {
+  border-style: solid;
+  border-color: var(--color-ok);
+  background: color-mix(in srgb, var(--color-ok) 8%, var(--color-surface));
+}
+
+.validate-item[data-state="removed"] .validate-item__row {
+  border-width: 1px;
+  border-color: var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+}
+
+.validate-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.validate-item__n {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-surface-2);
+  font-weight: 700;
+}
+
+.validate-item__gloss {
+  min-width: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.validate-item__gloss--spelled {
+  font-size: var(--text-xl);
+  letter-spacing: 0.04em;
+}
+
+.validate-item__state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+}
+
+.validate-item[data-state="pending"] .validate-item__state {
+  color: var(--color-text);
+}
+
+.validate-item[data-state="confirmed"] .validate-item__state .icon {
+  color: var(--color-ok);
+}
+
+.validate-item__options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.validate-option {
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.validate-option[data-suggested="true"] {
+  border-width: 2px;
+  border-color: var(--color-accent);
+}
+
+.validate-option[aria-pressed="true"] {
+  border-color: var(--color-ok);
+  background: color-mix(in srgb, var(--color-ok) 12%, var(--color-surface));
+}
+
+.validate-option[aria-pressed="true"] .icon {
+  color: var(--color-ok);
+}
+
+.validate-option__key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.validate-option .option__p,
+.validate-option__tag {
+  white-space: nowrap;
+}
+
+.validate-option__tag {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.validate-remove {
+  min-height: 48px;
+}
+
 .chips__empty {
   color: var(--color-text-muted);
 }
@@ -809,6 +960,55 @@
 
 .sentence__paragraph {
   font-size: var(--text-lg);
+  color: var(--color-text-muted);
+}
+
+/* Señas con que se formó la oración; las corregidas por contexto llevan subrayado punteado y una nota. */
+.sentence__glosses {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.sentence__glosses-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.sentence-glosses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sentence-gloss {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+.sentence-gloss[data-corrected="true"] {
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+}
+
+.sentence-gloss[data-corrected="true"] .sentence-gloss__text {
+  text-decoration: underline dotted var(--color-accent);
+  text-underline-offset: 3px;
+}
+
+.sentence-gloss__note {
+  font-size: var(--text-xs);
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
@@ -1093,6 +1293,65 @@
 
 .segmented__item:focus-visible {
   outline-offset: -3px;
+}
+
+/* Tema de la conversación (Interpretación): control segmentado con radios nativos ocultos. */
+.topic-picker {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.topic-picker__legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.topic-picker__options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-self: start;
+  max-width: 100%;
+}
+
+.topic-picker__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.topic-picker__item:has(input:checked) {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 700;
+  box-shadow: var(--shadow-1), inset 0 0 0 1px var(--color-border);
+}
+
+.topic-picker__item:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: -3px;
+}
+
+/* En pantallas angostas los cuatro temas van en 2 × 2 (no cabe "Emergencias" en una sola fila). */
+@media (max-width: 479px) {
+  .topic-picker__options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-self: stretch;
+    border-radius: var(--radius-lg);
+  }
+}
+
+.topic-picker__hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 /* ---------- Movimiento reducido: fuera transiciones y el pulso de los esqueletos ---------- */

@@ -23,7 +23,7 @@ def feed(seg, frames, start=0):
 
 def test_rest_move_rest_gives_one_segment_then_pause():
     seg = Segmenter()
-    frames = [REST] * 5 + [up(0.1 * i) for i in range(20)] + [REST] * 60
+    frames = [REST] * 5 + [up(0.1 * i) for i in range(20)] + [REST] * 120  # pausa de 3.5 s = 105 cuadros
     ev = feed(seg, frames)
     ends = [e for e in ev if e.kind == "end"]
     assert len(ends) == 1 and (ends[0].start, ends[0].end) == (5, 24)
@@ -160,7 +160,7 @@ def ends_in_seconds(path, fps, duration, **kw):
 def test_default_rate_is_30_fps():
     seg = Segmenter()
     assert seg.rate == 1.0
-    assert (seg.frames("rest"), seg.frames("still"), seg.frames("pause")) == (6, 12, 45)
+    assert (seg.frames("rest"), seg.frames("still"), seg.frames("pause")) == (6, 12, 105)
     assert (seg.frames("min_len"), seg.frames("max_len"), seg.frames("post_still")) == (6, 75, 15)
     assert seg.speed_limit() == 0.04
 
@@ -168,7 +168,7 @@ def test_default_rate_is_30_fps():
 def test_thresholds_scale_with_rate_and_have_minimums():
     seg = Segmenter(max_len=150, rate=0.5)
     # reposo: la racha debe abarcar el mismo tiempo que 6 cuadros a 30 fps (5 intervalos = 0.167 s) → 4
-    assert (seg.frames("rest"), seg.frames("still"), seg.frames("pause")) == (4, 6, 22)
+    assert (seg.frames("rest"), seg.frames("still"), seg.frames("pause")) == (4, 6, 52)
     assert (seg.frames("min_len"), seg.frames("max_len"), seg.frames("post_still")) == (3, 75, 8)
     assert seg.speed_limit() == 0.08
     seg.set_rate(0.05)
@@ -248,3 +248,47 @@ def test_rest_y_is_configurable_by_env(monkeypatch):
     for bad in ("abc", "nan", "-1", "50"):
         monkeypatch.setenv("LSM_REST_Y", bad)
         assert Segmenter().rest_y == 3.5, bad
+
+
+# --- pausa de oración en segundos (LSM_PAUSE_S) ---
+
+def test_pause_is_in_seconds_and_configurable_by_env(monkeypatch):
+    from lsm.segmenter import PAUSE_S
+    monkeypatch.delenv("LSM_PAUSE_S", raising=False)
+    assert Segmenter().pause_s == PAUSE_S == 3.5
+    monkeypatch.setenv("LSM_PAUSE_S", "5")
+    assert Segmenter().pause_s == 5.0 and Segmenter().frames("pause") == 150
+    assert Segmenter(pause_s=2.0).pause_s == 2.0  # un valor explícito manda
+    for bad in ("abc", "nan", "1.4", "10.5", "-3"):
+        monkeypatch.setenv("LSM_PAUSE_S", bad)
+        assert Segmenter().pause_s == 3.5, bad
+
+
+def test_pause_arrives_after_the_same_seconds_at_15_and_30_fps(monkeypatch):
+    monkeypatch.delenv("LSM_PAUSE_S", raising=False)
+    for fps in (30, 15):
+        seg = Segmenter(rate=fps / 30)
+        at = None
+        for i, h in enumerate(sample(lambda t: sign_path(t), fps, 6.0)):
+            hands = np.zeros((2, 21, 3), np.float32)
+            present = np.zeros(2, bool)
+            hands[0], present[0] = h, True
+            if any(e.kind == "pause" for e in seg.update(i, hands, present)):
+                at = i / fps
+                break
+        assert at is not None, fps
+        assert 3.5 - 1 / fps <= at - 1.3 <= 3.5 + 1 / fps, (fps, at)  # 1.3 s: la mano vuelve al reposo
+
+
+def test_raising_hands_restarts_the_pause():
+    # seña, 2 s en reposo, subir las manos un instante (aunque no llegue a seña) y bajar: la pausa vuelve a 0
+    seg = Segmenter(pause_s=3.0)
+    feed(seg, [REST] * 5 + [up(0.1 * i) for i in range(20)] + [REST] * 60)
+    assert seg.pending == 1 and seg.idle_count > 50
+    feed(seg, [up(0.0)] * 3, start=100)
+    ev = feed(seg, [REST] * 80, start=103)
+    # el instante arriba abre un segmento (demasiado corto: se descarta) y su cierre reinicia la espera,
+    # contando desde que la mano bajó
+    assert seg.idle_count == 80 and not [e for e in ev if e.kind == "pause"]  # 80 < 90 cuadros (3 s)
+    assert [e.kind for e in feed(seg, [REST] * 10, start=183)] == ["pause"]
+

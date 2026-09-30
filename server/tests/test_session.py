@@ -30,7 +30,8 @@ def frame(wrist_units=None, glove=None):
 
 
 def sign_frames():
-    return [frame((-1.0, 5.0))] * 5 + [frame((-1.0 + 0.05 * i, 1.0)) for i in range(20)] + [frame((-1.0, 5.0))] * 60
+    # 120 cuadros de reposo (4 s a 30 fps): alcanzan para la pausa de oración por defecto (3.5 s)
+    return [frame((-1.0, 5.0))] * 5 + [frame((-1.0 + 0.05 * i, 1.0)) for i in range(20)] + [frame((-1.0, 5.0))] * 120
 
 
 class FakeClassifier:
@@ -84,7 +85,7 @@ def test_confirm_and_remove_gloss():
     s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
     s.pending = [{"gloss": "HOLA", "top3": [], "confident": False}, {"gloss": "SI", "top3": [], "confident": True}]
     out = asyncio.run(run(s, [{"type": "confirm_gloss", "index": 0, "gloss": "ADIOS"}, {"type": "remove_gloss", "index": 1}]))
-    assert out[-1] == {"type": "pending", "glosses": ["ADIOS"]}
+    assert out[-1] == {"type": "pending", "glosses": ["ADIOS"], "confirmed": [True]}
 
 
 def test_no_hand_warning_once():
@@ -223,7 +224,7 @@ def test_confirm_gloss_is_canonical_string():
     s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
     s.pending = [{"gloss": "HOLA", "top3": [], "confident": False}]
     out = asyncio.run(run(s, [{"type": "confirm_gloss", "index": 0, "gloss": "buenos días"}]))
-    assert out[-1] == {"type": "pending", "glosses": ["BUENOS_DIAS"]}
+    assert out[-1] == {"type": "pending", "glosses": ["BUENOS_DIAS"], "confirmed": [True]}
     asyncio.run(run(s, [{"type": "confirm_gloss", "index": 0, "gloss": {"a": 1}}]))
     assert isinstance(s.pending[0]["gloss"], str)
     out = asyncio.run(run(s, [{"type": "build_sentence"}]))
@@ -242,7 +243,7 @@ def test_hello_validates_mode_and_target():
 
 def test_build_sentence_without_pending_returns_empty_pending():
     s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
-    assert asyncio.run(s.handle({"type": "build_sentence"})) == [{"type": "pending", "glosses": []}]
+    assert asyncio.run(s.handle({"type": "build_sentence"})) == [{"type": "pending", "glosses": [], "confirmed": []}]
 
 
 def two_hand_ref():
@@ -463,3 +464,71 @@ def test_periodic_summary_every_5_seconds(caplog):
     assert len(summ) == 1
     for part in ("fps=15.0", "manos=", "activos=", "top_y_med=", "top_y_p90=", "rest_y=3.5", "estado="):
         assert part in summ[0], (part, summ[0])
+
+
+# --- pausa de oración (3.5 s por defecto) y aviso "pausing" ---
+
+def rest_after_sign(fps, rest_s, t0=1000.0):
+    """Reposo 0.3 s, seña de 1 s y `rest_s` s de reposo, con marca de tiempo. Devuelve (cuadros, índice del
+    primer cuadro en reposo tras la seña)."""
+    n = lambda sec: int(round(sec * fps))  # noqa: E731
+    frames = [frame((-1.0, 5.0))] * n(0.3) + [frame((-1.0 + 2.0 * k / n(1.0), 1.0)) for k in range(n(1.0))]
+    return timed(frames + [frame((-1.0, 5.0))] * n(rest_s), fps, t0), n(0.3) + n(1.0)
+
+
+def per_frame(s, frames):
+    return [asyncio.run(s.handle(f)) for f in frames]
+
+
+def test_sentence_waits_3_5_s_of_rest_at_15_and_30_fps(monkeypatch):
+    monkeypatch.delenv("LSM_PAUSE_S", raising=False)
+    for fps in (30, 15):
+        s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
+        asyncio.run(s.handle({"type": "hello", "mode": "translate", "target": None}))
+        frames, down = rest_after_sign(fps, 5.0)
+        outs = per_frame(s, frames)
+        at = [i for i, o in enumerate(outs) if any(m["type"] == "sentence" for m in o)]
+        assert len(at) == 1, fps
+        waited = (at[0] - down + 1) / fps
+        assert waited > 1.5 and 3.5 - 1 / fps <= waited <= 3.5 + 2 / fps, (fps, waited)
+
+
+def test_pausing_countdown_every_half_second(monkeypatch):
+    monkeypatch.delenv("LSM_PAUSE_S", raising=False)
+    for fps in (30, 15):
+        s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
+        asyncio.run(s.handle({"type": "hello", "mode": "translate", "target": None}))
+        frames, down = rest_after_sign(fps, 5.0)
+        outs = per_frame(s, frames)
+        ticks = [(i, m) for i, o in enumerate(outs) for m in o if m["type"] == "pausing"]
+        sign_at = next(i for i, o in enumerate(outs) if any(m["type"] == "sign" for m in o))
+        sent_at = next(i for i, o in enumerate(outs) if any(m["type"] == "sentence" for m in o))
+        assert ticks and ticks[0][0] == sign_at  # el aviso empieza con la seña cerrada por reposo
+        assert all(m["total"] == 3.5 and m["remaining"] is not None for _, m in ticks)
+        assert 2.9 <= ticks[0][1]["remaining"] <= 3.5
+        gaps = [(b - a) / fps for (a, _), (b, _) in zip(ticks, ticks[1:])]
+        assert gaps and all(abs(g - 0.5) <= 1 / fps + 1e-9 for g in gaps), (fps, gaps)
+        rem = [m["remaining"] for _, m in ticks]
+        assert rem == sorted(rem, reverse=True) and rem[-1] <= 0.6
+        assert ticks[-1][0] < sent_at
+        # tras la oración no hay aviso de cancelación ni más cuenta regresiva
+        assert not [m for o in outs[sent_at:] for m in o if m["type"] == "pausing"]
+
+
+def test_raising_hands_cancels_pausing():
+    fps = 30
+    s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
+    asyncio.run(s.handle({"type": "hello", "mode": "translate", "target": None}))
+    frames, _ = rest_after_sign(fps, 1.5)
+    outs = per_frame(s, frames)
+    assert any(m["type"] == "pausing" and m["remaining"] is not None for o in outs for m in o)
+    again = timed([frame((-1.0 + 0.1 * k, 1.0)) for k in range(10)], fps, t0=frames[-1]["t"] + 1000 / fps)
+    outs = per_frame(s, again)
+    msgs = [m for o in outs for m in o if m["type"] == "pausing"]
+    assert msgs == [{"type": "pausing", "remaining": None}]
+    assert not any(m["type"] == "sentence" for o in outs for m in o)
+
+
+def test_no_pausing_without_pending_glosses():
+    s, out = _translate(NoneClassifier(0, p_none=0.5))  # la seña se descarta: nada que formar
+    assert not [m for m in out if m["type"] == "pausing"]

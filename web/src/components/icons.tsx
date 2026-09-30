@@ -57,6 +57,14 @@ export const IconError = (p: IconProps) => (
   </Icon>
 );
 
+/** X simple: quitar ("Ninguna"). */
+export const IconClose = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6 6l12 12" />
+    <path d="M18 6 6 18" />
+  </Icon>
+);
+
 export const IconCamera = (p: IconProps) => (
   <Icon {...p}>
     <path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />

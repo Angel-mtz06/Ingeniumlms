@@ -90,3 +90,21 @@ def test_processed_dir_can_be_overridden(monkeypatch):
         monkeypatch.delenv("LSM_PROCESSED")
         importlib.reload(paths)
     assert paths.PROCESSED == paths.DATASETS / "processed"
+
+
+def test_ensemble_uses_references_and_vocab_of_its_base_model(tmp_path, monkeypatch):
+    # classifier_v2e = ensamble de semillas de classifier_v2: mismas clases, mismas referencias y catálogo
+    _models(tmp_path, monkeypatch, "classifier_v1", "classifier_v2", "classifier_v2e")
+    monkeypatch.setattr(paths, "DATASETS", tmp_path / "datasets")
+    monkeypatch.setattr(paths, "PROCESSED", tmp_path / "datasets" / "processed")
+    (tmp_path / "references_classifier_v2.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "datasets" / "processed_classifier_v2").mkdir(parents=True)
+    (tmp_path / "datasets" / "processed_classifier_v2" / "vocab.csv").write_text("gloss\n", encoding="utf-8")
+    assert paths.base_model("classifier_v2e") == "classifier_v2"
+    assert paths.base_model("classifier_v2") == "classifier_v2"
+    assert paths.base_model("classifier_v1") == "classifier_v1"
+    assert paths.active_references_path("classifier_v2e") == tmp_path / "references_classifier_v2.json"
+    assert paths.active_vocab_path("classifier_v2e") == tmp_path / "datasets" / "processed_classifier_v2" / "vocab.csv"
+    # un archivo propio del ensamble manda
+    (tmp_path / "references_classifier_v2e.json").write_text("{}", encoding="utf-8")
+    assert paths.active_references_path("classifier_v2e") == tmp_path / "references_classifier_v2e.json"

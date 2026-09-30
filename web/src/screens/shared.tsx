@@ -13,7 +13,7 @@ import type { SessionHandle } from "../hooks/useSession";
 import type { VisionHandle } from "../hooks/useVision";
 import type { CalibrationState } from "../lib/calibration";
 import { type Health, healthWarning, parseHealth } from "../lib/health";
-import type { FramePayload, Mode } from "../lib/protocol";
+import type { FramePayload, Mode, Topic } from "../lib/protocol";
 import type { SavedRecording } from "../lib/record";
 import type { TranslateAction, TranslateState } from "../lib/translate";
 import type { VocabItem } from "../lib/ui";
@@ -38,6 +38,12 @@ export interface AppState {
   setFrameSink(fn: FrameSink | null): void;
   setSessionMode(mode: Mode, target: string | null): void;
   translate: TranslateState;
+  /** Tema de la conversación en Interpretación (por defecto "todo"); vive en App para sobrevivir al cambio de pestaña. */
+  topic: Topic;
+  setTopic(topic: Topic): void;
+  /** "Validar cada seña" en Interpretación (por defecto activado). */
+  validate: boolean;
+  setValidate(on: boolean): void;
   translateDispatch: Dispatch<TranslateAction>;
   /** Guantes calibrados en la sesión actual del servidor (se pierde al reconectar el WebSocket). */
   calibration: CalibrationState;

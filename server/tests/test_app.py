@@ -212,3 +212,23 @@ def test_vocab_includes_reference_only_glosses(tmp_path):
     got = {x["gloss"]: x for x in TestClient(app).get("/api/vocab").json()}
     assert list(got) == ["HOLA", "MAMA"]
     assert got["MAMA"] == {"gloss": "MAMA", "category": "Personas", "has_reference": True}
+
+
+def test_websocket_session_gets_context_model(tmp_path, monkeypatch):
+    import lsm.app
+    from lsm.context import load_default
+    seen = {}
+    real = lsm.app.Session
+
+    def spy(*a, **kw):
+        seen.update(kw)
+        return real(*a, **kw)
+
+    monkeypatch.setattr(lsm.app, "Session", spy)
+    ctx = load_default()
+    app = create_app(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"), own_dir=tmp_path / "own",
+                     context=ctx)
+    with TestClient(app).websocket_connect("/ws") as ws:
+        ws.send_json({"type": "hello", "mode": "translate", "target": None})
+        assert ws.receive_json()["type"] == "ready"
+    assert seen["context"] is ctx
