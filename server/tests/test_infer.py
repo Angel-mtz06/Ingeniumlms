@@ -67,3 +67,32 @@ def test_ensemble_averages_member_probabilities(tmp_path):
         save_ensemble([paths[0], tmp_path / "bad.pt"], tmp_path / "x.pt")
     with pytest.raises(ValueError):
         EnsembleClassifier([members[0], Classifier.load(tmp_path / "bad.pt")])
+
+
+def test_crop_active_and_predict_tta():
+    import numpy as np
+    from lsm.classifier.infer import TTA_CROPS, crop_active, predict_tta
+    from lsm.normalize import NormSequence
+    T = 30
+    hands = np.zeros((T, 2, 21, 3), np.float32)
+    hands[:, 0, 0, 1] = 5.0  # reposo (muñeca abajo)
+    hands[10:30, 0, 0, 1] = 1.0  # tramo activo: cuadros 10..29
+    present = np.zeros((T, 2), bool)
+    present[:, 0] = True  # solo una mano
+    norm = NormSequence(hands, present)
+    assert crop_active(norm, 0, 0) is norm
+    assert crop_active(norm, 0.15, 0).T == 30 - (10 + 3)  # sin el reposo previo ni el 15 % inicial
+    assert crop_active(norm, 0, 0.15).T == 30 - 3
+    assert crop_active(norm, 0.9, 0.9) is norm  # recorte demasiado corto: la secuencia completa
+
+    class Fake:
+        labels = ["A", "B"]
+        seen = []
+
+        def probs(self, n):
+            self.seen.append(n.T)
+            return np.array([0.6, 0.4]) if n.T == 30 else np.array([0.2, 0.8])
+
+    f = Fake()
+    top = predict_tta(f, norm, k=2)
+    assert len(f.seen) == len(TTA_CROPS) and top[0][0] == "B"  # (0.6 + 0.2 + 0.2) / 3 < (0.4 + 0.8 + 0.8) / 3

@@ -10,6 +10,7 @@ from collections import deque
 
 import numpy as np
 
+from lsm.classifier.infer import predict_tta
 from lsm.context import LOCK_P, MIN_P, START, ContextModel, rerank, token
 from lsm.context import context_weight as env_context_weight
 from lsm.evaluator.feedback import messages
@@ -31,7 +32,24 @@ LIVE_EVERY = 2
 KEEP = 900
 DROP = 300
 CONF_MIN = 0.6
-NONE_MIN = 0.5  # Traducción descarta un segmento solo si NINGUNA es top-1 con al menos esta probabilidad
+# Traducción descarta un segmento si NINGUNA tiene al menos esta probabilidad (LSM_NONE_MIN; con 0.5 = la regla
+# anterior, "NINGUNA top-1 con p ≥ 0.5"). Con 0.35, en personas no vistas se cuelan 31.5 → 24 % de los movimientos
+# que no son seña, sin perder señas completas ni HOLA/GRACIAS/AYUDA/POR_FAVOR; una seña cortada a media se pierde
+# un poco más (2 → 5 %).
+NONE_MIN = 0.35
+
+
+def env_none_min() -> float:
+    try:
+        v = float(os.environ.get("LSM_NONE_MIN", NONE_MIN))
+    except ValueError:
+        return NONE_MIN
+    return v if 0.0 < v <= 1.0 else NONE_MIN
+
+
+def env_tta() -> bool:
+    """LSM_TTA=0 apaga el promedio de recortes del segmento (predict_tta)."""
+    return os.environ.get("LSM_TTA", "1").strip() != "0"
 TOP_K = 5  # candidatas que se piden al clasificador; el contexto solo reordena dentro de ellas
 # Deletreo (mensaje `spelling`): el navegador confirma la 1a letra ~0.6 s después de formarla, y el
 # segmentador ya pudo cerrar un segmento por quietud (0.4 s). Al empezar un deletreo se apartan también
@@ -116,6 +134,8 @@ class Session:
         # Prior de contexto (bigramas de glosas). λ de LSM_CONTEXT_WEIGHT (0.5; 0 = sin reordenar ni Viterbi).
         self.context = context
         self.ctx_weight = env_context_weight() if context_weight is None else max(0.0, float(context_weight))
+        self.none_min = env_none_min()
+        self.tta = env_tta()
         # LSM_CONTEXT_LLM=0: al formar la oración el LLM solo recibe la glosa mostrada (sin candidatas)
         self.llm_choose = os.environ.get("LSM_CONTEXT_LLM", "1").strip() != "0"
         # Tema de conversación (mensaje "topic"): sus glosas reciben log(boost) en el reordenamiento.
@@ -424,7 +444,11 @@ class Session:
         b = self._trim_descent(a, b)
         seq = NormSequence(np.stack(self.hands[a:b + 1]), np.stack(self.present[a:b + 1]))
         # k=5: NINGUNA nunca se muestra como alternativa; quitándola quedan ≥4 para el contexto
-        top = [[g, round(float(p), 3)] for g, p in self.classifier.predict(seq, k=TOP_K)] if self.classifier else []
+        if not self.classifier:
+            preds = []
+        else:  # promedio de recortes del segmento (LSM_TTA=0 lo apaga)
+            preds = predict_tta(self.classifier, seq, k=TOP_K) if self.tta else self.classifier.predict(seq, k=TOP_K)
+        top = [[g, round(float(p), 3)] for g, p in preds]
         self._last_top = top  # para el registro (incluye NINGUNA si salió)
         none_top1 = bool(top) and top[0][0] == NONE_GLOSS
         cands = [t for t in top if t[0] != NONE_GLOSS]
@@ -446,7 +470,8 @@ class Session:
                      "fingers": finger_status(ref, ev.finger_flex).tolist(),
                      # False si una mano que la seña requiere no se vio (el puntaje no es comparable)
                      "evaluable": not any(i.param == "mano" for i in ev.issues)}]
-        if not top3 or (none_top1 and top[0][1] >= NONE_MIN):
+        p_none = next((p for g, p in top if g == NONE_GLOSS), 0.0)
+        if not top3 or p_none >= self.none_min:
             return []  # NINGUNA segura (movimiento que no es seña): se descarta en silencio
         prev = self._ctx_prev()
         ranked, changed = rerank(cands, prev, self.context, self.ctx_weight, favored=topic_glosses(self.topic),
