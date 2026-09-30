@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScoreGauge } from "../components/ScoreGauge";
+import { IconFlag, IconLetterW, IconPuzzle, IconSimon } from "../components/icons";
 import {
   availablePhrases, lettersOf, lettersPerMinute, pickOther, RACE_LEVEL_ORDER, RACE_LEVELS, readRecords, rivalFinishMs,
   rivalProgress, saveRecord, SPELL_WORDS, standings, wordCorrect, type RaceLevel, type Racer,
@@ -35,47 +36,39 @@ export default function Games() {
     <div className="screen">
       <header className="screen__head">
         <h2 className="screen__title">Juegos</h2>
-        <p className="screen__lead">Practica jugando con el alfabeto y con señas: forma palabras, gana carreras, adivina en Wordle y entrena tu memoria con Simón dice.</p>
+        <p className="screen__lead">Practica el alfabeto y las señas jugando.</p>
       </header>
       <div className="game-menu">
         <section className="sheet game-card" aria-labelledby="juego-completa">
-          <p className="game-card__icon" aria-hidden="true">🧩</p>
+          <span className="entry__icon game-card__icon" aria-hidden="true"><IconPuzzle size={40} strokeWidth={1.75} /></span>
           <h3 id="juego-completa" className="sheet__title">Completa la palabra</h3>
-          <p className="sheet__hint">La app te pide algo y tú lo formas frente a la cámara, paso por paso.</p>
+          <p className="sheet__hint">Forma la palabra o la frase que te pide la app.</p>
           <div className="game-card__actions">
             <button type="button" className="btn btn--primary" onClick={() => open("letras")}>Con letras</button>
             <button type="button" className="btn btn--secondary" onClick={() => open("senas")}>Con señas</button>
           </div>
-          <ul className="game-card__list">
-            <li><strong>Con letras:</strong> deletrea una palabra (p. ej. CARRERA) letra por letra.</li>
-            <li><strong>Con señas:</strong> haz las señas de una frase (p. ej. HOLA MAMÁ), una tras otra.</li>
-          </ul>
         </section>
         <section className="sheet game-card" aria-labelledby="juego-carrera">
-          <p className="game-card__icon" aria-hidden="true">🐆</p>
+          <span className="entry__icon game-card__icon" aria-hidden="true"><IconFlag size={40} strokeWidth={1.75} /></span>
           <h3 id="juego-carrera" className="sheet__title">Carrera de letras</h3>
-          <p className="sheet__hint">Deletrea el texto lo más rápido que puedas: cada letra correcta hace avanzar tu leopardo. Compite contra tres rivales.</p>
+          <p className="sheet__hint">Deletrea rápido y gánale a tres rivales.</p>
           <div className="game-card__actions">
             <button type="button" className="btn btn--primary" onClick={() => open("carrera")}>Jugar</button>
           </div>
         </section>
         <section className="sheet game-card" aria-labelledby="juego-wordle">
-          <p className="game-card__icon" aria-hidden="true">🟩</p>
+          <span className="entry__icon game-card__icon" aria-hidden="true"><IconLetterW size={40} strokeWidth={1.75} /></span>
           <h3 id="juego-wordle" className="sheet__title">Wordle LSM</h3>
-          <p className="sheet__hint">Adivina lo secreto en 6 intentos: verde está en su lugar, amarillo está en otro lugar, gris no está.</p>
+          <p className="sheet__hint">Adivina la palabra secreta en 6 intentos.</p>
           <div className="game-card__actions">
             <button type="button" className="btn btn--primary" onClick={() => open("wordle-letras")}>Con letras</button>
             <button type="button" className="btn btn--secondary" onClick={() => open("wordle-senas")}>Con señas</button>
           </div>
-          <ul className="game-card__list">
-            <li><strong>Con letras:</strong> una palabra de 5 letras que deletreas.</li>
-            <li><strong>Con señas:</strong> 3 señas secretas de un banco de 6, en orden.</li>
-          </ul>
         </section>
         <section className="sheet game-card" aria-labelledby="juego-simon">
-          <p className="game-card__icon" aria-hidden="true">🧠</p>
+          <span className="entry__icon game-card__icon" aria-hidden="true"><IconSimon size={40} strokeWidth={1.75} /></span>
           <h3 id="juego-simon" className="sheet__title">Simón dice</h3>
-          <p className="sheet__hint">Mira la secuencia y repítela de memoria. Cada ronda agrega una más; tienes 3 vidas.</p>
+          <p className="sheet__hint">Repite la secuencia de memoria. Tienes 3 vidas.</p>
           <div className="game-card__actions">
             <button type="button" className="btn btn--primary" onClick={() => open("simon-letras")}>Con letras</button>
             <button type="button" className="btn btn--secondary" onClick={() => open("simon-senas")}>Con señas</button>

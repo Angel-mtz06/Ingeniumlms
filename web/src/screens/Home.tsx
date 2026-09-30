@@ -1,5 +1,5 @@
 import type { MouseEvent } from "react";
-import { IconCamera, IconSpeaker } from "../components/icons";
+import { IconCamera, IconGamepad, IconSpeaker } from "../components/icons";
 import { StatusBar } from "../components/StatusBar";
 import { GloveControls, HealthNotice, useApp } from "./shared";
 
@@ -21,7 +21,7 @@ export function Home() {
     <div className="screen">
       <header className="screen__head">
         <h2 className="screen__title">¿Qué quieres hacer?</h2>
-        <p className="screen__lead">Todo funciona con tu cámara. Los guantes son opcionales y ayudan a leer mejor los dedos.</p>
+        <p className="screen__lead">Solo necesitas tu cámara.</p>
       </header>
 
       <HealthNotice />
@@ -29,24 +29,26 @@ export function Home() {
       <div className="entries">
         <a href="#practica" className="entry" onClick={link("practica")}>
           <span className="entry__icon">
-            <IconCamera size={32} />
+            <IconCamera size={40} strokeWidth={1.75} />
           </span>
           <span className="entry__title">Práctica</span>
-          <span className="entry__text">Elige una seña, mira el ejemplo y recibe una calificación con lo que debes corregir.</span>
+          <span className="entry__text">Aprende señas y recibe consejos al momento.</span>
           <span className="entry__go">Ir a Práctica</span>
         </a>
         <a href="#traduccion" className="entry" onClick={link("traduccion")}>
           <span className="entry__icon">
-            <IconSpeaker size={32} />
+            <IconSpeaker size={40} strokeWidth={1.75} />
           </span>
           <span className="entry__title">Interpretación</span>
-          <span className="entry__text">Haz varias señas seguidas y la app forma la oración en español, lista para leerse en voz alta.</span>
+          <span className="entry__text">Haz señas y conviértelas en texto y voz.</span>
           <span className="entry__go">Ir a Interpretación</span>
         </a>
         <a href="#juegos" className="entry" onClick={link("juegos")}>
-          <span className="entry__icon entry__icon--emoji" aria-hidden="true">🎮</span>
+          <span className="entry__icon">
+            <IconGamepad size={40} strokeWidth={1.75} />
+          </span>
           <span className="entry__title">Juegos</span>
-          <span className="entry__text">Completa palabras con letras o con señas, o gana una carrera deletreando.</span>
+          <span className="entry__text">Aprende jugando con letras y señas.</span>
           <span className="entry__go">Ir a Juegos</span>
         </a>
       </div>

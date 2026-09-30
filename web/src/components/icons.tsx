@@ -179,3 +179,37 @@ export const IconMore = (p: IconProps) => (
     <path d="M18.5 12h.01" />
   </Icon>
 );
+
+/** Pieza de rompecabezas: juego "Completa la palabra". */
+export const IconPuzzle = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 8h4.5a2 2 0 1 1 4 0H17v4.5a2 2 0 1 1 0 4V21H4Z" />
+  </Icon>
+);
+
+/** Bandera de meta: juego "Carrera de letras". */
+export const IconFlag = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 21V4" />
+    <path d="M5 4.5c2.5-1.5 5-1.5 7 0s4.5 1.5 7 0v9c-2.5 1.5-5 1.5-7 0s-4.5-1.5-7 0" />
+  </Icon>
+);
+
+/** Letra W ("doble u"): juego "Wordle LSM". */
+export const IconLetterW = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 5.5 7.5 19l4.5-10 4.5 10 4-13.5" />
+  </Icon>
+);
+
+/** Círculo en cuatro cuadrantes, como el juguete Simón: juego "Simón dice". */
+export const IconSimon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 3v6.5" />
+    <path d="M12 14.5V21" />
+    <path d="M3 12h6.5" />
+    <path d="M14.5 12H21" />
+    <circle cx="12" cy="12" r="2.5" />
+  </Icon>
+);

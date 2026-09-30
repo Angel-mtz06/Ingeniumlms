@@ -266,8 +266,8 @@ export default function App() {
       <header className="app-header">
         <div className="app-header__inner">
           <h1 className="brand">
-            <span className="brand__mark" translate="no">LSM</span>
-            <span className="brand__name">Aprende y traduce Lengua de Señas Mexicana</span>
+            <img className="brand__logo" src="/brand/logo.png" alt="" width={36} height={40} />
+            <span className="brand__name" translate="no">SingLink</span>
           </h1>
           <div className="tabs" role="tablist" aria-label="Secciones de la aplicación" onKeyDown={onKeyDown}>
             {TABS.map((t) => {
