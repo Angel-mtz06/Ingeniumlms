@@ -33,7 +33,7 @@ from add_class import K_AUG, augmented, embed, fit_row  # noqa: E402
 
 from lsm.anchor import AnchorError  # noqa: E402
 from lsm.classifier.model import SignTransformer  # noqa: E402
-from lsm.normalize import NormSequence, normalize  # noqa: E402
+from lsm.normalize import NormSequence, mirror, normalize  # noqa: E402
 from lsm.paths import DATASETS, MODELS, active_references_path, active_vocab_path  # noqa: E402
 from lsm.schema import RawSequence  # noqa: E402
 from lsm.session import NONE_MIN  # noqa: E402
@@ -56,7 +56,7 @@ def model_of(ck: dict) -> SignTransformer:
     return m.eval()
 
 
-def positives(gloss: str, pos_norms: Path | None, min_hands: float) -> dict[str, list[NormSequence]]:
+def positives(gloss: str, pos_norms: Path | None, min_hands: float, espejo: bool = False) -> dict[str, list[NormSequence]]:
     by: dict[str, list[NormSequence]] = {}
     if pos_norms is not None:
         for p in sorted(pos_norms.glob("*.npz")):
@@ -66,7 +66,8 @@ def positives(gloss: str, pos_norms: Path | None, min_hands: float) -> dict[str,
         if canonical(r["source_label"]) != gloss or float(r["hand_ratio"]) < min_hands:
             continue
         try:
-            by.setdefault(r["signer"], []).append(normalize(RawSequence.load(r["path"])))
+            n = normalize(RawSequence.load(r["path"]))
+            by.setdefault(r["signer"], []).append(mirror(n) if espejo else n)
         except AnchorError:
             continue
     return by
@@ -98,6 +99,8 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--manifest", type=Path, default=DATASETS / "processed_classifier_v2" / "manifest.csv")
     ap.add_argument("--pos-norms", type=Path, default=None)
+    ap.add_argument("--espejo", action="store_true",
+                    help="las tomas propias (datasets/own) están en espejo (cámara frontal del celular): se reflejan antes de usarlas")
     ap.add_argument("--min-hands", type=float, default=MIN_HAND_RATIO)
     ap.add_argument("--dry-run", action="store_true", help="solo evalúa; no escribe nada")
     args = ap.parse_args()
@@ -112,7 +115,7 @@ def main():
     if gloss in labels:
         raise SystemExit(f"{gloss} ya es una clase de {args.base}.")
     none, new = labels.index(NONE_GLOSS), len(labels)
-    by_signer = positives(gloss, args.pos_norms, args.min_hands)
+    by_signer = positives(gloss, args.pos_norms, args.min_hands, args.espejo)
     n_pos = sum(len(v) for v in by_signer.values())
     if len(by_signer) < 2 or n_pos < 6:
         raise SystemExit(f"Faltan tomas de {gloss}: {n_pos} de {len(by_signer)} personas (mínimo 6 de 2).")

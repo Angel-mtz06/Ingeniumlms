@@ -140,3 +140,15 @@ def test_tolerance_also_applies_to_live_finger_status():
     strict = finger_status(REF, flex)[0]
     loose = finger_status(replace(REF, tolerance={"configuracion": 3.0}), flex)[0]
     assert (loose <= strict).all() and loose.sum() < strict.sum()
+
+
+def test_one_hand_sign_in_the_other_slot_is_still_evaluated():
+    from lsm.evaluator.scoring import align_one_hand
+    s = seq()
+    other = NormSequence(s.hands[:, ::-1].copy(), s.present[:, ::-1].copy(), s.sample_id, s.signer)
+    assert any(i.param == "mano" for i in evaluate(REF, other).issues)  # sin alinear: "no veo tu mano"
+    a = evaluate(REF, *align_one_hand(REF, other))
+    b = evaluate(REF, s)
+    assert a.scores == b.scores and not any(i.param == "mano" for i in a.issues)
+    # si la mano ya está en su lado no cambia nada
+    assert align_one_hand(REF, s)[0] is s

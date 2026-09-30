@@ -14,7 +14,7 @@ from pathlib import Path
 from lsm.anchor import AnchorError
 from lsm.evaluator.references import build_reference, load_references, save_references
 from lsm.features import REST_Y
-from lsm.normalize import NormSequence, normalize
+from lsm.normalize import NormSequence, mirror, normalize
 from lsm.paths import DATASETS
 from lsm.schema import RawSequence
 from lsm.vocab import canonical
@@ -31,6 +31,8 @@ def main():
                     help='margen extra por parámetro, JSON: \'{"configuracion":1.2,"ubicacion":1.3,'
                          '"movimiento":2.5,"orientacion":1.6}\' (divide el z; 1 = sin margen). Útil cuando la '
                          "cámara en vivo (fps, resolución, luz) difiere de la de las tomas")
+    ap.add_argument("--espejo", action="store_true",
+                    help="las tomas están en espejo (cámara frontal del celular): se reflejan antes de usarlas")
     args = ap.parse_args()
     gloss = canonical(args.gloss)
 
@@ -43,6 +45,8 @@ def main():
             continue
         try:
             n = normalize(RawSequence.load(r["path"]))
+            if args.espejo:
+                n = mirror(n)
         except AnchorError:
             print("omitida (sin cabeza):", r["sample_id"])
             continue

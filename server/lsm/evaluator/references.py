@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import json
 import warnings
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, replace
 from pathlib import Path
 
 import numpy as np
 
 from lsm.features import T_OUT, active_span, finger_flexion, resample
-from lsm.normalize import NormSequence
+from lsm.normalize import NormSequence, mirror
 
 TIPS = (8, 12, 16, 20)
 HOLD_K = 4
@@ -141,6 +141,25 @@ def build_reference(gloss: str, norms: list[NormSequence], preferred: tuple[str,
         path_len=float(np.mean([s["path_len"] for s in stats])), n_samples=len(norms),
         example_id=ex.sample_id, example_hands=ex_h, example_present=ex_p,
     )
+
+
+def mirror_reference(ref: GlossRef) -> GlossRef:
+    """La referencia en espejo, como si se hubiera construido con las muestras reflejadas (`normalize.mirror`): se
+    intercambian las manos (slot 0 ↔ 1), la ubicación y la trayectoria cambian el signo de x, la normal de la palma
+    (x, y, z) pasa a (x, -y, -z) y la flexión y los contactos no cambian. Sirve para tomas grabadas en espejo (la
+    cámara frontal del celular): la mano derecha quedó como izquierda."""
+    swap = lambda a: np.asarray(a)[::-1].copy()  # noqa: E731
+    loc = swap(ref.loc_mean)
+    loc[:, 0] *= -1
+    palm = swap(ref.palm_mean)
+    palm[:, 1:] *= -1
+    traj = np.asarray(ref.traj_mean, np.float32).copy()
+    traj[:, 0] *= -1
+    ex = mirror(NormSequence(np.asarray(ref.example_hands, np.float32), np.asarray(ref.example_present, bool)))
+    return replace(ref, slots_used=swap(ref.slots_used), flex_mean=swap(ref.flex_mean), flex_std=swap(ref.flex_std),
+                   loc_mean=loc, loc_std=swap(ref.loc_std), palm_mean=palm, palm_spread=swap(ref.palm_spread),
+                   contact_prob=swap(ref.contact_prob), dom=1 - ref.dom, traj_mean=traj,
+                   example_hands=ex.hands, example_present=ex.present)
 
 
 def _to_json(v):
