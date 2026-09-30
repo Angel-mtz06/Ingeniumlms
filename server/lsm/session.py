@@ -10,7 +10,7 @@ from collections import deque
 
 import numpy as np
 
-from lsm.classifier.disambiguate import distinguish_hola_no
+from lsm.classifier.disambiguate import distinguish_pairs
 from lsm.classifier.boost import sign_boost
 from lsm.classifier.infer import predict_focus
 from lsm.context import LOCK_P, MIN_P, START, ContextModel, rerank, token
@@ -480,7 +480,7 @@ class Session:
         if self.mode != "practice":  # Práctica califica las manos que la referencia pide, tal como se vieron
             seq = read
         top = [[g, round(float(p), 3)] for g, p in preds]
-        return distinguish_hola_no(top, seq, self.references), seq
+        return distinguish_pairs(top, seq, self.references), seq
 
     def _evaluate_segment(self, a: int, b: int, read: tuple[list, NormSequence] | None = None,
                           reason: str = "") -> list[dict]:
