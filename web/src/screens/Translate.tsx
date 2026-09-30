@@ -4,6 +4,7 @@ import { IconSpeaker, IconWarning, ToneIcon } from "../components/icons";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { SentencePanel } from "../components/SentencePanel";
 import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
+import { useFrameRecorder } from "../hooks/useFrameRecorder";
 import { freeGauge, spellStatus } from "../lib/alphabetView";
 import { SpellingTracker, type SpellEvent } from "../lib/spelling";
 import { lostMessage } from "../lib/translate";
@@ -75,9 +76,11 @@ export function Translate() {
   const correcting = useRef(false);
   // Letras: siempre activas, junto con las palabras del servidor.
   const alpha = useAlphabetRecognition(null, "free", true);
+  const recorder = useFrameRecorder(10000);
   useFrameSink((f) => {
     if (!correcting.current) session.send(f);
     alpha.onFrame(f);
+    recorder.push(f);
   });
   const speller = useRef(new SpellingTracker());
   const [letters, setLetters] = useState<string[]>([]);
@@ -209,6 +212,13 @@ export function Translate() {
               </button>
             </div>
           ) : null}
+          <p className="sheet__hint">
+            ¿Algo salió mal?{" "}
+            <button type="button" className="btn btn--quiet btn--small" onClick={() => recorder.download("interpretacion", {
+              screen: "interpretacion", letters, chips: translate.chips.map((c) => c.gloss), sentence: translate.sentence?.text ?? null,
+            })}>Descargar intento</button>{" "}
+            (últimos 10 s, solo puntos de la mano).
+          </p>
         </section>
         <section className="sheet" aria-labelledby="traduccion-senas">
           <h3 id="traduccion-senas" className="sheet__title" tabIndex={-1}>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { LETTERS, MOTION_LETTERS } from "../lib/alphabet";
 import { useAlphabetRecognition, useLetterSequence, type AlphabetMode } from "../hooks/useAlphabetRecognition";
+import { useFrameRecorder } from "../hooks/useFrameRecorder";
 import { HandDiagram } from "../components/HandDiagram";
 import { IconEye, IconEyeOff, IconWarning, ToneIcon } from "../components/icons";
 import { ScoreGauge } from "../components/ScoreGauge";
@@ -136,7 +137,8 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
   const { detected, progress: holdProgress, complete, feedback, fingers, live } = recognition;
   const base = target !== null ? motionBaseLetter(target) : null;
   useSessionMode("practice", target);
-  useFrameSink(cameraOn ? (f) => { session.send(f); recognition.onFrame(f); } : null);
+  const recorder = useFrameRecorder();
+  useFrameSink(cameraOn ? (f) => { session.send(f); recognition.onFrame(f); recorder.push(f); } : null);
 
   useEffect(() => {
     if (!complete || mode !== "sequential" || letterIdx === LETTERS.length - 1) return;
@@ -355,6 +357,15 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
         )}
       </div>
 
+      {cameraOn ? (
+        <p className="sheet__hint">
+          ¿No te reconoció una letra?{" "}
+          <button type="button" className="btn btn--quiet btn--small" onClick={() => recorder.download(`alfabeto_${mode}_${target ?? "libre"}`, {
+            screen: "alfabeto", mode, target, stable: recognition.stable, motionResult: recognition.motionResult ?? live?.result ?? null,
+          })}>Descargar intento</button>{" "}
+          (guarda los puntos de la mano de los últimos 8 s, sin video, para revisar qué pasó).
+        </p>
+      ) : null}
       {target === "K" && <p className="sheet__hint">En K se evalúa únicamente la pose; el giro que muestra la referencia no se califica.</p>}
       <p className="sheet__hint">Reconocimiento experimental. Confianza relativa, no probabilidad de acierto. Puede confundir letras parecidas (R/U/V, S/T, M/N); no sustituye la revisión de una persona que domine LSM.</p>
     </div>
