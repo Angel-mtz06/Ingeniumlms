@@ -40,6 +40,26 @@ def live_rest_y() -> float:
     return y
 
 
+PAUSE_S = 3.5  # segundos en reposo, tras al menos una seña, para formar la oración (Traducción)
+PAUSE_S_RANGE = (1.5, 10.0)
+
+
+def live_pause_s() -> float:
+    """Pausa de oración en segundos. Por defecto PAUSE_S (3.5); se ajusta con LSM_PAUSE_S (1.5–10). Con 1.5 s
+    la oración se formaba en cuanto la persona bajaba las manos entre dos señas."""
+    v = os.environ.get("LSM_PAUSE_S")
+    if v is None:
+        return PAUSE_S
+    try:
+        p = float(v)
+    except ValueError:
+        p = float("nan")
+    if not (PAUSE_S_RANGE[0] <= p <= PAUSE_S_RANGE[1]):
+        logging.getLogger("lsm.segmenter").warning("LSM_PAUSE_S=%r inválido; se usa %.1f", v, PAUSE_S)
+        return PAUSE_S
+    return p
+
+
 POST_STILL_MIN = 15  # un segmento que sigue a un cierre por quietud necesita ≥15 cuadros…
 POST_STILL_DROP = 1.0  # …y no bajar en neto más de 1 ancho de cabeza (si no, es solo bajar la mano)
 
@@ -87,14 +107,16 @@ class Segmenter:
     1) reposo: la mano vuelve abajo (o desaparece) `rest_frames` cuadros;
     2) quietud: la muñeca casi no se mueve `still_frames` cuadros (Práctica lo desactiva);
     3) max_len: tope de longitud.
+    Emite "pause" tras `pause_s` segundos sin manos arriba si hubo al menos una seña desde la última pausa.
     Los parámetros (cuadros y velocidad por cuadro) están a 30 fps; `rate` = fps/30 los lleva a la tasa real."""
 
     def __init__(self, rest_y: float | None = None, still_speed: float = 0.04, rest_frames: int = 6,
-                 still_frames: int = 12, pause_frames: int = 45, min_len: int = 6, max_len: int = 75,
+                 still_frames: int = 12, pause_s: float | None = None, min_len: int = 6, max_len: int = 75,
                  rate: float = 1.0):
         self.rest_y = live_rest_y() if rest_y is None else rest_y
+        self.pause_s = live_pause_s() if pause_s is None else pause_s
         self.still_speed = still_speed
-        self.rest_frames, self.still_frames, self.pause_frames = rest_frames, still_frames, pause_frames
+        self.rest_frames, self.still_frames = rest_frames, still_frames
         self.min_len, self.max_len = min_len, max_len
         self.rate = rate
         self.state = "idle"
@@ -115,6 +137,8 @@ class Segmenter:
         """Umbral `name` (rest, still, pause, min_len, max_len, post_still) en cuadros a la tasa actual."""
         if name == "rest":
             return scale_run(self.rest_frames, self.rate, MIN_FRAMES[name])
+        if name == "pause":  # en segundos: pause_s × 30 cuadros a 30 fps
+            return scale_frames(round(self.pause_s * BASE_FPS), self.rate, MIN_FRAMES[name])
         base = POST_STILL_MIN if name == "post_still" else getattr(
             self, name if name in ("min_len", "max_len") else f"{name}_frames")
         return scale_frames(base, self.rate, MIN_FRAMES[name])
@@ -136,7 +160,8 @@ class Segmenter:
     def _close(self, end: int, reason: str) -> list[SegEvent]:
         start = self.start
         self.state = "idle"
-        self.idle_count = 0
+        # la pausa se mide desde que la mano bajó: los cuadros de la racha de reposo ya cuentan
+        self.idle_count = self.rest_count if reason == "reposo" else 0
         self.need_motion = reason == "quietud"
         if end - start + 1 < self.frames("min_len"):
             return []

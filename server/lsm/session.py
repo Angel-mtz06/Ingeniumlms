@@ -29,6 +29,7 @@ NO_HAND_WARN = 60  # cuadros a 30 fps (2 s); se escala con la tasa real
 GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
 SIDE_OF_SLOT = ("R", "L")
 SUMMARY_FRAMES = 150  # un resumen de diagnóstico cada ~5 s (cuadros a 30 fps)
+PAUSING_EVERY = 15  # aviso "pausing" cada ~0.5 s (cuadros a 30 fps)
 
 log = logging.getLogger("lsm.session")
 
@@ -120,6 +121,7 @@ class Session:
         self.calib: dict = calib
         self.calibrator: Calibrator | None = None
         self.pending: list[dict] = []
+        self.pausing_at: int | None = None  # idx del último aviso "pausing"; None = sin cuenta regresiva
         self.no_hand = 0
         self.warned = False
         self._new_window()
@@ -231,7 +233,28 @@ class Session:
                 out += self._segment(ev)
             elif ev.kind == "pause" and self.mode == "translate":
                 out += await self._sentence()
-        return out
+        return out + self._pausing()
+
+    def _pause_left(self) -> float | None:
+        """Segundos que faltan para formar la oración por pausa, o None si no hay cuenta regresiva (sin glosas
+        pendientes, manos arriba o en otro modo)."""
+        seg = self.segmenter
+        if self.mode != "translate" or not self.pending or not seg.pending or seg.state != "idle" or seg.idle_count <= 0:
+            return None
+        return max(0.0, (seg.frames("pause") - seg.idle_count) / self.rate.fps)
+
+    def _pausing(self) -> list[dict]:
+        """Aviso de la cuenta regresiva cada ~0.5 s; `remaining: null` si se cancela (la persona subió las manos)."""
+        left = self._pause_left()
+        if left is None:
+            if self.pausing_at is None:
+                return []
+            self.pausing_at = None
+            return [{"type": "pausing", "remaining": None}]
+        if self.pausing_at is not None and self.idx - self.pausing_at < scale_frames(PAUSING_EVERY, self.segmenter.rate):
+            return []
+        self.pausing_at = self.idx
+        return [{"type": "pausing", "remaining": round(left, 1), "total": round(self.segmenter.pause_s, 1)}]
 
     def _update_gloves(self, lines: dict) -> dict[str, bool]:
         """Guarda la última lectura por lado; devuelve qué lados trajeron una lectura nueva (seq distinto).
@@ -313,6 +336,7 @@ class Session:
         text, source = await self.sentences.build(glosses, self.paragraph[-3:])
         self.paragraph.append(text)
         self.pending = []
+        self.pausing_at = None  # la oración reemplaza al aviso: no hace falta cancelarlo
         return [{"type": "sentence", "glosses": glosses, "text": text,
                  "paragraph": " ".join(self.paragraph), "source": source}]
 

@@ -18,7 +18,10 @@
 - [ ] Probar una seña en Práctica y una oración corta en Traducción.
 
 ## Durante
-- [ ] Entre señas en Traducción: pausa breve; al terminar la oración, manos al reposo ~1.5 s.
+- [ ] Entre señas en Traducción: se pueden bajar las manos un momento; al terminar la oración, manos al reposo
+  ~3.5 s (la app muestra "Formando oración en 3 s… sube las manos para seguir"; subir las manos cancela la
+  cuenta). La pausa se ajusta con `LSM_PAUSE_S=<segundos>` en `.env` (por defecto 3.5; rango válido 1.5–10) y
+  reiniciando el servidor. "Formar oración ahora" la forma sin esperar.
 - [ ] **Formar la oración antes de cambiar de pestaña** (si no, las señas pendientes se descartan; la app avisa).
 - [ ] Si aparece "Se reinició la conexión: vuelve a calibrar", recalibrar (20 s).
 

@@ -59,6 +59,14 @@ no afecta a los rasgos del modelo). Registro de diagnóstico en `logs/lsm.log` (
 | `calibration` | `step`, `status` o `sides: {"L": bool, "R": bool}` |
 | `warning` | `code`, `message` |
 | `error` | `message` |
+| `pausing` | `remaining: number\|null` (s, 1 decimal), `total: number` (s) — ver nota de pausa |
+
+Nota (aditiva, 2026-09-28, pausa de oración): en Traducción la oración se forma tras `LSM_PAUSE_S` segundos
+(por defecto **3.5**, rango 1.5–10; antes 45 cuadros ≈ 1.5 s) con las manos en reposo, medidos desde que la mano
+bajó, si hubo al menos una seña desde la última oración. Mientras hay glosas pendientes y las manos están en
+reposo, el servidor emite `pausing` cada ~0.5 s con los segundos que faltan (`remaining`) y la pausa total
+(`total`). Si la persona sube las manos antes de terminar, emite `{"type":"pausing","remaining":null}` (sin
+`total`) para cancelar el aviso. Cuando llega `sentence` no se emite cancelación: la oración reemplaza al aviso.
 
 ## Estructura de archivos
 
