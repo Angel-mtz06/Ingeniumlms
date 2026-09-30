@@ -4,7 +4,7 @@ import type { ClientMsg, ServerMsg } from "./protocol";
  * Mensajes que fijan una preferencia de la conexión: se recuerda el último de cada tipo y se reenvía después
  * de `hello` en cada conexión nueva (cada conexión es una Session nueva en el servidor).
  */
-const STICKY: readonly ClientMsg["type"][] = ["topic"];
+const STICKY: readonly ClientMsg["type"][] = ["topic", "validate"];
 
 /** Si el WebSocket acumula más de esto sin enviar, los cuadros se descartan (los de control nunca). */
 export const MAX_BUFFERED_BYTES = 64 * 1024;

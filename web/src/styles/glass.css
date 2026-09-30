@@ -532,6 +532,35 @@ body::after {
   box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 
+/* Validar cada seña: filas de cristal sutil con el tono del estado */
+.validate-item__row {
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-warn) 8%, var(--glass-fill-subtle));
+  box-shadow: var(--glass-highlight);
+}
+
+.validate-item[data-state="confirmed"] .validate-item__row {
+  background: color-mix(in srgb, var(--color-ok) 8%, var(--glass-fill-subtle));
+}
+
+.validate-item[data-state="removed"] .validate-item__row {
+  background: var(--glass-fill-subtle);
+}
+
+.validate-item__n {
+  background: var(--glass-fill-strong);
+  box-shadow: var(--glass-highlight), 0 0 0 1px var(--glass-border);
+}
+
+.validate-option[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--color-ok) 12%, var(--glass-fill-strong));
+}
+
+.validate-option__key,
+.sheet__hint kbd {
+  background: var(--glass-fill-strong);
+}
+
 /* Etiquetas dentro del chip y señas usadas en la oración: cápsulas de cristal sutil */
 .chip__tag,
 .sentence-gloss {
@@ -589,6 +618,12 @@ body::after {
 
 .topic-picker__item:active {
   transform: scale(0.95);
+}
+
+@media (max-width: 479px) {
+  .topic-picker__options {
+    border-radius: 24px;
+  }
 }
 
 .switch {

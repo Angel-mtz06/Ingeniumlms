@@ -768,6 +768,31 @@
   font-weight: 700;
 }
 
+/* Dentro de una hoja (grid) el interruptor no se estira. */
+.switch--inline {
+  justify-self: start;
+}
+
+.switch--inline .switch__label {
+  white-space: nowrap;
+}
+
+/* Atajos de teclado en las instrucciones ("Validar cada seña"). */
+.sheet__hint kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 var(--space-1);
+  border-radius: 4px;
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border), 0 1px 0 var(--color-border);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .switch__state {
   color: var(--color-text-muted);
 }

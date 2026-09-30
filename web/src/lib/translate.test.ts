@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ServerMsg } from "./protocol";
-import { lostMessage, newEvents, pausingFraction, pausingText, TRANSLATE_INITIAL, translateReducer, type TranslateState, validCorrected } from "./translate";
+import { lostMessage, newEvents, pausingFraction, pausingText, serverIndex, TRANSLATE_INITIAL, translateReducer, type TranslateState, validateKey, validation, validCorrected } from "./translate";
 
 const sign = (index: number, gloss: string, confident = true): ServerMsg => ({
   type: "sign",
@@ -135,7 +135,7 @@ describe("contexto", () => {
     });
     expect(s.chips.map((c) => c.reranked ?? false)).toEqual([false, true]);
     s = translateReducer(s, { kind: "confirm", index: 1, gloss: "BOMBEROS" });
-    expect(s.chips[1]).toEqual({ gloss: "BOMBEROS", top3: [["YO", 0.3], ["BOMBEROS", 0.4], ["NO", 0.1]], confident: true });
+    expect(s.chips[1]).toEqual({ gloss: "BOMBEROS", top3: [["YO", 0.3], ["BOMBEROS", 0.4], ["NO", 0.1]], confident: true, confirmed: true });
   });
 
   it("sentence guarda las glosas elegidas y los índices corregidos", () => {
@@ -156,5 +156,91 @@ describe("contexto", () => {
     expect(s.sentence?.corrected).toEqual([]);
     expect(validCorrected([2, 0, 0, -1, 1.5, 9, "1"], 3)).toEqual([0, 2]);
     expect(validCorrected(null, 3)).toEqual([]);
+  });
+});
+
+describe("validar cada seña", () => {
+  const three = () => run(TRANSLATE_INITIAL, sign(0, "HOLA", false), sign(1, "YO"), sign(2, "BOMBEROS", false));
+
+  it("confirmar marca la seña; quitar con ghost la deja visible como quitada", () => {
+    let s = three();
+    expect(s.chips.map((c) => c.confirmed ?? false)).toEqual([false, false, false]);
+    s = translateReducer(s, { kind: "confirm", index: 1, gloss: "YO" });
+    s = translateReducer(s, { kind: "remove", index: 2, ghost: true });
+    expect(s.chips.map((c) => [c.gloss, !!c.confirmed, !!c.removed])).toEqual([
+      ["HOLA", false, false],
+      ["YO", true, false],
+      ["BOMBEROS", false, true],
+    ]);
+    expect(validation(s.chips)).toEqual({ live: 2, confirmed: 1, unvalidated: 1, ready: false });
+    s = translateReducer(s, { kind: "confirm", index: 0, gloss: "ADIOS" });
+    expect(validation(s.chips)).toEqual({ live: 2, confirmed: 2, unvalidated: 0, ready: true });
+  });
+
+  it("el índice del servidor salta las quitadas; sign y pending se acomodan a las vivas", () => {
+    let s = translateReducer(three(), { kind: "remove", index: 0, ghost: true });
+    expect([0, 1, 2].map((i) => serverIndex(s.chips, i))).toEqual([-1, 0, 1]);
+    s = run(s, { type: "pending", glosses: ["YO", "BOMBEROS"], confirmed: [true, false] });
+    expect(s.chips.map((c) => [c.gloss, !!c.confirmed, !!c.removed])).toEqual([
+      ["HOLA", false, true],
+      ["YO", true, false],
+      ["BOMBEROS", false, false],
+    ]);
+    s = run(s, sign(2, "GRACIAS"));
+    expect(s.chips.map((c) => c.gloss)).toEqual(["HOLA", "YO", "BOMBEROS", "GRACIAS"]);
+    expect(serverIndex(s.chips, 3)).toBe(2);
+  });
+
+  it("aceptar todas confirma las sugeridas vivas", () => {
+    let s = translateReducer(three(), { kind: "remove", index: 1, ghost: true });
+    s = translateReducer(s, { kind: "acceptAll" });
+    expect(s.chips.map((c) => [c.gloss, !!c.confirmed])).toEqual([
+      ["HOLA", true],
+      ["YO", false],
+      ["BOMBEROS", true],
+    ]);
+    expect(validation(s.chips).ready).toBe(true);
+  });
+
+  it("quitar la única seña deja el estado vacío (no se puede formar oración)", () => {
+    let s = run(TRANSLATE_INITIAL, sign(0, "HOLA", false));
+    s = translateReducer(s, { kind: "remove", index: 0, ghost: true });
+    s = run(s, { type: "pending", glosses: [], confirmed: [] });
+    expect(validation(s.chips)).toEqual({ live: 0, confirmed: 0, unvalidated: 0, ready: false });
+  });
+
+  it("la oración y ready borran también las quitadas; las perdidas cuentan solo las vivas", () => {
+    let s = translateReducer(three(), { kind: "remove", index: 0, ghost: true });
+    s = run(s, { type: "ready", mode: "practice", target: "HOLA", has_reference: true });
+    expect(s.chips).toEqual([]);
+    expect(s.lost).toBe(2);
+  });
+
+  it("pending con awaiting_validation avisa que faltan señas por validar", () => {
+    let s = run(TRANSLATE_INITIAL, sign(0, "HOLA", false));
+    s = translateReducer(s, { kind: "build" });
+    s = run(s, { type: "pending", glosses: ["HOLA"], confirmed: [false], awaiting_validation: true });
+    expect(s.notice).toBe("validate");
+    expect(s.awaitingBuild).toBe(false);
+    s = translateReducer(s, { kind: "confirm", index: 0, gloss: "HOLA" });
+    expect(s.notice).toBeNull();
+  });
+});
+
+describe("teclas de validación", () => {
+  const k = (key: string, mod: Partial<{ ctrlKey: boolean; altKey: boolean; metaKey: boolean }> = {}) =>
+    validateKey({ key, ctrlKey: false, altKey: false, metaKey: false, ...mod });
+  it("1, 2 y 3 eligen; X y Supr quitan; flechas arriba y abajo cambian de seña", () => {
+    expect(k("1")).toEqual({ kind: "pick", n: 0 });
+    expect(k("3")).toEqual({ kind: "pick", n: 2 });
+    expect(k("4")).toBeNull();
+    expect(k("x")).toEqual({ kind: "remove" });
+    expect(k("X")).toEqual({ kind: "remove" });
+    expect(k("Delete")).toEqual({ kind: "remove" });
+    expect(k("ArrowDown")).toEqual({ kind: "move", delta: 1 });
+    expect(k("ArrowUp")).toEqual({ kind: "move", delta: -1 });
+    expect(k("Enter")).toBeNull();
+    expect(k("1", { ctrlKey: true })).toBeNull();
+    expect(k("x", { metaKey: true })).toBeNull();
   });
 });

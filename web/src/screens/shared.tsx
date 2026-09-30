@@ -41,6 +41,9 @@ export interface AppState {
   /** Tema de la conversación en Interpretación (por defecto "todo"); vive en App para sobrevivir al cambio de pestaña. */
   topic: Topic;
   setTopic(topic: Topic): void;
+  /** "Validar cada seña" en Interpretación (por defecto activado). */
+  validate: boolean;
+  setValidate(on: boolean): void;
   translateDispatch: Dispatch<TranslateAction>;
   /** Guantes calibrados en la sesión actual del servidor (se pierde al reconectar el WebSocket). */
   calibration: CalibrationState;

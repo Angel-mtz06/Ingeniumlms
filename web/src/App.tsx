@@ -67,6 +67,16 @@ export default function App() {
     setTopicState(t);
     sendRef.current({ type: "topic", topic: t });
   }, []);
+  // "Validar cada seña": activado por defecto; el servidor arranca apagado, así que se avisa al conectar
+  // (el socket lo guarda y lo reenvía tras cada hello).
+  const [validate, setValidateState] = useState(true);
+  const setValidate = useCallback((on: boolean) => {
+    setValidateState(on);
+    sendRef.current({ type: "validate", enabled: on });
+  }, []);
+  useEffect(() => {
+    sendRef.current({ type: "validate", enabled: true });
+  }, []);
 
   // Las etiquetas y la oración de Traducción se derivan de todos los mensajes, aunque la pestaña no esté abierta.
   const lastSeen = useRef<ServerMsg | null>(null);
@@ -139,13 +149,15 @@ export default function App() {
       translateDispatch,
       topic,
       setTopic,
+      validate,
+      setValidate,
       calibration,
       takes,
       addTake,
       go,
       health,
     }),
-    [camera, vision, gloves, session, cameraStatus, vocab, vocabError, setFrameSink, setSessionMode, translate, topic, setTopic, calibration, takes, addTake, go, health],
+    [camera, vision, gloves, session, cameraStatus, vocab, vocabError, setFrameSink, setSessionMode, translate, topic, setTopic, validate, setValidate, calibration, takes, addTake, go, health],
   );
 
   useEffect(() => {

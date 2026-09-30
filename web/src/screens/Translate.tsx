@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { GlossChips } from "../components/GlossChips";
-import { IconSpeaker, IconWarning } from "../components/icons";
+import { IconCheck, IconSpeaker, IconWarning } from "../components/icons";
 import { SentencePanel } from "../components/SentencePanel";
 import { TopicPicker } from "../components/TopicPicker";
-import { lostMessage, type Pausing, pausingFraction, pausingText } from "../lib/translate";
+import { lostMessage, type Pausing, pausingFraction, pausingText, serverIndex, validation } from "../lib/translate";
 import { LiveCamera } from "./LiveCamera";
 import { ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
@@ -47,12 +47,31 @@ function PauseIndicator({ pausing }: { pausing: Pausing }) {
   );
 }
 
+/** Aviso sobre el video mientras hay señas sin validar: la app no manda cuadros hasta que se elija. */
+function HoldIndicator({ n }: { n: number }) {
+  return (
+    <div className="overlay-pill overlay-pill--hold" aria-hidden="true">
+      <IconCheck />
+      <span>{n === 1 ? "Elige la palabra para seguir" : `Elige las ${n} palabras para seguir`}</span>
+    </div>
+  );
+}
+
+/** Texto del estado de "Validar cada seña" (vacío si no hay nada pendiente). */
+function validateStatus(unvalidated: number): string {
+  if (unvalidated <= 0) return "";
+  return unvalidated === 1 ? "Valida las palabras para formar la oración (falta 1)." : `Valida las palabras para formar la oración (faltan ${unvalidated}).`;
+}
+
 /**
- * Traducción: cámara, señas reconocidas (corregibles) y la oración en español. Al llegar una
+ * Interpretación: cámara, señas reconocidas (validables o corregibles) y la oración en español. Al llegar una
  * oración nueva se lee en voz alta si el interruptor "Voz" está activo.
  */
 export function Translate() {
-  const { session, translate, translateDispatch, topic, setTopic } = useApp();
+  const { session, translate, translateDispatch, topic, setTopic, validate, setValidate } = useApp();
+  const v = validation(translate.chips);
+  // "Validar cada seña": con señas sin validar no se mandan cuadros (no se cuela otra seña) ni corre la pausa.
+  const holding = validate && v.unvalidated > 0;
   const [voice, setVoice] = useState(readVoice);
   const [confirmClear, setConfirmClear] = useState(false);
   const clearBtn = useRef<HTMLButtonElement | null>(null);
@@ -86,11 +105,13 @@ export function Translate() {
   }, [pauseRunning]);
 
   useSessionMode("translate", null);
-  // Mientras se corrige una seña dudosa no se mandan cuadros: así el contador de quietud del
-  // servidor (pausa automática) no avanza y no forma la oración a media corrección.
+  // Mientras se corrige una seña dudosa (panel abierto) o hay señas sin validar no se mandan cuadros: así el
+  // contador de quietud del servidor (pausa automática) no avanza y no se cuela otra seña a media elección.
   const correcting = useRef(false);
+  const holdRef = useRef(holding);
+  holdRef.current = holding;
   useFrameSink((f) => {
-    if (!correcting.current) session.send(f);
+    if (!correcting.current && !holdRef.current) session.send(f);
   });
 
   // Solo se leen las oraciones que llegan con la pantalla abierta (no la que ya estaba al entrar).
@@ -129,8 +150,30 @@ export function Translate() {
     session.send({ type: "reset" });
   };
 
+  const confirm = (index: number, gloss: string) => {
+    const at = serverIndex(translate.chips, index);
+    if (at < 0) return;
+    translateDispatch({ kind: "confirm", index, gloss });
+    session.send({ type: "confirm_gloss", index: at, gloss });
+  };
+
+  const remove = (index: number) => {
+    const at = serverIndex(translate.chips, index);
+    if (at < 0) return;
+    translateDispatch({ kind: "remove", index, ghost: validate });
+    session.send({ type: "remove_gloss", index: at });
+  };
+
+  const acceptAll = () => {
+    translate.chips.forEach((c, i) => {
+      if (!c.removed && !c.confirmed) session.send({ type: "confirm_gloss", index: serverIndex(translate.chips, i), gloss: c.gloss });
+    });
+    translateDispatch({ kind: "acceptAll" });
+  };
+
   const s = translate.sentence;
   const hasContent = translate.chips.length > 0 || s !== null;
+  const hasSigns = v.live > 0;
 
   return (
     <div className="screen">
@@ -158,35 +201,62 @@ export function Translate() {
       ) : null}
 
       <div className="translate-grid">
-        <LiveCamera>{translate.pausing ? <PauseIndicator pausing={translate.pausing} /> : null}</LiveCamera>
+        <LiveCamera>
+          {holding ? <HoldIndicator n={v.unvalidated} /> : translate.pausing ? <PauseIndicator pausing={translate.pausing} /> : null}
+        </LiveCamera>
         <section className="sheet" aria-labelledby="traduccion-senas">
           <h3 id="traduccion-senas" className="sheet__title" tabIndex={-1}>
             Señas reconocidas
           </h3>
           <TopicPicker value={topic} onChange={setTopic} />
-          <p className="sheet__hint">Toca una seña para cambiarla o quitarla. Las dudosas dicen “¿revisar?”.</p>
-          {translate.chips.length > 0 ? (
+          <button type="button" role="switch" aria-checked={validate} className="switch switch--inline" onClick={() => setValidate(!validate)}>
+            <span className="switch__track" aria-hidden="true">
+              <span className="switch__thumb" />
+            </span>
+            <span className="switch__label">Validar cada seña</span>
+            <span className="switch__state">{validate ? "activado" : "automático"}</span>
+          </button>
+          {validate ? (
+            <p className="sheet__hint">
+              Toca la palabra correcta o <strong>Ninguna</strong>. Con teclado: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> eligen, <kbd>X</kbd> quita y las flechas{" "}
+              <kbd aria-label="arriba">↑</kbd> <kbd aria-label="abajo">↓</kbd> cambian de seña.
+            </p>
+          ) : (
+            <p className="sheet__hint">Toca una seña para cambiarla o quitarla. Las dudosas dicen “¿revisar?”.</p>
+          )}
+          {hasSigns ? (
             <p className="sheet__hint">Forma la oración antes de practicar o calibrar: al cambiar de modo, las señas sin oración se borran.</p>
+          ) : null}
+          {validate ? (
+            <p className="sheet__status" role="status">
+              {validateStatus(v.unvalidated)}
+            </p>
           ) : null}
           <GlossChips
             items={translate.chips}
-            onConfirm={(index, gloss) => {
-              translateDispatch({ kind: "confirm", index, gloss });
-              session.send({ type: "confirm_gloss", index, gloss });
-            }}
-            onRemove={(index) => {
-              translateDispatch({ kind: "remove", index });
-              session.send({ type: "remove_gloss", index });
-            }}
+            validate={validate}
+            onConfirm={confirm}
+            onRemove={remove}
             onOpenChange={(open) => {
               // El confirm_gloss/remove_gloss ya salió (se envía antes de cerrar): los cuadros siguen detrás.
               correcting.current = open;
             }}
           />
           <div className="sheet__actions">
-            <button type="button" className="btn btn--secondary" onClick={build} disabled={!session.connected}>
-              Formar oración ahora
-            </button>
+            {validate ? (
+              <>
+                <button type="button" className="btn btn--primary" onClick={build} disabled={!session.connected || !v.ready}>
+                  Formar oración
+                </button>
+                <button type="button" className="btn btn--secondary" onClick={acceptAll} disabled={v.unvalidated === 0}>
+                  Aceptar todas las sugeridas
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn btn--secondary" onClick={build} disabled={!session.connected}>
+                Formar oración ahora
+              </button>
+            )}
             {confirmClear ? (
               <span className="confirm" role="group" aria-label="Confirmar borrado">
                 <span className="confirm__text">Se borran las señas y la conversación.</span>
