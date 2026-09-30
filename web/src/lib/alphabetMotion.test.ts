@@ -156,6 +156,23 @@ describe("live tracking (no countdown, no fixed window)", () => {
     }
     expect(last?.result?.issue).toBe("ok");
   });
+  it("X counts in any direction (out and back) and answers as soon as it is complete", () => {
+    const hand=byLetter("X")[0];
+    for (const path of [[[0,0],[.7,0],[0,0]], [[0,0],[0,.7],[0,.05]], [[0,0],[.5,.5],[.05,.05]]]) {
+      const live=new LiveMotion("X"); let last=null as ReturnType<LiveMotion["push"]> | null, doneT=0;
+      for (let t=0;t<=4000 && last?.phase!=="result";t+=1000/30) {
+        const [dx,dy]=along(path,Math.max(0,Math.min(1,(t-1200)/1000)));
+        const h=hand.map(p=>[p[0]*110+320+dx*110,p[1]*110+230+dy*110,p[2]*110]);
+        last=live.push({t,hand:h,pose:predictAlphabet(h).pose,out:false,startOk:true}); doneT=t;
+      }
+      expect(last?.result?.issue).toBe("ok");
+      expect(doneT).toBeLessThan(2500); // el trazo termina a los 2200 ms: no esperó la quietud
+    }
+  });
+  it("X only going out (no return) is not approved", () => {
+    const f=Array.from({length:40},(_,i)=>{const h=byLetter("X")[0].map(p=>[p[0]*110+320+Math.min(1,i/20)*.8*110,p[1]*110+230,p[2]*110]);return {t:i*33,hand:h,pose:predictAlphabet(h).pose,startOk:true} as MotionFrame;});
+    expect(analyzeMotionFor(f,"X",{live:true}).issue).not.toBe("ok");
+  });
   it("never leaves 'pose' with a wrong hand shape", () => {
     expect(run("A",1200,2700,{end:3000}).phases).toEqual(["pose"]);
   });
