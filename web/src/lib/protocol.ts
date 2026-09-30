@@ -21,6 +21,11 @@ export type ClientMsg =
   | { type: "calibrate"; step: "open" | "fist" | "done" }
   | { type: "confirm_gloss"; index: number; gloss: string }
   | { type: "remove_gloss"; index: number }
+  /** Palabra deletreada con el alfabeto (letras separadas por guiones, p. ej. "M-A-R-I-O"). */
+  | { type: "add_gloss"; gloss: string }
+  /** Deletreo en Interpretación: al empezar, el servidor aparta las señas de esos cuadros; al terminar,
+   *  con `word` entra la palabra y se descartan; sin ella se regresan. */
+  | { type: "spelling"; active: boolean; word?: string | null }
   | { type: "build_sentence" }
   | { type: "reset" }
   /** Preferencia de la conexión (sobrevive a hello y reset); el socket la reenvía tras `hello` al reconectar. */

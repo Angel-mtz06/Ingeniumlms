@@ -1,14 +1,15 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { handsUp, SpellWord } from "../lib/spell";
+import { useEffect, useRef, useState } from "react";
 import { GlossChips } from "../components/GlossChips";
-import { IconSpeaker, IconWarning } from "../components/icons";
+import { IconSpeaker, IconWarning, ToneIcon } from "../components/icons";
+import { ScoreGauge } from "../components/ScoreGauge";
 import { SentencePanel } from "../components/SentencePanel";
 import { TopicPicker } from "../components/TopicPicker";
+import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
+import { useFrameRecorder } from "../hooks/useFrameRecorder";
+import { freeGauge, spellStatus } from "../lib/alphabetView";
+import { SpellingTracker, type SpellEvent } from "../lib/spelling";
 import { lostMessage, type Pausing, pausingFraction, pausingText, serverIndex, validation } from "../lib/translate";
 import { LiveCamera } from "./LiveCamera";
-import type { FramePayload } from "../lib/protocol";
-
-const SpellRecognizer = lazy(() => import("./SpellRecognizer"));
 import { ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
 
 const VOICE_KEY = "lsm.voz";
@@ -76,7 +77,7 @@ function SpellIndicator({ word }: { word: string }) {
       ) : (
         <span>Deletrea: haz la primera letra</span>
       )}
-      <span className="spell-hint">Baja la mano 1 s para terminar</span>
+      <span className="spell-hint">Baja la mano para terminar</span>
     </div>
   );
 }
@@ -90,6 +91,11 @@ function validateStatus(unvalidated: number): string {
 /**
  * Interpretación: cámara, señas reconocidas (validables o corregibles) y la oración en español. Al llegar una
  * oración nueva se lee en voz alta si el interruptor "Voz" está activo.
+ *
+ * Palabras y letras a la vez: cada cuadro va al servidor (señas de palabras) y al reconocimiento del
+ * alfabeto del navegador (el de Alfabeto → Libre, con J, Ñ, Q, X y Z). La primera letra empieza un
+ * deletreo (SpellingTracker): el servidor aparta las señas de esos cuadros, que eran el deletreo, y
+ * al terminar entra la palabra como "M-A-R-I-O" (mensaje `spelling`).
  */
 export function Translate() {
   const { session, translate, translateDispatch, topic, setTopic, validate, setValidate } = useApp();
@@ -129,67 +135,51 @@ export function Translate() {
   }, [pauseRunning]);
 
   useSessionMode("translate", null);
-  // Deletreo: las letras se reconocen en el navegador con el mismo reconocedor de Alfabeto (modo libre). Mientras
-  // tanto no se mandan cuadros al servidor (no segmenta señas); la palabra llega con add_word al terminar.
-  const [spelling, setSpelling] = useState(false);
-  const spellFrame = useRef<((f: FramePayload) => void) | null>(null);
-  const spell = useRef(new SpellWord());
-  const [word, setWord] = useState("");
-  const [seenLetter, setSeenLetter] = useState<string | null>(null);
-  useEffect(() => {
-    if (spelling && spell.current.letter(seenLetter)) setWord(spell.current.word);
-  }, [seenLetter, spelling]);
-
-  /** Termina la palabra (si tiene letras la manda al servidor) y sale del deletreo. */
-  const endSpelling = () => {
-    const w = spell.current.take();
-    setWord("");
-    setSpelling(false);
-    setSeenLetter(null);
-    if (w) session.send({ type: "add_word", word: w, spelled: true });
-  };
-  const toggleSpelling = () => {
-    if (spelling) {
-      endSpelling();
-      return;
-    }
-    spell.current.reset();
-    setWord("");
-    setSpelling(true);
-  };
-  const backspace = () => {
-    if (spell.current.backspace()) setWord(spell.current.word);
-  };
-  // Tecla D: activa o termina el deletreo (no mientras se escribe en un campo).
-  const toggleRef = useRef(toggleSpelling);
-  toggleRef.current = toggleSpelling;
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== "d" && e.key !== "D") return;
-      if (e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
-      const el = e.target as HTMLElement | null;
-      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
-      e.preventDefault();
-      toggleRef.current();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   // Mientras se corrige una seña dudosa (panel abierto) o hay señas sin validar no se mandan cuadros: así el
   // contador de quietud del servidor (pausa automática) no avanza y no se cuela otra seña a media elección.
   const correcting = useRef(false);
   const holdRef = useRef(holding);
   holdRef.current = holding;
+  // Letras: siempre activas, junto con las palabras del servidor (salvo mientras se elige una seña).
+  const alpha = useAlphabetRecognition(null, "free", true);
+  const recorder = useFrameRecorder(10000);
   useFrameSink((f) => {
-    if (spelling) {
-      spellFrame.current?.(f);
-      // Bajar las manos ~1 s termina la palabra.
-      if (spell.current.frame(f.t ?? performance.now(), handsUp(f))) endSpelling();
-      return;
-    }
-    if (!correcting.current && !holdRef.current) session.send(f);
+    recorder.push(f);
+    if (correcting.current || holdRef.current) return;
+    session.send(f);
+    alpha.onFrame(f);
   });
+  const speller = useRef(new SpellingTracker());
+  const [letters, setLetters] = useState<string[]>([]);
+  const [spelling, setSpelling] = useState(false);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const sendSpell = (ev: SpellEvent) => sessionRef.current.send(
+    ev.kind === "start" ? { type: "spelling", active: true } : { type: "spelling", active: false, word: ev.word });
+  const syncSpell = () => { setLetters(speller.current.letters); setSpelling(speller.current.active); };
+  const sendSpellRef = useRef(sendSpell);
+  sendSpellRef.current = sendSpell;
+  const liveLetter = useRef({ stable: null as string | null, busy: false });
+  // Mientras se elige una seña el reconocedor no recibe cuadros: su última letra no cuenta (el deletreo termina).
+  liveLetter.current = holding ? { stable: null, busy: false } : { stable: alpha.stable?.[0] ?? null, busy: alpha.phase === "capturing" };
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      speller.current.push(performance.now(), liveLetter.current.stable, liveLetter.current.busy).forEach((ev) => sendSpellRef.current(ev));
+      syncSpell();
+    }, 100);
+    return () => {
+      window.clearInterval(id);
+      // Al salir de la pantalla a media palabra, la palabra se agrega (o se regresan las señas apartadas).
+      if (speller.current.active) sendSpellRef.current(speller.current.finish());
+    };
+  }, []);
+  const finishWord = (keep = true) => {
+    if (speller.current.active) sendSpell(speller.current.finish(keep));
+    syncSpell();
+  };
+  const word = letters.join("");
+  const showLetter = spelling || alpha.stable !== null || alpha.phase !== "idle";
+  const status = showLetter ? spellStatus({ ...alpha, freeReady: spelling ? alpha.freeReady : "" }) : null;
 
   // Solo se leen las oraciones que llegan con la pantalla abierta (no la que ya estaba al entrar).
   const spoken = useRef(translate.sentence);
@@ -216,6 +206,7 @@ export function Translate() {
   };
 
   const build = () => {
+    finishWord(); // una palabra a media deletreo también cuenta
     translateDispatch({ kind: "build" });
     session.send({ type: "build_sentence" });
   };
@@ -225,6 +216,8 @@ export function Translate() {
     if (canSpeak) window.speechSynthesis.cancel();
     translateDispatch({ kind: "clear" });
     session.send({ type: "reset" });
+    speller.current.clear();
+    syncSpell();
   };
 
   const confirm = (index: number, gloss: string) => {
@@ -249,7 +242,7 @@ export function Translate() {
   };
 
   const s = translate.sentence;
-  const hasContent = translate.chips.length > 0 || s !== null;
+  const hasContent = translate.chips.length > 0 || s !== null || letters.length > 0;
   const hasSigns = v.live > 0;
 
   return (
@@ -260,20 +253,12 @@ export function Translate() {
       </header>
 
       <ServerNotice />
-      {spelling ? (
-        <Suspense fallback={null}>
-          <SpellRecognizer frameRef={spellFrame} onLetter={setSeenLetter} />
-        </Suspense>
-      ) : null}
       {/* Región viva siempre montada (vacía al montar) y rellenada después: así sí se anuncia. */}
       <p className="visually-hidden" role="status">
         {lostAnnounce}
       </p>
       <p className="visually-hidden" role="status">
         {pauseAnnounce}
-      </p>
-      <p className="visually-hidden" role="status">
-        {spelling && word ? `Palabra: ${[...word].join(" ")}` : ""}
       </p>
       {translate.lost > 0 ? (
         <div className="notice notice--warn notice--action">
@@ -286,7 +271,7 @@ export function Translate() {
       ) : null}
 
       <div className="translate-grid">
-        <LiveCamera>
+        <LiveCamera corner={showLetter ? <ScoreGauge view={freeGauge(alpha.stable, alpha.feedback)} /> : undefined}>
           {spelling ? (
             <SpellIndicator word={word} />
           ) : holding ? (
@@ -295,6 +280,45 @@ export function Translate() {
             <PauseIndicator pausing={translate.pausing} />
           ) : null}
         </LiveCamera>
+        <div className="translate-side">
+        <section className="sheet translate-spell" aria-labelledby="traduccion-deletreo" data-on={spelling || undefined}>
+          <h3 id="traduccion-deletreo" className="sheet__title">Letras (deletreo)</h3>
+          <p className="sheet__hint">
+            Se reconocen palabras y letras a la vez. Para deletrear un nombre, haz cada letra y sostenla un momento
+            (J, Ñ, Q, X y Z con su movimiento); al bajar la mano, la palabra entra a las señas.
+          </p>
+          <p className="alfa-free-letters__text translate-spell__word" translate="no" aria-live="polite" aria-label={word ? `Deletreando: ${word}` : "Sin letras"}>
+            {letters.length
+              ? letters.map((l, i) => <span key={i} data-last={i === letters.length - 1 || undefined}>{l}</span>)
+              : <span className="translate-spell__empty">…</span>}
+          </p>
+          {status ? (
+            <p className="translate-spell__status" data-tone={status.tone} role="status">
+              {status.tone === "ok" ? <ToneIcon tone="ok" /> : status.tone === "warn" ? <IconWarning /> : null}
+              <span>{status.text}</span>
+            </p>
+          ) : null}
+          {letters.length ? (
+            <div className="sheet__actions">
+              <button type="button" className="btn btn--primary" onClick={() => finishWord()} disabled={!session.connected}>
+                {letters.length >= 2 ? <>Agregar <span translate="no">«{word}»</span></> : "Terminar"}
+              </button>
+              <button type="button" className="btn btn--secondary" onClick={() => { speller.current.removeLast(); syncSpell(); }}>
+                Borrar letra
+              </button>
+              <button type="button" className="btn btn--quiet" onClick={() => finishWord(false)}>
+                No era deletreo
+              </button>
+            </div>
+          ) : null}
+          <p className="sheet__hint">
+            ¿Algo salió mal?{" "}
+            <button type="button" className="btn btn--quiet btn--small" onClick={() => recorder.download("interpretacion", {
+              screen: "interpretacion", letters, chips: translate.chips.map((c) => c.gloss), sentence: translate.sentence?.text ?? null,
+            })}>Descargar intento</button>{" "}
+            (últimos 10 s, solo puntos de la mano).
+          </p>
+        </section>
         <section className="sheet" aria-labelledby="traduccion-senas">
           <h3 id="traduccion-senas" className="sheet__title" tabIndex={-1}>
             Señas reconocidas
@@ -307,37 +331,6 @@ export function Translate() {
             <span className="switch__label">Validar cada seña</span>
             <span className="switch__state">{validate ? "activado" : "automático"}</span>
           </button>
-          <div className="spell-row">
-            <button type="button" className="btn btn--secondary" aria-pressed={spelling} aria-keyshortcuts="D" onClick={toggleSpelling}>
-              {spelling ? "Terminar palabra" : "Deletrear"} <kbd aria-hidden="true">D</kbd>
-            </button>
-            {spelling ? (
-              <button type="button" className="btn btn--quiet" onClick={backspace} disabled={!word}>
-                <span aria-hidden="true">⌫</span> Borrar letra
-              </button>
-            ) : (
-              <span className="spell-row__hint">Para nombres: letra por letra con el alfabeto manual.</span>
-            )}
-          </div>
-          {spelling ? (
-            <div className="spell">
-              <p className="spell__word" translate="no" aria-hidden="true">
-                {word ? (
-                  [...word].map((l, i) => (
-                    <span key={i} className="spell-word__letter" data-last={i === word.length - 1 || undefined}>
-                      {l}
-                    </span>
-                  ))
-                ) : (
-                  <span className="spell__placeholder">Haz la primera letra</span>
-                )}
-              </p>
-              <p className="sheet__hint">
-                Sostén cada letra un momento. Para repetir una letra, mueve la mano entre las dos. Baja la mano 1 s para terminar.
-                {seenLetter ? ` Veo: ${seenLetter}.` : ""}
-              </p>
-            </div>
-          ) : null}
           {validate ? (
             <p className="sheet__hint">
               Toca la palabra correcta o <strong>Ninguna</strong>. Con teclado: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> eligen, <kbd>X</kbd> quita y las flechas{" "}
@@ -400,6 +393,7 @@ export function Translate() {
             {translate.notice === "empty" ? "Todavía no hay señas para formar una oración. Haz una seña primero." : ""}
           </p>
         </section>
+        </div>
       </div>
 
       <div className="sentence-block">

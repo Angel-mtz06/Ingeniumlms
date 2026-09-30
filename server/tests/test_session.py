@@ -88,6 +88,82 @@ def test_confirm_and_remove_gloss():
     assert out[-1] == {"type": "pending", "glosses": ["ADIOS"], "confirmed": [True]}
 
 
+def test_add_spelled_gloss():
+    s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
+    s.pending = [{"gloss": "YO", "top3": [], "confident": True}]
+    out = asyncio.run(run(s, [{"type": "add_gloss", "gloss": "m-a-r-i-o"}]))
+    # Igual que add_word: palabra sin guiones, ya confirmada y marcada como deletreo.
+    assert out == [{"type": "sign", "index": 1, "gloss": "MARIO", "top3": [], "confident": True, "confirmed": True,
+                    "spelled": True}]
+    out = asyncio.run(run(s, [{"type": "build_sentence"}]))
+    assert out[-1]["glosses"] == ["YO", "MARIO"] and out[-1]["text"] == "Yo Mario."
+    for bad in [{"type": "add_gloss"}, {"type": "add_gloss", "gloss": "  "}, {"type": "add_gloss", "gloss": 3}]:
+        out = asyncio.run(run(s, [bad]))
+        assert len(out) == 1 and out[0]["type"] == "error"
+
+
+def _spell_session():
+    s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
+    asyncio.run(s.handle({"type": "hello", "mode": "translate", "target": None}))
+    return s
+
+
+ON = {"type": "spelling", "active": True}
+
+
+def off(word=None):
+    return {"type": "spelling", "active": False, "word": word}
+
+
+def test_spelling_word_replaces_the_segments_it_produced():
+    s = _spell_session()
+    out = asyncio.run(run(s, [ON] + sign_frames() + [off("A-N-A")]))
+    signs = [m for m in out if m["type"] == "sign"]
+    assert [m["gloss"] for m in signs] == ["ANA"]  # el segmento del deletreo (HOLA) no entra
+    assert not [m for m in out if m["type"] == "sentence"]  # la pausa no forma oración a media palabra
+    assert [p["gloss"] for p in s.pending] == ["ANA"]
+
+
+def test_spelling_without_word_returns_the_held_signs():
+    s = _spell_session()
+    out = asyncio.run(run(s, [ON] + sign_frames()[:40] + [off(None)]))
+    assert [m["gloss"] for m in out if m["type"] == "sign"] == ["HOLA"]
+
+
+def test_spelling_takes_back_the_sign_closed_just_before_it_started():
+    s = _spell_session()
+    out = asyncio.run(run(s, sign_frames()[:35]))
+    assert [m["gloss"] for m in out if m["type"] == "sign"] == ["HOLA"]
+    out = asyncio.run(run(s, [ON]))
+    assert out == [{"type": "pending", "glosses": [], "confirmed": []}]
+    out = asyncio.run(run(s, [off("M-A-R-I-O")]))
+    assert [p["gloss"] for p in s.pending] == ["MARIO"]
+
+
+def test_segment_that_began_while_spelling_is_dropped_after_the_word():
+    s = _spell_session()
+    frames = sign_frames()
+    out = asyncio.run(run(s, [ON] + frames[:25] + [off("A-B")] + frames[25:40]))
+    assert [m["gloss"] for m in out if m["type"] == "sign"] == ["AB"]
+    assert [p["gloss"] for p in s.pending] == ["AB"]
+
+
+def test_spelling_keeps_signs_the_person_already_validated():
+    s = _spell_session()
+    asyncio.run(run(s, sign_frames()[:35]))
+    asyncio.run(run(s, [{"type": "confirm_gloss", "index": 0, "gloss": "HOLA"}]))
+    assert asyncio.run(run(s, [ON])) == []
+    asyncio.run(run(s, [off("A-N-A")]))
+    assert [p["gloss"] for p in s.pending] == ["HOLA", "ANA"]
+
+
+def test_malformed_spelling_is_error():
+    s = _spell_session()
+    for bad in [{"type": "spelling"}, {"type": "spelling", "active": "sí"}, off(""), off(7)]:
+        out = asyncio.run(run(s, [bad]))
+        assert len(out) == 1 and out[0]["type"] == "error"
+
+
 def test_no_hand_warning_once():
     s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
     out = asyncio.run(run(s, [{"type": "hello", "mode": "practice", "target": "HOLA"}] + [frame(None)] * 130))

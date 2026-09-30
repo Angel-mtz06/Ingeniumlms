@@ -33,6 +33,10 @@ DROP = 300
 CONF_MIN = 0.6
 NONE_MIN = 0.5  # Traducción descarta un segmento solo si NINGUNA es top-1 con al menos esta probabilidad
 TOP_K = 5  # candidatas que se piden al clasificador; el contexto solo reordena dentro de ellas
+# Deletreo (mensaje `spelling`): el navegador confirma la 1a letra ~0.6 s después de formarla, y el
+# segmentador ya pudo cerrar un segmento por quietud (0.4 s). Al empezar un deletreo se apartan también
+# las señas de los últimos SPELL_LOOKBACK_S segundos.
+SPELL_LOOKBACK_S = 1.2
 NO_HAND_WARN = 60  # cuadros a 30 fps (2 s); se escala con la tasa real
 GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
 SIDE_OF_SLOT = ("R", "L")
@@ -144,6 +148,11 @@ class Session:
         self.calibrator: Calibrator | None = None
         self.pending: list[dict] = []
         self.pausing_at: int | None = None  # idx del último aviso "pausing"; None = sin cuenta regresiva
+        # Deletreo con el alfabeto (lo detecta el navegador): mientras dura, las señas se apartan en `held`.
+        self.spelling = False
+        self.held: list[dict] = []
+        self.spell_end = -1  # idx del cuadro en que terminó el último deletreo
+        self.spell_word = False  # ese deletreo se agregó como palabra (sus segmentos se descartan)
         self.no_hand = 0
         self.warned = False
         self._new_window()
@@ -216,6 +225,15 @@ class Session:
             except (KeyError, ValueError, TypeError):
                 return [{"type": "error", "message": f"mensaje inválido: {t}"}]
             return [self._pending_msg()]
+        if t == "add_gloss":
+            # Palabra deletreada con el alfabeto en el navegador (p. ej. "M-A-R-I-O"): entra a las señas
+            # pendientes como una seña confirmada más, en el orden en que se hizo.
+            item = self._spelled(msg.get("gloss"))
+            if item is None:
+                return [{"type": "error", "message": "mensaje inválido: add_gloss"}]
+            return self._append(item)
+        if t == "spelling":
+            return self._spelling(msg)
         if t == "build_sentence":
             return await self._sentence() if self.pending else [self._pending_msg()]
         if t == "reset":
@@ -268,24 +286,18 @@ class Session:
         for ev in self.segmenter.update(self.idx, hands, present):
             if ev.kind == "end":
                 out += self._segment(ev)
-            elif ev.kind == "pause" and self.mode == "translate":
+            elif ev.kind == "pause" and self.mode == "translate" and not self.spelling:
                 out += await self._sentence()
         return out + self._pausing()
 
     def _add_word(self, msg: dict) -> list[dict]:
         """Palabra deletreada en la web (alfabeto manual): entra a `pending` fija y ya confirmada (la persona la
         acaba de construir). Arma la pausa de oración desde cero, como si fuera una seña recién cerrada."""
-        word = msg.get("word")
-        word = canonical(word) if isinstance(word, str) else ""
-        if self.mode != "translate" or msg.get("spelled") is not True or not WORD_RE.fullmatch(word):
+        item = self._spelled(msg.get("word")) if self.mode == "translate" and msg.get("spelled") is True else None
+        if item is None:
             return [{"type": "error", "message": "add_word inválido: word de 1 a 24 letras, spelled true, en Interpretación"}]
-        item = {"gloss": word, "top3": [], "confident": True, "confirmed": True, "spelled": True}
-        self.pending.append(item)
         self.segmenter.interrupt()
-        self.segmenter.pending += 1
-        log.info("palabra deletreada letras=%d", len(word))  # nunca el texto: suele ser un nombre
-        return [{"type": "sign", "index": len(self.pending) - 1, "gloss": word, "top3": [], "confident": True,
-                 "spelled": True, "confirmed": True}]
+        return self._append(item)
 
     def _unvalidated(self) -> bool:
         """Con "Validar cada seña", True si alguna seña pendiente no la confirmó la persona."""
@@ -305,7 +317,7 @@ class Session:
         pendientes, manos arriba, en otro modo o con señas sin validar)."""
         seg = self.segmenter
         if (self.mode != "translate" or not self.pending or not seg.pending or seg.state != "idle"
-                or seg.idle_count <= 0 or self._unvalidated()):
+                or seg.idle_count <= 0 or self._unvalidated() or self.spelling):
             return None
         return max(0.0, (seg.frames("pause") - seg.idle_count) / self.rate.fps)
 
@@ -321,6 +333,54 @@ class Session:
             return []
         self.pausing_at = self.idx
         return [{"type": "pausing", "remaining": round(left, 1), "total": round(self.segmenter.pause_s, 1)}]
+
+    @staticmethod
+    def _spelled(word) -> dict | None:
+        """Palabra deletreada en el navegador ("M-A-R-I-O" o "MARIO") → seña pendiente ya confirmada y marcada como
+        deletreo (igual que add_word: nombre propio, no se traduce ni se cambia). None si no es una palabra válida."""
+        g = canonical(word).replace("-", "") if isinstance(word, str) else ""
+        if not WORD_RE.fullmatch(g):
+            return None
+        return {"gloss": g, "top3": [], "confident": True, "confirmed": True, "spelled": True}
+
+    def _append(self, item: dict) -> list[dict]:
+        self.pending.append(item)
+        if item.get("spelled"):
+            self.segmenter.pending += 1  # la palabra arma la pausa de oración aunque no se cerrara ningún segmento
+            log.info("palabra deletreada letras=%d", len(item["gloss"]))  # nunca el texto: suele ser un nombre
+        return [{"type": "sign", "index": len(self.pending) - 1,
+                 **{k: v for k, v in item.items() if not k.startswith("_")}}]
+
+    def _spelling(self, msg: dict) -> list[dict]:
+        """{"active": true}: empieza un deletreo; {"active": false, "word": "M-A-R-I-O" | null}: termina.
+        Con palabra, las señas apartadas eran el deletreo y se descartan; sin palabra (p. ej. una sola
+        letra, que casi siempre era parte de una seña) se regresan a las pendientes."""
+        active, word = msg.get("active"), msg.get("word")
+        spelled = self._spelled(word) if word is not None else None
+        if not isinstance(active, bool) or (not active and word is not None and spelled is None):
+            return [{"type": "error", "message": "mensaje inválido: spelling"}]
+        if active:
+            if self.spelling:
+                return []
+            self.spelling, self.held = True, []
+            since = self.idx - round(SPELL_LOOKBACK_S * self.rate.fps)
+            # Las que la persona ya validó no se apartan: esas sí eran señas.
+            recent = [p for p in self.pending if p.get("_end", -1) >= since and not p.get("confirmed")]
+            if not recent:
+                return []
+            self.held = recent
+            self.pending = [p for p in self.pending if all(p is not r for r in recent)]
+            return [self._pending_msg()]
+        if not self.spelling:
+            return self._append(spelled) if spelled is not None else []
+        self.spelling, self.spell_end, self.spell_word = False, self.idx, word is not None
+        held, self.held = self.held, []
+        if spelled is not None:
+            return self._append(spelled)
+        out: list[dict] = []
+        for item in held:
+            out += self._append(item)
+        return out
 
     def _update_gloves(self, lines: dict) -> dict[str, bool]:
         """Guarda la última lectura por lado; devuelve qué lados trajeron una lectura nueva (seq distinto).
@@ -342,6 +402,7 @@ class Session:
         a, b = max(ev.start - self.base, 0), ev.end - self.base
         if b < a:
             return []
+        self._span = (ev.start, ev.end)
         out = self._evaluate_segment(a, b)
         if log.isEnabledFor(logging.INFO):
             ys = np.array([self._top_y(i) for i in range(a, b + 1)])
@@ -391,13 +452,18 @@ class Session:
         ranked, changed = rerank(cands, prev, self.context, self.ctx_weight, favored=topic_glosses(self.topic),
                                  boost=self.topic_boost)
         top3 = [[g, p] for g, p in ranked[:3]]
-        item = {"gloss": top3[0][0], "top3": top3, "confident": top3[0][1] >= CONF_MIN}
+        start, end = self._span
+        item = {"gloss": top3[0][0], "top3": top3, "confident": top3[0][1] >= CONF_MIN, "_end": end}
         if changed:
             item["reranked"] = True
             log.info("contexto top1 %s->%s previa=%s p=%.2f->%.2f lambda=%.2f tema=%s", cands[0][0], top3[0][0], prev,
                      cands[0][1], top3[0][1], self.ctx_weight, self.topic)
-        self.pending.append(item)
-        return [{"type": "sign", "index": len(self.pending) - 1, **item}]
+        if self.spelling:
+            self.held.append(item)  # cuadros de un deletreo: no es una seña de palabra
+            return []
+        if self.spell_word and start <= self.spell_end:
+            return []  # empezó durante el deletreo ya agregado como palabra (p. ej. al bajar la mano)
+        return self._append(item)
 
     def _top_y(self, i: int) -> float:
         ys = self.hands[i][:, 0, 1][self.present[i]]

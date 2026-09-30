@@ -47,6 +47,43 @@ export function motionGauge(live: LiveMotionState | null, feedback: Feedback | n
   return { kind: "guide", label: "Posición inicial", detail: feedback?.correct ? "Mantén la posición" : "Corrige la forma de la mano" };
 }
 
+export interface SpellInput {
+  feedback: Feedback | null;
+  phase: "idle" | "capturing" | "result";
+  motionResult: { prediction: [string, number] | null; reason: string } | null;
+  /** Letras con movimiento cuya pose inicial ya está lista (p. ej. "J"). */
+  freeReady: string;
+  stable: [string, number] | null;
+}
+
+/**
+ * Pose inicial de una letra con movimiento ya lista. Para J/Ñ/Z no se pide esperar: su pose es la
+ * I/N/D, que se escribe sola si no te mueves ("N… o muévela para Ñ").
+ */
+export function readyText(freeReady: string): string {
+  const letters = [...freeReady];
+  const withBase: string[] = letters.filter((l) => l === "J" || l === "Ñ" || l === "Z");
+  const own = letters.filter((l) => !withBase.includes(l));
+  const base: Record<string, string> = { J: "I", "Ñ": "N", Z: "D" };
+  const parts = withBase.map((l) => `${base[l]}… o muévela para ${l}`);
+  if (own.length) parts.push(`Pose de ${own.join(" / ")}: haz el movimiento`);
+  return parts.join(" · ") + ".";
+}
+
+/** Una línea de estado para el deletreo en Interpretación (mismo orden de prioridad que Libre). */
+export function spellStatus(r: SpellInput): { tone?: "ok" | "warn"; text: string } {
+  if (r.feedback?.type === "capture" && r.feedback.issue !== "no_hand") return { tone: "warn", text: r.feedback.message };
+  if (r.phase === "capturing") return { text: "Siguiendo el movimiento…" };
+  if (r.motionResult) {
+    return r.motionResult.prediction ? { tone: "ok", text: `Letra ${r.motionResult.prediction[0]} (con movimiento).` }
+      : { tone: "warn", text: `Movimiento de la ${r.motionResult.reason}` };
+  }
+  if (r.freeReady) return { tone: "ok", text: readyText(r.freeReady) };
+  if (r.stable) return { tone: "ok", text: `Letra ${r.stable[0]}.` };
+  if (!r.feedback || r.feedback.issue === "no_hand") return { text: "Coloca tu mano en el cuadro y haz una letra." };
+  return { text: "Mantén la letra un momento." };
+}
+
 /** Libre: la letra estable, sin decir cómo cambiarla (no se sabe qué quería hacer el usuario). */
 export function freeGauge(stable: [string, number] | null, feedback: Feedback | null): GaugeView {
   if (feedback?.type === "capture") return { kind: "guide", label: "Ajusta la mano", detail: CAPTURE_SHORT[feedback.issue] ?? feedback.message };

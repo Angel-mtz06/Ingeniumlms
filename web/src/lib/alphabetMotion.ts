@@ -1,5 +1,5 @@
-import { alphabetFeatures, CONF_THRESHOLD, type Prediction } from "./alphabet";
-import { poseFeedback } from "./alphabetFeedback";
+import { alphabetFeatures, CONF_THRESHOLD, LETTERS_ORDER, type AlphabetPrediction, type Prediction } from "./alphabet";
+import { poseFeedback, targetMatches } from "./alphabetFeedback";
 
 export const PREPARE_MS = 3000;
 export const CAPTURE_MS = 2500;
@@ -30,18 +30,18 @@ export type MotionResult = {
 };
 
 /**
- * Mínimo de cuadros con desplazamiento para poder OBSERVAR la trayectoria. No es una velocidad
- * de la LSM (no hay secuencias de referencia de letras en el repositorio): la trayectoria se
- * remuestrea a 32 puntos y se filtra con mediana de 3; con menos de 10 observaciones reales el
- * gancho de la J o los tres trazos de la Z quedan con 1–2 cuadros por tramo, y la forma sería
- * interpolación, no medición.
+ * Mínimo para poder OBSERVAR la trayectoria (no es una velocidad de la LSM: no hay secuencias de
+ * referencia de letras en el repositorio). Cuadros Y tiempo con desplazamiento: con muy pocos
+ * cuadros la forma sería interpolación, no medición; y el tiempo impide aprobar un trazo de 0.15 s.
+ * Muchas cámaras entregan ~15 cuadros/s: con 7 cuadros un movimiento normal de 0.4 s se rechazaba.
  */
-export const MIN_ACTIVE_FRAMES = 7;
-/** Seguimiento en vivo: pose inicial sostenida, inicio, fin por quietud y duración máxima. */
-export const READY_HOLD_MS = 300, ONSET_PALMS = .15, STILL_MS = 450, STILL_PALMS = .12, MAX_MOVE_MS = 4000, RESULT_MS = 2500, PREROLL_FRAMES = 4;
+export const MIN_ACTIVE_FRAMES = 5, MIN_ACTIVE_MS = 250;
+const tooFastSpan = (a: {frames: number; ms: number}) => a.frames < MIN_ACTIVE_FRAMES || a.ms < MIN_ACTIVE_MS;
+/** Seguimiento en vivo: pose inicial sostenida (200 ms), inicio, fin por quietud y duración máxima. */
+export const READY_HOLD_MS = 200, ONSET_PALMS = .15, STILL_MS = 450, STILL_PALMS = .12, MAX_MOVE_MS = 4000, RESULT_MS = 2500, PREROLL_FRAMES = 4;
 /** Tolerancia de forma (RMS tras normalizar). La misma para el avance en vivo y el juicio final:
  * si el medidor llegó a 100 %, el resultado no puede decir lo contrario. */
-export const SHAPE_ERROR = .32;
+export const SHAPE_ERROR = .38;
 
 const dist = (a: number[], b: number[]) => Math.hypot(a[0]-b[0], a[1]-b[1]);
 const length = (points: number[][]) => points.slice(1).reduce((s,p,i) => s+dist(p,points[i]),0);
@@ -100,6 +100,22 @@ export function startPoseOk(pose: Prediction | null, letter: string): boolean {
   return !!rule && !!pose && rule.poses.includes(pose[0]) && pose[1] >= CONF_THRESHOLD;
 }
 
+/**
+ * ¿Esta mano está en la pose inicial de `letter`? (lo usan Secuencial, Libre e Interpretación).
+ * J/Ñ/Z: su letra base verificada (I/N/D) o el clasificador. Q y X: sus poses se confunden entre sí
+ * (en las filas de prueba de letters.npz, 21 de 60 Q se ven como X y viceversa), pero sus movimientos
+ * no (arco / ida y vuelta): para cualquiera de las dos vale la pose de Q o de X y decide el recorrido.
+ * Así la pose inicial se acepta en 59/60 Q y 60/60 X de prueba, y en 9 de 1500 manos de otras letras.
+ */
+const Q_OR_X = ["Q", "X"];
+export function motionStartOk(prediction: AlphabetPrediction, hand: number[][], letter: string): boolean {
+  const base = motionBaseLetter(letter);
+  if (!base) return false;
+  if (!Q_OR_X.includes(letter)) return startPoseOk(prediction.pose, letter) || targetMatches(prediction, hand, base);
+  const share = Q_OR_X.reduce((sum, l)=>sum+(prediction.shares[LETTERS_ORDER.indexOf(l)] ?? 0), 0);
+  return share >= .4 || Q_OR_X.some((l)=>startPoseOk(prediction.pose, l) || targetMatches(prediction, hand, l));
+}
+
 function normalizedPath(frames: MotionFrame[], tip: number): {points: number[][]; t: number[]} {
   const valid = frames.filter((f) => f.hand && alphabetFeatures(f.hand));
   if (!valid.length) return {points: [], t: []};
@@ -121,14 +137,30 @@ function extent(points: number[][]): number {
   return Math.max(...[0,1].map((a)=>Math.max(...points.map((p)=>p[a]))-Math.min(...points.map((p)=>p[a]))));
 }
 
-/** RMS distance between user path and template after scale normalisation; x may be mirrored (either hand). */
+/**
+ * Giros tolerados del trazo completo (radianes: 0, ±15°, ±30°): la mano o la cámara casi nunca están
+ * derechas, y una Z hecha 20° inclinada es una Z. La J/Ñ/Q/Z siguen necesitando su rasgo (keyFeature).
+ */
+export const SHAPE_ROTATIONS = [0, -.26, .26, -.52, .52];
+
+/** RMS distance between user path and template after scale normalisation; x may be mirrored (either hand) and rotated. */
 function shapeError(points: number[][], path: number[][]): number {
   const span = extent(points), templateSpan = extent(path);
   if (span < 1e-6 || templateSpan < 1e-6) return Infinity;
   // Both start at their own first point: a reversed template must not carry an offset.
   const shape = resample(points).map((p)=>p.map((v,a)=>(v-points[0][a])/span));
   const template = resample(path).map((p)=>p.map((v,a)=>(v-path[0][a])/templateSpan));
-  return Math.min(...[1,-1].map((mirror)=>Math.sqrt(shape.reduce((sum,p,i)=>sum+(p[0]*mirror-template[i][0])**2+(p[1]-template[i][1])**2,0)/shape.length)));
+  let best = Infinity;
+  for (const mirror of [1,-1]) for (const r of SHAPE_ROTATIONS) {
+    const c = Math.cos(r), s = Math.sin(r);
+    let sum = 0;
+    for (let i=0;i<shape.length;i++) {
+      const x = shape[i][0]*mirror, y = shape[i][1];
+      sum += (x*c-y*s-template[i][0])**2+(x*s+y*c-template[i][1])**2;
+    }
+    best = Math.min(best, Math.sqrt(sum/shape.length));
+  }
+  return best;
 }
 
 /** Frames between 5 % and 95 % of the travelled distance: when the hand was really moving. */
@@ -145,7 +177,7 @@ function activeSpan(points: number[][], t: number[]): {frames: number; ms: numbe
  * X: ir y volver en CUALQUIER dirección (la plantilla horizontal fallaba si el movimiento iba en
  * diagonal o hacia la cámara). Devuelve 0–1: 0.5 al alejarse lo suficiente, 1 al regresar.
  */
-export const X_MIN_OUT = .4;
+export const X_MIN_OUT = .3;
 function outAndBack(points: number[][]): number {
   if (points.length < 3) return 0;
   const d = points.map((p)=>dist(p, points[0]));
@@ -153,6 +185,16 @@ function outAndBack(points: number[][]): number {
   if (far < X_MIN_OUT) return 0;
   const back = 1 - d.at(-1)!/far;               // 0 = sigue lejos, 1 = regresó al inicio
   return Math.min(1, .5 + .5*Math.min(1, back/.6)); // regresar al 40 % de la distancia ya cuenta
+}
+
+/** X: la ida y la vuelta van por casi la misma línea (un cuadrado o un círculo también regresan). */
+export const X_MAX_WIDTH = .35;
+function xStraight(points: number[][]): boolean {
+  const d = points.map((p)=>dist(p, points[0]));
+  const far = Math.max(...d), q = points[d.indexOf(far)], a = points[0];
+  if (far < 1e-6) return false;
+  const width = Math.max(...points.map((p)=>Math.abs((q[0]-a[0])*(p[1]-a[1])-(q[1]-a[1])*(p[0]-a[0]))/far));
+  return width <= X_MAX_WIDTH*far;
 }
 
 /** Rule-specific evidence beyond the overall shape (kept from the original analyzer). */
@@ -199,9 +241,11 @@ export interface MotionOptions { live?: boolean; timedOut?: boolean }
 
 function sequenceProblem(frames: MotionFrame[], r: MotionResult, o: MotionOptions = {}): MotionResult | null {
   if (o.live ? frames.length < 6 || (frames.length-1)*1000/Math.max(r.duration, 1) < 8 : frames.length < 12 || r.duration < 2200) return withIssue(r, "capture_short");
-  if (frames.some((f,i)=>i>0 && (f.t<=frames[i-1].t || f.t-frames[i-1].t>250))) return withIssue(r, "camera_pause");
+  // En vivo, los cuadros en que MediaPipe perdió la mano un momento (≤ HAND_GAP_MS) ya no llegan aquí.
+  const maxGap = o.live ? HAND_GAP_MS+100 : 250;
+  if (frames.some((f,i)=>i>0 && (f.t<=frames[i-1].t || f.t-frames[i-1].t>maxGap))) return withIssue(r, "camera_pause");
   if (frames.some((f)=>!f.hand)) return withIssue(r, "hand_lost");
-  if (frames.filter((f)=>f.out).length > frames.length*.1) return withIssue(r, "out_of_frame");
+  if (frames.filter((f)=>f.out).length > frames.length*(o.live ? .3 : .1)) return withIssue(r, "out_of_frame");
   return null;
 }
 
@@ -244,14 +288,15 @@ export function analyzeMotionFor(frames: MotionFrame[], target: string, options:
   const out = {...r, travel: travelled, activeFrames: active.frames, activeMs: active.ms};
   if (span < .25) return withIssue(out, "no_motion");
   if (span < .4) return withIssue(out, "too_small");
-  if (active.frames < MIN_ACTIVE_FRAMES) return withIssue(out, "too_fast");
+  if (tooFastSpan(active)) return withIssue(out, "too_fast");
   if (target === "X") {
     const x = outAndBack(points);
-    if (x >= .95) return {...withIssue(out, "ok"), prediction: [target, Math.max(CONF_THRESHOLD, supporting.length/frames.length)]};
+    if (x >= .95 && xStraight(points)) return {...withIssue(out, "ok"), prediction: [target, Math.max(CONF_THRESHOLD, supporting.length/frames.length)]};
+    if (x >= .95) return withIssue(out, "wrong_path", "La X va y regresa por el mismo camino: no hagas un círculo ni un cuadro.");
     return withIssue(out, "incomplete", x >= .5 ? "Regresa la mano al punto donde empezaste." : "Aleja más la mano antes de regresar.");
   }
   const error = shapeError(points, rule.path);
-  if (ruleGates(target, points, span, travelled) && error <= SHAPE_ERROR) {
+  if (ruleGates(target, points, span, travelled) && error <= SHAPE_ERROR && keyFeature(target, points)) {
     const poseScore = supporting.reduce((s,f)=>s+(f.pose?.[1] ?? CONF_THRESHOLD),0)/frames.length;
     const confidence = Math.min(poseScore, 1-error);
     if (confidence >= CONF_THRESHOLD) return {...withIssue(out, "ok"), prediction: [target, confidence]};
@@ -294,7 +339,7 @@ export function analyzeMotion(frames: MotionFrame[]): MotionResult {
     result.travel = Math.max(result.travel, travelled);
     if (rule.letter === "X") {
       const active = activeSpan(points, t);
-      if (outAndBack(points) >= .95 && active.frames >= MIN_ACTIVE_FRAMES) candidates.push(["X", Math.max(CONF_THRESHOLD, supporting.reduce((s,f)=>s+f.pose![1],0)/frames.length)]);
+      if (outAndBack(points) >= .95 && xStraight(points) && !tooFastSpan(active)) candidates.push(["X", Math.max(CONF_THRESHOLD, supporting.reduce((s,f)=>s+f.pose![1],0)/frames.length)]);
       continue;
     }
     if (!ruleGates(rule.letter, points, span, travelled)) continue;
@@ -302,8 +347,8 @@ export function analyzeMotion(frames: MotionFrame[]): MotionResult {
     result.activeFrames = Math.max(result.activeFrames, active.frames);
     result.activeMs = Math.max(result.activeMs, active.ms);
     const error = shapeError(points, rule.path);
-    if (error > SHAPE_ERROR) continue;
-    if (active.frames < MIN_ACTIVE_FRAMES) { tooFast = true; continue; }
+    if (error > SHAPE_ERROR || !keyFeature(rule.letter, points)) continue;
+    if (tooFastSpan(active)) { tooFast = true; continue; }
     // Both significant displacement and the ordered trajectory must match.
     // A frozen pose or a straight translation cannot pass a J, Z or arc rule.
     const poseScore = supporting.reduce((s,f)=>s+f.pose![1],0)/frames.length;
@@ -324,18 +369,48 @@ function recentExtent(frames: MotionFrame[], tip: number, ms: number): number {
   return Math.max(extent(normalizedPath(recent, tip).points), extent(normalizedPath(recent, 0).points));
 }
 
-/** The hand moved and has now been still for STILL_MS (used to end a live segment, also in Libre). */
-export function movementEnded(frames: MotionFrame[], tip = 8): boolean {
-  if (frames.length < 3 || frames.at(-1)!.t-frames[0].t < STILL_MS+150) return false;
-  return recentExtent(frames, tip, STILL_MS) < STILL_PALMS;
+/** The hand moved and has now been still for `ms` (STILL_MS by default; ends a live segment). */
+export function movementEnded(frames: MotionFrame[], tip = 8, ms = STILL_MS): boolean {
+  if (frames.length < 3 || frames.at(-1)!.t-frames[0].t < ms+150) return false;
+  return recentExtent(frames, tip, ms) < STILL_PALMS;
 }
+/** X: al dar la vuelta en el punto más lejano la mano casi se detiene; ahí no se da por terminada. */
+export const X_TURN_STILL_MS = 900;
 
 /** How much of the letter's trajectory the partial path already matches (0–1), for live feedback. */
+/**
+ * Qué tanto se aleja el recorrido de la línea recta entre su inicio y su final, en fracción de su
+ * tamaño. Una línea recta (bajar la mano a descansar, moverla de lado) da ~0 aunque tiemble.
+ */
+function bend(points: number[][]): number {
+  const span = extent(points), a = points[0], b = points.at(-1)!, chord = dist(a, b);
+  if (span < 1e-6 || chord < 1e-6) return 0;
+  return Math.max(...points.map((p)=>Math.abs((b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]))/chord))/span;
+}
+/**
+ * El rasgo sin el cual la letra no está hecha, aunque la forma general se parezca: la curva final
+ * de la J, el arco de Ñ/Q, los dos giros de la Z (la X ya exige ir y volver). Sin él el avance no
+ * llega al 100 %; así se puede tolerar más la forma sin que una I que baja en línea recta sea J.
+ */
+export const KEY_BEND: Record<string, number> = { J: .15, "Ñ": .12, Q: .12, Z: .2 };
+export function keyFeature(letter: string, points: number[][]): boolean {
+  if (letter === "X") return outAndBack(points) >= .95 && xStraight(points);
+  const need = KEY_BEND[letter];
+  if (need === undefined) return true;
+  if (letter === "Z" && length(points)/Math.max(extent(points), 1e-6) < 1.8) return false;
+  return bend(points) >= need;
+}
+/** Avance a partir del cual el recorrido cuenta como completo. */
+export const DONE_PROGRESS = .9;
+
 export function trajectoryProgress(frames: MotionFrame[], target: string): number {
   const rule = RULES.find((r)=>r.letter===target);
   if (!rule) return 0;
   const {points} = normalizedPath(frames, rule.tip);
-  if (target === "X") return outAndBack(points);
+  if (target === "X") {
+    const x = outAndBack(points);
+    return x >= DONE_PROGRESS && !xStraight(points) ? DONE_PROGRESS-.05 : x;
+  }
   if (extent(points) < .2) return 0;
   // La fracción del recorrido cuya forma se parece MÁS a lo hecho hasta ahora.
   let best = {f: 0, error: Infinity};
@@ -343,10 +418,18 @@ export function trajectoryProgress(frames: MotionFrame[], target: string): numbe
     const e = shapeError(points, prefix(rule.path, Math.min(f, 1)));
     if (e < best.error) best = {f: Math.min(f, 1), error: e};
   }
-  return best.error <= SHAPE_ERROR ? best.f : 0;
+  if (best.error > SHAPE_ERROR) return 0;
+  return best.f >= DONE_PROGRESS && !keyFeature(target, points) ? DONE_PROGRESS-.05 : best.f;
 }
 
 export const DONE_GRACE_MS = 150;
+/**
+ * En un movimiento rápido, a ~15 cuadros/s, MediaPipe pierde la mano uno o dos cuadros (desenfoque).
+ * Hasta HAND_GAP_MS sin mano el intento sigue (esos cuadros se ignoran); más tiempo = se perdió la mano.
+ */
+export const HAND_GAP_MS = 350;
+/** Estando "lista", cuánto puede perderse la pose inicial (un cuadro dudoso de MediaPipe) sin volver a empezar. */
+export const READY_LOST_MS = 600;
 const KEEP_WHEN_DONE = new Set<MotionIssue>(["capture_short", "camera_pause", "hand_lost", "out_of_frame", "too_fast"]);
 
 export type LivePhase = "pose" | "ready" | "moving" | "result";
@@ -369,6 +452,7 @@ export class LiveMotion {
   private phase: LivePhase = "pose";
   private readySince: number | null = null;
   private lastOk = 0;
+  private lastHand = 0;
   private buffer: MotionFrame[] = [];
   private frames: MotionFrame[] = [];
   private since = 0;
@@ -401,7 +485,9 @@ export class LiveMotion {
     }
     if (this.phase === "ready") {
       if (ok) this.lastOk = t;
-      else if (!frame.hand || t-this.lastOk > 400) { this.reset(); return this.state(t); }
+      else if (t-this.lastOk > READY_LOST_MS) { this.reset(); return this.state(t); }
+      if (!frame.hand) return this.state(t); // un cuadro sin mano: se ignora (READY_LOST_MS decide)
+      this.lastHand = t;
       this.buffer.push(frame);
       this.buffer = this.buffer.filter((f)=>t-f.t <= 600);
       // Inicio: la punta o la muñeca se alejan del punto de reposo (primer cuadro del búfer).
@@ -413,17 +499,20 @@ export class LiveMotion {
       return this.state(t);
     }
     // moving
+    if (!frame.hand && t-this.lastHand <= HAND_GAP_MS) return this.state(t); // desenfoque de un momento
     this.frames.push(frame);
+    if (frame.hand) this.lastHand = t;
     const gap = t-(this.frames.at(-2)?.t ?? t);
-    const missing = !frame.hand || gap > 250;
+    const missing = !frame.hand || gap > HAND_GAP_MS+100;
     const timedOut = t-this.since > MAX_MOVE_MS;
     if (!missing) {
       this.progress = Math.max(this.progress, trajectoryProgress(this.frames, this.target));
-      if (this.progress >= .95 && this.doneAt === null) { this.doneAt = this.frames.length; this.doneT = t; }
+      if (this.progress >= DONE_PROGRESS && this.doneAt === null) { this.doneAt = this.frames.length; this.doneT = t; }
     }
     // Recorrido completo: se califica a los 150 ms, sin esperar a que la mano se quede quieta.
     const finished = this.doneT !== null && t-this.doneT >= DONE_GRACE_MS;
-    if (missing || timedOut || finished || movementEnded(this.frames, rule.tip)) {
+    const stillMs = this.target === "X" && this.progress >= .5 ? X_TURN_STILL_MS : STILL_MS;
+    if (missing || timedOut || finished || movementEnded(this.frames, rule.tip, stillMs)) {
       // Lo que la mano hace DESPUÉS de completar el recorrido (bajar, acomodarse) no cuenta.
       const judged = this.doneAt !== null && !missing ? this.frames.slice(0, this.doneAt+3) : this.frames;
       const r = analyzeMotionFor(judged, this.target, {live: true, timedOut: timedOut && this.doneAt === null});
@@ -436,6 +525,100 @@ export class LiveMotion {
       this.phase = "result"; this.since = t;
     }
     return this.state(t);
+  }
+}
+
+export interface FreeMotionState {
+  /** Alguna letra con movimiento ya partió de su pose inicial y lleva al menos 25 % del recorrido. */
+  moving: boolean;
+  /** Mayor avance entre las letras que se están siguiendo (0–1). */
+  progress: number;
+  /** Letra reconocida al completar su recorrido (solo en el cuadro en que termina). */
+  result: MotionResult | null;
+  /** Letras cuya pose inicial ya se sostuvo: se puede hacer el movimiento. */
+  ready: string[];
+  /** Intento que llevaba al menos la mitad del recorrido y no se aprobó (p. ej. demasiado rápido). */
+  failed: MotionResult | null;
+}
+
+/**
+ * Libre: las cinco letras con movimiento se siguen EN VIVO a la vez, cada una con el mismo LiveMotion
+ * que Secuencial (misma tolerancia, mismo "100 % = correcto"). Cada letra arranca desde SU pose
+ * inicial (J desde I, Ñ desde N, Z desde D, Q y X desde la suya): quien llama pasa en `startOk` qué
+ * poses verifica ese cuadro. Sin letra objetivo no se sabe qué quería hacer el usuario: un intento
+ * fallido solo se reporta si ya llevaba al menos la mitad de SU recorrido (ahí sí se sabe qué letra
+ * se intentaba), y esa letra vuelve a esperar su pose de inmediato.
+ */
+export const FREE_MOTION_LETTERS = RULES.map((r) => r.letter);
+export class FreeMotion {
+  private trackers = new Map(FREE_MOTION_LETTERS.map((l) => [l, new LiveMotion(l)]));
+  /** Avance de cada letra en el cuadro anterior (el resultado ya no lo trae). */
+  private progress = new Map<string, number>();
+  reset() { for (const t of this.trackers.values()) t.reset(); this.progress.clear(); }
+  /** `score`: desempate cuando dos letras terminan en el mismo cuadro (p. ej. Ñ y Q, mismo arco). */
+  push(frame: MotionFrame, startOk: Record<string, boolean>, score: Record<string, number> = {}): FreeMotionState {
+    const done: MotionResult[] = [], ready: string[] = [];
+    let moving = false, progress = 0, failed: {result: MotionResult; progress: number} | null = null;
+    for (const [letter, tracker] of this.trackers) {
+      const before = this.progress.get(letter) ?? 0;
+      const st = tracker.push({...frame, startOk: !!startOk[letter]});
+      if (st.phase === "result") {
+        if (st.result?.issue === "ok" && st.result.prediction) done.push(st.result);
+        else if (st.result && before >= .5 && (!failed || before > failed.progress))
+          failed = {result: {...st.result, prediction: null, reason: `${letter}: ${st.result.reason}`}, progress: before};
+        tracker.reset();
+        this.progress.set(letter, 0);
+      } else {
+        this.progress.set(letter, st.phase === "moving" ? st.progress : 0);
+        if (st.phase === "ready") ready.push(letter);
+        if (st.phase === "moving") {
+          progress = Math.max(progress, st.progress);
+          if (st.progress >= .25) moving = true;
+        }
+      }
+    }
+    if (!done.length) return {moving, progress, result: null, ready, failed: failed?.result ?? null};
+    done.sort((a, b) => (score[b.prediction![0]] ?? 0)-(score[a.prediction![0]] ?? 0) || b.prediction![1]-a.prediction![1]);
+    this.reset();
+    return {moving: false, progress: 1, result: {...done[0], reason: MESSAGES.ok}, ready: [], failed: null};
+  }
+}
+
+/**
+ * Cuándo se da por hecha una letra ESTÁTICA en Libre e Interpretación (sin letra objetivo):
+ *  - solo con la mano quieta (STATIC_STILL_PALMS en los últimos STATIC_STILL_MS) y sin una letra con
+ *    movimiento en curso: al trazar una Z con la forma de D no se escribe una D a media Z;
+ *  - I, N y D (poses iniciales de J, Ñ y Z) esperan BASE_EXTRA_MS más, por si viene su movimiento
+ *    (poco: si después llega la J, reemplaza a la I en la lista);
+ *    las demás, STATIC_EXTRA_MS más que la estabilidad (StableLetter, 0.6 s);
+ *  - perder la mano menos de HAND_GAP_MS no reinicia la letra.
+ */
+export const STATIC_STILL_MS = 350, STATIC_STILL_PALMS = .15, STATIC_EXTRA_MS = 150, BASE_EXTRA_MS = 300;
+export const MOTION_START_POSES = new Set(RULES.filter((r)=>r.base !== r.letter).map((r)=>r.base));
+export class StaticGate {
+  private recent: MotionFrame[] = [];
+  private letter: string | null = null;
+  private since = 0;
+  private lastHand = -Infinity;
+  reset() { this.recent = []; this.letter = null; this.lastHand = -Infinity; }
+  /** ¿La mano está quieta? (llamar en cada cuadro, antes de `gate`). */
+  observe(frame: MotionFrame): {still: boolean; present: boolean} {
+    if (frame.hand) {
+      this.lastHand = frame.t;
+      this.recent.push(frame);
+      this.recent = this.recent.filter((f)=>frame.t-f.t <= STATIC_STILL_MS);
+    }
+    const present = !!frame.hand || frame.t-this.lastHand <= HAND_GAP_MS;
+    const still = this.recent.length >= 2 && frame.t-this.recent[0].t >= STATIC_STILL_MS*.6
+      && Math.max(extent(normalizedPath(this.recent, 8).points), extent(normalizedPath(this.recent, 0).points)) < STATIC_STILL_PALMS;
+    return {still, present};
+  }
+  /** La letra estable de StableLetter pasa solo después de su espera extra. */
+  gate(t: number, stable: Prediction | null): Prediction | null {
+    const l = stable?.[0] ?? null;
+    if (l !== this.letter) { this.letter = l; this.since = t; }
+    if (!stable) return null;
+    return t-this.since >= (MOTION_START_POSES.has(stable[0]) ? BASE_EXTRA_MS : STATIC_EXTRA_MS) ? stable : null;
   }
 }
 

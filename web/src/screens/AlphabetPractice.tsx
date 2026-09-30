@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { LETTERS, MOTION_LETTERS } from "../lib/alphabet";
-import { useAlphabetRecognition, type AlphabetMode } from "../hooks/useAlphabetRecognition";
+import { useAlphabetRecognition, useLetterSequence, type AlphabetMode } from "../hooks/useAlphabetRecognition";
+import { useFrameRecorder } from "../hooks/useFrameRecorder";
 import { HandDiagram } from "../components/HandDiagram";
 import { IconEye, IconEyeOff, IconWarning, ToneIcon } from "../components/icons";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { motionBaseLetter, READY_HOLD_MS } from "../lib/alphabetMotion";
-import { freeGauge, motionGauge, staticGauge } from "../lib/alphabetView";
+import { freeGauge, motionGauge, readyText, staticGauge } from "../lib/alphabetView";
 import { LiveCamera } from "./LiveCamera";
 import {
   CalibrationLostNotice,
@@ -128,7 +129,8 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
 
   const target = mode === "free" ? null : mode === "sequential" ? LETTERS[letterIdx] : freeLetter;
 
-  const [cameraOn, setCameraOn] = useState(false);
+  // La cámara se usa en cuanto se entra (sin botón "Abrir cámara"); "Detener cámara" la pausa.
+  const [cameraOn, setCameraOn] = useState(true);
   const [showRef, toggleRef] = useShowReference();
   const [tutorial, setTutorial] = useState(false);
   const motion = target !== null && MOTION_LETTERS.has(target);
@@ -136,7 +138,8 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
   const { detected, progress: holdProgress, complete, feedback, fingers, live } = recognition;
   const base = target !== null ? motionBaseLetter(target) : null;
   useSessionMode("practice", target);
-  useFrameSink(cameraOn ? (f) => { session.send(f); recognition.onFrame(f); } : null);
+  const recorder = useFrameRecorder();
+  useFrameSink(cameraOn ? (f) => { session.send(f); recognition.onFrame(f); recorder.push(f); } : null);
 
   useEffect(() => {
     if (!complete || mode !== "sequential" || letterIdx === LETTERS.length - 1) return;
@@ -151,13 +154,8 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
     if (complete && target) setDoneLetters((prev) => prev.has(target) ? prev : new Set(prev).add(target));
   }, [complete]);
 
-  // Libre: cada vez que se reconoce una letra nueva se agrega a la lista (como ir escribiendo). La
-  // misma letra se repite solo si antes se perdió la mano o se reconoció otra.
-  const stableLetter = mode === "free" ? recognition.stable?.[0] ?? null : null;
-  const [freeLetters, setFreeLetters] = useState<string[]>([]);
-  useEffect(() => {
-    if (stableLetter) setFreeLetters((prev) => [...prev, stableLetter].slice(-60));
-  }, [stableLetter]);
+  // Libre: cada letra nueva se agrega a la lista, como ir escribiendo (useLetterSequence).
+  const [freeLetters, setFreeLetters] = useLetterSequence(mode === "free" ? recognition.stable?.[0] ?? null : null);
 
   const correct = complete || (!motion && !!feedback?.correct);
   const prevLetter = () => setLetterIdx((i) => Math.max(0, i - 1));
@@ -173,11 +171,14 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
     if (!cameraOn) return null;
     if (mode === "free") {
       if (recognition.phase === "capturing") return { text: "Siguiendo el movimiento… deja la mano quieta al terminar." };
-      if (recognition.phase === "result" && recognition.motionResult) {
+      if (recognition.motionResult) {
         const r = recognition.motionResult;
-        return r.prediction ? { tone: "ok", text: `Movimiento compatible con la ${r.prediction[0]} (evaluación experimental).` } : { tone: "warn", lead: "Movimiento: ", text: r.reason };
+        return r.prediction ? { tone: "ok", text: `Movimiento compatible con la ${r.prediction[0]} (evaluación experimental).` } : { tone: "warn", lead: "Movimiento de la ", text: r.reason };
       }
-      return feedback?.type === "capture" ? { tone: "warn", text: feedback.message } : null;
+      if (feedback?.type === "capture") return { tone: "warn", text: feedback.message };
+      // La pose inicial de una letra con movimiento ya se reconoció: avisar que ya puede moverse.
+      if (recognition.freeReady) return { tone: "ok", text: readyText(recognition.freeReady) };
+      return null;
     }
     if (motion) {
       if (live?.phase === "result" && motionResult) {
@@ -344,6 +345,7 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
               ? recognition.ranking.map(([l, share]) => <><strong translate="no">{l}</strong> <span className="tabular">{Math.round(share * 100)} %</span></>)
               : [feedback?.type === "capture" ? feedback.message : "Haz una letra frente a la cámara."]}>
             <p className="sheet__hint">Confianza relativa entre letras, no probabilidad de acierto.</p>
+            <p className="sheet__hint">J, Ñ, Q, X y Z: sostén un momento la pose inicial (J desde I, Ñ desde N, Z desde D) y luego haz el movimiento.</p>
           </EvaluationCard>
         ) : motion && target ? (
           <EvaluationCard {...motionCard}>
@@ -356,6 +358,15 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
         )}
       </div>
 
+      {cameraOn ? (
+        <p className="sheet__hint">
+          ¿No te reconoció una letra?{" "}
+          <button type="button" className="btn btn--quiet btn--small" onClick={() => recorder.download(`alfabeto_${mode}_${target ?? "libre"}`, {
+            screen: "alfabeto", mode, target, stable: recognition.stable, motionResult: recognition.motionResult ?? live?.result ?? null,
+          })}>Descargar intento</button>{" "}
+          (guarda los puntos de la mano de los últimos 8 s, sin video, para revisar qué pasó).
+        </p>
+      ) : null}
       {target === "K" && <p className="sheet__hint">En K se evalúa únicamente la pose; el giro que muestra la referencia no se califica.</p>}
       <p className="sheet__hint">Reconocimiento experimental. Confianza relativa, no probabilidad de acierto. Puede confundir letras parecidas (R/U/V, S/T, M/N); no sustituye la revisión de una persona que domine LSM.</p>
     </div>

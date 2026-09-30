@@ -20,7 +20,8 @@ _RULES = """Reglas de la LSM a considerar:
   YO SORDO → "soy sordo"; NO_ENTENDER → "no entiendo".
 - Las palabras DELETREADAS con el alfabeto manual se indican aparte ("Deletreadas: …"). Casi siempre son nombres
   propios (personas, lugares, marcas): no las traduzcas; escríbelas con mayúscula inicial y la acentuación correcta
-  si es obvia (ANGEL → Ángel, MONICA → Mónica). Con MI NOMBRE + un nombre deletreado, lo natural es "me llamo …"."""
+  si es obvia (ANGEL → Ángel, MONICA → Mónica). Con MI NOMBRE + un nombre deletreado, lo natural es "me llamo …".
+- Una glosa de letras separadas por guiones (M-A-R-I-O) es una palabra deletreada con el alfabeto, casi siempre un nombre propio: escríbela como palabra (Mario)."""
 _STYLE = """No agregues información que no esté en las glosas o en el contexto. Mantén coherencia de género y número con el contexto."""
 
 SYSTEM_PROMPT = f"""Eres intérprete de Lengua de Señas Mexicana (LSM) a español.
@@ -56,6 +57,15 @@ Llm = Callable[[str, str], Awaitable[str]]
 log = logging.getLogger(__name__)
 
 
+def spelled_word(gloss: str) -> str | None:
+    """"M-A-R-I-O" (deletreo con el alfabeto) → "Mario"; None si la glosa no es un deletreo."""
+    parts = gloss.split("-")
+    if len(parts) < 2 or not all(len(p) == 1 and p.isalpha() for p in parts):
+        return None
+    word = "".join(parts)
+    return word[:1] + word[1:].lower()
+
+
 def template_sentence(glosses: list[str], spelled=()) -> str:
     """Respaldo sin LLM. `spelled`: glosas deletreadas (nombres propios): van con mayúscula inicial."""
     spelled = set(spelled)
@@ -65,8 +75,8 @@ def template_sentence(glosses: list[str], spelled=()) -> str:
     rest = [g for g in rest if g != "YO"] if has_yo else rest
     verbs = [g for g in rest if has_yo and g in YO_VERBS]
     others = [g for g in rest if g not in verbs]
-    words = [YO_VERBS[v] for v in verbs] + [o.capitalize() if o in spelled else o.lower().replace("_", " ")
-                                            for o in others]
+    words = [YO_VERBS[v] for v in verbs] + [o.capitalize() if o in spelled
+                                            else spelled_word(o) or o.lower().replace("_", " ") for o in others]
     if has_yo and not verbs:
         words = ["yo"] + words
     body = " ".join(words)
