@@ -6,6 +6,7 @@ from typing import Sequence
 import numpy as np
 import torch
 
+from lsm.classifier.focus import focus
 from lsm.classifier.model import SignTransformer
 from lsm.features import active_span, featurize
 from lsm.normalize import NormSequence
@@ -99,3 +100,18 @@ def predict_tta(clf, norm: NormSequence, k: int = 3) -> list[tuple[str, float]]:
     if not hasattr(clf, "probs"):
         return clf.predict(norm, k=k)
     return _top(np.mean([clf.probs(crop_active(norm, lo, hi)) for lo, hi in TTA_CROPS], axis=0), clf.labels, k)
+
+
+def predict_focus(clf, norm: NormSequence, k: int = 3, tta: bool = True) -> tuple[list[tuple[str, float]], NormSequence]:
+    """Como predict_tta (o sin recortes con `tta=False`), pero si una mano está de más (en reposo o quieta mientras
+    la otra hace la seña) también se lee sin ella y se queda la lectura más clara (lsm.classifier.focus).
+    Devuelve el top-k y la secuencia con que se leyó."""
+    if not hasattr(clf, "probs"):
+        return clf.predict(norm, k=k), norm
+    def probs(n: NormSequence) -> np.ndarray:
+        if not tta:
+            return clf.probs(n)
+        return np.mean([clf.probs(crop_active(n, lo, hi)) for lo, hi in TTA_CROPS], axis=0)
+    p, used = focus(probs, clf.labels, norm)
+    return _top(p, clf.labels, k), used
+
