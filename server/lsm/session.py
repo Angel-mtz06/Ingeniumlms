@@ -39,6 +39,14 @@ CONF_MIN = 0.6
 # que no son seña, sin perder señas completas ni HOLA/GRACIAS/AYUDA/POR_FAVOR; una seña cortada a media se pierde
 # un poco más (2 → 5 %).
 NONE_MIN = 0.35
+# Interpretación: una seña que se detiene a la mitad (MAMÁ en la barbilla, una seña que se sostiene) se partía por
+# quietud en pedazos de 0.6–0.9 s que el clasificador leía como NINGUNA o como otra seña con poca probabilidad
+# (BOMBEROS, DAÑAR, URGENCIA…). Un pedazo así (cerrado por quietud, corto y con la mejor seña debajo de WEAK_P) ya no
+# entra como seña; si el siguiente segmento empieza a menos de MERGE_GAP, se leen juntos y se queda la lectura
+# más clara. Cuadros a 30 fps (se escalan con la tasa real).
+WEAK_P = 0.3
+WEAK_MAX_FRAMES = 30  # 1 s
+MERGE_GAP = 18  # 0.6 s
 
 
 def env_none_min() -> float:
@@ -47,6 +55,11 @@ def env_none_min() -> float:
     except ValueError:
         return NONE_MIN
     return v if 0.0 < v <= 1.0 else NONE_MIN
+
+
+def _best_p(top: list) -> float:
+    """Probabilidad de la mejor seña (sin NINGUNA) de un top-k [[glosa, p], …]."""
+    return next((float(p) for g, p in top if g != NONE_GLOSS), 0.0)
 
 
 def env_tta() -> bool:
@@ -178,6 +191,7 @@ class Session:
         self.spell_word = False  # ese deletreo se agregó como palabra (sus segmentos se descartan)
         self.no_hand = 0
         self.warned = False
+        self._weak: tuple[int, int] | None = None  # último pedazo débil (idx absolutos), para leerlo con el siguiente
         self._new_window()
 
     def _new_window(self) -> None:
@@ -426,7 +440,20 @@ class Session:
         if b < a:
             return []
         self._span = (ev.start, ev.end)
-        out = self._evaluate_segment(a, b)
+        read = None
+        weak, self._weak = self._weak, None
+        gap = scale_frames(MERGE_GAP, self.segmenter.rate, 1)
+        if (self.mode == "translate" and self.classifier and weak is not None and weak[0] >= self.base
+                and ev.start - weak[1] <= gap):
+            # el pedazo débil anterior y este, juntos: si así la seña sale más clara, se usa el tramo completo
+            alone, joined = self._read(a, b), self._read(weak[0] - self.base, b)
+            if _best_p(joined[0]) > _best_p(alone[0]):
+                a, read = weak[0] - self.base, joined
+                self._span = (weak[0], ev.end)
+                log.info("segmento unido con el pedazo anterior (%d cuadros)", weak[1] - weak[0] + 1)
+            else:
+                read = alone
+        out = self._evaluate_segment(a, b, read=read, reason=ev.reason)
         if log.isEnabledFor(logging.INFO):
             ys = np.array([self._top_y(i) for i in range(a, b + 1)])
             ev_out = next((m for m in out if m["type"] == "evaluation"), None)
@@ -441,20 +468,26 @@ class Session:
                      " | ".join(ev_out["tips"][:2]) if ev_out else "-", self._last_issues)
         return out
 
-    def _evaluate_segment(self, a: int, b: int) -> list[dict]:
-        self._last_top: list = []
-        self._last_issues: list = []
+    def _read(self, a: int, b: int) -> tuple[list, NormSequence]:
+        """Top-k del tramo [a, b] (índices del búfer), sin la bajada final, y la secuencia con que se leyó."""
         b = self._trim_descent(a, b)
         seq = NormSequence(np.stack(self.hands[a:b + 1]), np.stack(self.present[a:b + 1]))
         # k=5: NINGUNA nunca se muestra como alternativa; quitándola quedan ≥4 para el contexto
         if not self.classifier:
-            preds = []
-        else:  # promedio de recortes del segmento (LSM_TTA=0 lo apaga); sin la mano de más si así sale más clara
-            preds, read = predict_focus(self.classifier, seq, k=TOP_K, tta=self.tta, boost=self.boost)
-            if self.mode != "practice":  # Práctica califica las manos que la referencia pide, tal como se vieron
-                seq = read
+            return [], seq
+        # promedio de recortes del segmento (LSM_TTA=0 lo apaga); sin la mano de más si así sale más clara
+        preds, read = predict_focus(self.classifier, seq, k=TOP_K, tta=self.tta, boost=self.boost)
+        if self.mode != "practice":  # Práctica califica las manos que la referencia pide, tal como se vieron
+            seq = read
         top = [[g, round(float(p), 3)] for g, p in preds]
-        top = distinguish_hola_no(top, seq, self.references)
+        return distinguish_hola_no(top, seq, self.references), seq
+
+    def _evaluate_segment(self, a: int, b: int, read: tuple[list, NormSequence] | None = None,
+                          reason: str = "") -> list[dict]:
+        self._last_top: list = []
+        self._last_issues: list = []
+        top, seq = read if read is not None else self._read(a, b)
+        b = self._trim_descent(a, b)
         self._last_top = top  # para el registro (incluye NINGUNA si salió)
         none_top1 = bool(top) and top[0][0] == NONE_GLOSS
         cands = [t for t in top if t[0] != NONE_GLOSS]
@@ -477,6 +510,10 @@ class Session:
                      # False si una mano que la seña requiere no se vio (el puntaje no es comparable)
                      "evaluable": not any(i.param == "mano" for i in ev.issues)}]
         p_none = next((p for g, p in top if g == NONE_GLOSS), 0.0)
+        if reason == "quietud" and b - a + 1 <= scale_frames(WEAK_MAX_FRAMES, self.segmenter.rate, 1) \
+                and _best_p(top) < WEAK_P:
+            self._weak = self._span  # pedazo de una seña que se detuvo: se lee con el siguiente
+            return []
         if not top3 or p_none >= self.none_min:
             return []  # NINGUNA segura (movimiento que no es seña): se descarta en silencio
         prev = self._ctx_prev()
