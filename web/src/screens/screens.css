@@ -817,6 +817,8 @@
 
 .spell-word {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.15em;
   font-family: var(--font-display);
   font-size: var(--text-2xl);

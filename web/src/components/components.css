@@ -827,8 +827,10 @@
 }
 
 .validate-item__gloss {
+  min-width: 0;
   font-size: var(--text-lg);
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .validate-item__gloss--spelled {

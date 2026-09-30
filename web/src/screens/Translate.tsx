@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAlphabetRecognition } from "../hooks/useAlphabetRecognition";
 import { handsUp, SpellWord } from "../lib/spell";
 import { GlossChips } from "../components/GlossChips";
-import { IconCheck, IconSpeaker, IconWarning } from "../components/icons";
+import { IconSpeaker, IconWarning } from "../components/icons";
 import { SentencePanel } from "../components/SentencePanel";
 import { TopicPicker } from "../components/TopicPicker";
 import { lostMessage, type Pausing, pausingFraction, pausingText, serverIndex, validation } from "../lib/translate";
@@ -53,7 +53,6 @@ function PauseIndicator({ pausing }: { pausing: Pausing }) {
 function HoldIndicator({ n }: { n: number }) {
   return (
     <div className="overlay-pill overlay-pill--hold" aria-hidden="true">
-      <IconCheck />
       <span>{n === 1 ? "Elige la palabra para seguir" : `Elige las ${n} palabras para seguir`}</span>
     </div>
   );
@@ -302,11 +301,11 @@ export function Translate() {
           </button>
           <div className="spell-row">
             <button type="button" className="btn btn--secondary" aria-pressed={spelling} aria-keyshortcuts="D" onClick={toggleSpelling}>
-              {spelling ? "Terminar palabra" : "Deletrear"} <kbd>D</kbd>
+              {spelling ? "Terminar palabra" : "Deletrear"} <kbd aria-hidden="true">D</kbd>
             </button>
             {spelling ? (
-              <button type="button" className="btn btn--quiet" onClick={backspace} disabled={!word} aria-label="Borrar la última letra">
-                ⌫ Borrar letra
+              <button type="button" className="btn btn--quiet" onClick={backspace} disabled={!word}>
+                <span aria-hidden="true">⌫</span> Borrar letra
               </button>
             ) : (
               <span className="spell-row__hint">Para nombres: letra por letra con el alfabeto manual.</span>
@@ -334,7 +333,8 @@ export function Translate() {
           {validate ? (
             <p className="sheet__hint">
               Toca la palabra correcta o <strong>Ninguna</strong>. Con teclado: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> eligen, <kbd>X</kbd> quita y las flechas{" "}
-              <kbd aria-label="arriba">↑</kbd> <kbd aria-label="abajo">↓</kbd> cambian de seña.
+              <kbd aria-hidden="true">↑</kbd> <kbd aria-hidden="true">↓</kbd>
+              <span className="visually-hidden">arriba y abajo</span> cambian de seña.
             </p>
           ) : (
             <p className="sheet__hint">Toca una seña para cambiarla o quitarla. Las dudosas dicen “¿revisar?”.</p>

@@ -243,7 +243,7 @@ function ValidateList({ items, onConfirm, onRemove }: GlossChipsProps) {
   }
 
   return (
-    <ol className="validate-list" aria-label="Señas reconocidas">
+    <ol className="validate-list" aria-label="Señas reconocidas" translate="no">
       {items.map((it, i) => {
         const state = it.removed ? "removed" : it.confirmed ? "confirmed" : "pending";
         const label = it.spelled ? spelledLabel(it.gloss) : glossLabel(it.gloss);

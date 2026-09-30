@@ -56,3 +56,17 @@
 - Para enseñarle frases nuevas: agregar oraciones en glosas a `server/lsm/data/corpus_glosas.txt` (una por línea,
   solo glosas del vocabulario y `<NOMBRE>`) y reiniciar el servidor; `pytest server/tests/test_context.py` valida
   que todas existan.
+
+## Interpretación: tema, validar cada seña y deletreo
+- **Tema de la conversación** (Todo, Saludos, Salud, Emergencias): antes de empezar, elegir el tema de la demo.
+  Las señas del tema ganan los empates dentro de las 5 candidatas (nunca cambia una seña con ≥ 70 %). Fuerza del
+  empujón: `LSM_TOPIC_BOOST=<1–20>` en `.env` (por defecto 3; 1 = sin efecto).
+- **Validar cada seña** (activado por defecto): tras cada seña aparecen hasta 3 candidatas; tocar la correcta o
+  "Ninguna" (teclas 1, 2, 3 y X). Mientras falte validar, la app no manda cuadros ni forma la oración ("Elige la
+  palabra para seguir"). "Aceptar todas las sugeridas" valida de un clic; "Formar oración" se habilita con todo
+  validado. Apagado, la app forma la oración sola como antes.
+- **Deletrear** (tecla D) para nombres: letra por letra con el alfabeto manual (el mismo reconocedor de Alfabeto);
+  sostener cada letra ~0.6 s; para repetir una letra, mover la mano entre las dos; "⌫ Borrar letra" quita la
+  última; bajar la mano 1 s termina la palabra, que entra ya validada ("A·N·G·E·L", etiqueta "deletreo"). Evitar
+  mover mucho la muñeca entre letras: un movimiento grande se analiza como letra con movimiento y pausa el
+  reconocimiento ~2–3 s.
