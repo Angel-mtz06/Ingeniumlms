@@ -27,7 +27,7 @@ Lee 6 MPU-6050 (dorso + 5 dedales) por un multiplexor TCA9548A y envía las lect
 Eje **X** hacia la punta del dedo y eje **Z** saliendo de la uña (en el dorso, saliendo de la mano). Con la mano
 quieta ~0.2 s al encender, cada IMU mide el sesgo de su giroscopio.
 
-## Monitor serie (115200 o cualquier velocidad: el ESP32-C3 usa USB nativo)
+## Monitor serie (921600 baudios; con el ESP32-C3 cualquier velocidad funciona: usa USB nativo)
 
 Las líneas que empiezan con `#` son mensajes de estado (IMU que responden, cambios de WiFi con su IP). Comandos
 (escríbelos y Enter):
