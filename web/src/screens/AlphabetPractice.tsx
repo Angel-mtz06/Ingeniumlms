@@ -16,9 +16,9 @@ import {
 } from "./shared";
 
 // Fotografía de la letra dentro del cartel original de SEP, sin alterar la imagen. Se muestra en el
-// mismo marco que la referencia animada de Práctica (.ref / .ref__stage / .ref__bar).
-const SOURCE = "https://nuevaescuelamexicana.sep.gob.mx/contenido/recurso/34697/";
-function LetterReference({ letter, controls }: { letter: string; controls?: ReactNode }) {
+// mismo marco que la referencia animada de Práctica (.ref / .ref__stage). Sin controles: la letra
+// solo cambia sola al acertar (Secuencial) o desde el selector (Letra específica).
+function LetterReference({ letter }: { letter: string }) {
   const i = [..."ABCDEFGHIJKLMNÑOPQRSTUVWXYZ"].indexOf(letter);
   const row = Math.floor(i / 6), col = i % 6;
   const x = row === 4 ? [342, 546, 748][col] : [44, 246, 447, 647, 848, 1050][col];
@@ -31,11 +31,6 @@ function LetterReference({ letter, controls }: { letter: string; controls?: Reac
           <image href="/alphabet/lsm-sep.jpg" width="1280" height="1920" />
         </svg>
       </div>
-      <figcaption className="ref__bar">
-        <span className="ref__title">Referencia: <strong translate="no">{letter}</strong></span>
-        {controls ? <div className="ref__controls">{controls}</div> : null}
-      </figcaption>
-      <p className="sheet__hint"><a href={SOURCE} target="_blank" rel="noreferrer">Fotografía: SEP / @prende.mx</a> · <a href="/alphabet/lsm-sep.jpg" target="_blank" rel="noreferrer">Ver cartel completo</a></p>
     </figure>
   );
 }
@@ -69,11 +64,12 @@ function EvaluationCard({ tone, title, items, children }: { tone?: Tone; title: 
   );
 }
 
-function LetterPicker({ selected, onPick }: { selected: string; onPick(l: string): void }) {
+function LetterPicker({ selected, done, onPick }: { selected: string; done: ReadonlySet<string>; onPick(l: string): void }) {
   return (
     <div className="alfa-picker" role="group" aria-label="Selector de letras">
       {LETTERS.map((l) => (
-        <button key={l} type="button" className="alfa-picker__btn" aria-pressed={l === selected} onClick={() => onPick(l)}>
+        <button key={l} type="button" className="alfa-picker__btn" aria-pressed={l === selected} data-done={done.has(l) || undefined}
+          aria-label={done.has(l) ? `${l}, ya la hiciste bien` : l} onClick={() => onPick(l)}>
           {l}
         </button>
       ))}
@@ -148,9 +144,24 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
     return () => window.clearTimeout(timer);
   }, [complete, mode, target, letterIdx, motion]);
 
+  // Letras que ya salieron bien en esta sesión (se marcan en verde en el selector). Solo depende de
+  // `complete`: al cambiar de letra, `complete` sigue en true un render con la letra nueva.
+  const [doneLetters, setDoneLetters] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    if (complete && target) setDoneLetters((prev) => prev.has(target) ? prev : new Set(prev).add(target));
+  }, [complete]);
+
+  // Libre: cada vez que se reconoce una letra nueva se agrega a la lista (como ir escribiendo). La
+  // misma letra se repite solo si antes se perdió la mano o se reconoció otra.
+  const stableLetter = mode === "free" ? recognition.stable?.[0] ?? null : null;
+  const [freeLetters, setFreeLetters] = useState<string[]>([]);
+  useEffect(() => {
+    if (stableLetter) setFreeLetters((prev) => [...prev, stableLetter].slice(-60));
+  }, [stableLetter]);
+
   const correct = complete || (!motion && !!feedback?.correct);
-  const prevLetter = useCallback(() => { if (mode === "sequential") setLetterIdx((i) => Math.max(0, i - 1)); }, [mode]);
-  const nextLetter = useCallback(() => { if (mode === "sequential") setLetterIdx((i) => Math.min(i + 1, LETTERS.length - 1)); }, [mode]);
+  const prevLetter = () => setLetterIdx((i) => Math.max(0, i - 1));
+  const nextLetter = () => setLetterIdx((i) => Math.min(i + 1, LETTERS.length - 1));
 
   const gauge = mode === "free" ? freeGauge(recognition.stable, feedback)
     : motion ? motionGauge(live, feedback, complete)
@@ -196,11 +207,19 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
           : { title: "Esta letra requiere movimiento", items: [] };
 
   return (
-    <div className="screen">
-      <header className="screen__head screen__head--row screen__head--compact">
+    <div className="screen alfa-screen">
+      <header className="screen__head screen__head--row screen__head--compact alfa-head">
         <div className="screen__head-text">
           <h2 className="screen__title">Practica el Alfabeto LSM</h2>
           <p className="screen__lead">Mira la referencia, haz la letra frente a la cámara y sigue la sugerencia hasta que quede correcta.</p>
+        </div>
+        <div className="alfa-mode-row">
+          {(["sequential", "specific", "free"] as AlphabetMode[]).map((m) => (
+            <button key={m} type="button" className={`btn ${mode === m ? "btn--primary" : "btn--secondary"}`} aria-pressed={mode === m}
+              onClick={() => { setMode(m); if (m === "sequential") setLetterIdx(0); }}>
+              {m === "sequential" ? "Secuencial" : m === "specific" ? "Letra específica" : "Libre"}
+            </button>
+          ))}
         </div>
         <button type="button" className="btn btn--change btn--small" onClick={onBack}>Volver a Práctica</button>
       </header>
@@ -208,19 +227,10 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
       <ServerNotice />
       <CalibrationLostNotice onCalibrate={() => go("calibracion")} />
 
-      <div className="alfa-mode-row">
-        {(["sequential", "specific", "free"] as AlphabetMode[]).map((m) => (
-          <button key={m} type="button" className={`btn ${mode === m ? "btn--primary" : "btn--secondary"}`} aria-pressed={mode === m}
-            onClick={() => { setMode(m); if (m === "sequential") setLetterIdx(0); }}>
-            {m === "sequential" ? "Secuencial" : m === "specific" ? "Letra específica" : "Libre"}
-          </button>
-        ))}
-      </div>
-
       {mode === "specific" && (
         <section className="sheet" aria-label="Elige una letra">
           <h3 className="sheet__title">Elige la letra a practicar</h3>
-          <LetterPicker selected={freeLetter} onPick={setFreeLetter} />
+          <LetterPicker selected={freeLetter} done={doneLetters} onPick={setFreeLetter} />
         </section>
       )}
 
@@ -263,15 +273,18 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
               ) : null}
             </div>
           )}
-          {/* Secuencial: moverse entre letras sin tener que completarlas (siempre visible, bajo la cámara). */}
-          {mode === "sequential" ? (
-            <div className="alfa-nav-row" role="group" aria-label="Navegar el alfabeto">
-              <button type="button" className="btn btn--secondary btn--small" onClick={prevLetter} disabled={letterIdx === 0}>← Anterior</button>
-              <span className="alfa-nav-progress tabular">Letra <strong translate="no">{target}</strong> · {letterIdx + 1} de {LETTERS.length}</span>
-              <button type="button" className="btn btn--primary btn--small" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1}>Saltar letra →</button>
+          {mode === "sequential" || cameraOn ? (
+            <div className="alfa-cam-actions">
+              {mode === "sequential" ? (
+                <div className="alfa-letter-nav" role="group" aria-label="Cambiar de letra">
+                  <button type="button" className="btn btn--secondary" onClick={prevLetter} disabled={letterIdx === 0}>← Anterior</button>
+                  <span className="alfa-letter-nav__pos tabular" aria-live="polite">{letterIdx + 1} / {LETTERS.length}</span>
+                  <button type="button" className="btn btn--secondary" onClick={nextLetter} disabled={letterIdx === LETTERS.length - 1}>Saltar letra →</button>
+                </div>
+              ) : null}
+              {cameraOn ? <button type="button" className="btn btn--secondary alfa-camera-stop" onClick={() => setCameraOn(false)}>Detener cámara</button> : null}
             </div>
           ) : null}
-          {cameraOn ? <button type="button" className="btn btn--secondary alfa-camera-stop" onClick={() => setCameraOn(false)}>Detener cámara</button> : null}
           {complete && mode === "specific" ? <button type="button" className="btn btn--secondary" onClick={recognition.restart}>Repetir letra</button> : null}
           {complete && mode === "sequential" && letterIdx === LETTERS.length - 1 ? <p role="status" className="alfa-feedback__ok">✓ Llegaste al final del alfabeto.</p> : null}
         </div>
@@ -279,7 +292,10 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
           {target !== null ? (
             <section className="sheet practice-ref" aria-labelledby="alfa-ejemplo" data-open={showRef}>
               <div className="practice-ref__head">
-                <h3 id="alfa-ejemplo" className="practice-ref__title">{tutorial && TUTORIAL[target] ? "Tutorial" : "Ejemplo"}: <span translate="no">{target}</span></h3>
+                <h3 id="alfa-ejemplo" className="practice-ref__title">
+                  {tutorial && TUTORIAL[target] ? "Tutorial" : "Ejemplo"}: <span translate="no">{target}</span>
+                  {mode === "sequential" ? <span className="tabular"> · {letterIdx + 1} / {LETTERS.length}</span> : null}
+                </h3>
                 {TUTORIAL[target] ? (
                   <button type="button" className="btn btn--primary btn--small alfa-tutorial-btn" aria-pressed={tutorial}
                     onClick={() => { if (!showRef) toggleRef(); setTutorial((v) => !v); }}>
@@ -296,10 +312,18 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
               </div>
             </section>
           ) : (
-            <section className="sheet" aria-label="Reconocimiento libre">
-              <h3 className="sheet__title">Reconocimiento libre</h3>
-              <p>Haz cualquier letra y mantén la pose. La app muestra la letra más probable y las más parecidas; no te dice cómo corregirla porque no sabe cuál querías hacer.</p>
-              <p className="sheet__hint">Si mueves la mano, la app sigue el movimiento hasta que la dejas quieta e intenta reconocer J, Ñ, Q, X o Z.</p>
+            <section className="sheet alfa-free-letters" aria-labelledby="alfa-detectadas">
+              <div className="alfa-free-letters__head">
+                <h3 id="alfa-detectadas" className="sheet__title">Letras detectadas</h3>
+                {freeLetters.length ? <button type="button" className="btn btn--secondary btn--small" onClick={() => setFreeLetters([])}>Borrar</button> : null}
+              </div>
+              {freeLetters.length ? (
+                <p className="alfa-free-letters__text" translate="no" aria-live="polite">
+                  {freeLetters.map((l, i) => <span key={i} data-last={i === freeLetters.length - 1 || undefined}>{l}</span>)}
+                </p>
+              ) : (
+                <p className="sheet__hint">Aún no hay letras. Haz una frente a la cámara y mantén la pose.</p>
+              )}
             </section>
           )}
           <section className="sheet hands-panel" aria-labelledby="alfa-dedos">
@@ -309,12 +333,6 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
               <HandDiagram side="izquierda" fingers={recognition.side === "izquierda" ? fingers : []} />
               <HandDiagram side="derecha" fingers={recognition.side === "derecha" ? fingers : []} />
             </div>
-            <p className="sheet__hint">
-              {mode === "free" ? (recognition.stable
-                  ? `Cada dedo se compara con la ${recognition.stable[0]}, la letra que se reconoció: liso = bien, rayas = casi, cuadrícula = distinto.`
-                  : "Cuando se reconozca una letra, sus dedos se pintan aquí comparados con ella.")
-                : `Cada dedo se compara con la ${motion && base ? `${base} (posición inicial de la ${target})` : target}: liso = bien, rayas = casi, cuadrícula = corrige.`}
-            </p>
           </section>
         </div>
       </div>

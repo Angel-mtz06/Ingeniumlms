@@ -1274,11 +1274,63 @@
 
 /* ---------- Alfabeto LSM — pantalla de práctica ---------- */
 
+/* Cabecera más estrecha: título y guía chicos para que la cámara suba. */
+.screen:has(> .alfa-head) {
+  gap: var(--space-3);
+}
+
+.alfa-head .screen__title {
+  font-size: var(--text-lg);
+}
+
+.alfa-head .screen__lead {
+  line-height: 1.35;
+}
+
 /* Selector de modo (Secuencial / Letra libre) */
 .alfa-mode-row {
   display: flex;
   flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.alfa-mode-row .btn {
+  min-height: 40px;
+  padding: var(--space-1) var(--space-4);
+}
+
+/* Escritorio: los modos suben a la fila del título, junto a "Volver a Práctica", en vez de
+   ocupar una fila propia; así la cámara y el ejemplo empiezan más arriba. */
+@media (min-width: 1024px) {
+  .alfa-head {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+}
+
+/* Lado derecho más compacto que en Práctica: ejemplo, dedos y cámara caben sin bajar. */
+.alfa-screen .practice-side {
   gap: var(--space-3);
+}
+
+.alfa-screen .practice-ref .ref__stage {
+  block-size: clamp(13rem, 100dvh - 31.5rem, 28rem);
+}
+
+/* Menos marco alrededor de la foto: el espacio va a la imagen. */
+.alfa-screen .alfa-ref__stage {
+  padding: var(--space-1);
+}
+
+.alfa-screen .practice-side .hand__svg {
+  max-width: clamp(80px, 100dvh - 44rem, 130px);
+}
+
+/* Tableta y móvil: los modos van en su propia fila, debajo del título y del botón. */
+@media (max-width: 1023px) {
+  .alfa-head .alfa-mode-row {
+    grid-column: 1 / -1;
+    order: 1;
+  }
 }
 
 /* Etapa principal: panel referencia | panel cámara */
@@ -1512,8 +1564,30 @@
   text-align: center;
 }
 
+/* Bajo la cámara: anterior / siguiente letra (Secuencial) a la izquierda y "Detener cámara" a la derecha. */
+.alfa-cam-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.alfa-letter-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.alfa-letter-nav__pos {
+  min-width: 4.5ch;
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 .alfa-camera-stop {
-  justify-self: end;
+  margin-left: auto;
 }
 
 /* Tarjeta de evaluación (estilo ScoreCard): el fondo sigue el tono */
@@ -1630,19 +1704,70 @@
   box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 40%, transparent);
 }
 
-/* Navegación anterior / siguiente */
-.alfa-nav-row {
+/* Libre: las letras que se van reconociendo, en orden, como un texto. */
+.alfa-free-letters__head {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-surface-2);
 }
 
-.alfa-nav-progress {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  font-weight: 600;
+.alfa-free-letters__text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  max-height: 14rem;
+  overflow-y: auto;
+  font: 800 var(--text-2xl)/1.2 var(--font-display);
+  letter-spacing: 0.02em;
 }
+
+.alfa-free-letters__text [data-last] {
+  color: var(--color-accent);
+}
+
+/* Escritorio: las 27 letras en una sola línea, cada una con el mismo ancho. */
+@media (min-width: 1024px) {
+  .alfa-picker {
+    display: grid;
+    grid-template-columns: repeat(27, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+
+  .alfa-picker__btn {
+    min-width: 0;
+    padding-inline: 0;
+    font-size: var(--text-lg);
+  }
+}
+
+/* Letra que ya salió bien: verde, con palomita en la esquina superior derecha. */
+.alfa-picker__btn {
+  position: relative;
+}
+
+.alfa-picker__btn[data-done] {
+  background: color-mix(in srgb, var(--color-ok) 28%, var(--color-surface-2));
+  box-shadow: inset 0 0 0 2px var(--color-ok);
+}
+
+.alfa-picker__btn[data-done][aria-pressed="true"] {
+  background: var(--color-accent);
+  box-shadow: inset 0 0 0 2px var(--color-ok), 0 2px 8px color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.alfa-picker__btn[data-done]::after {
+  content: "✓";
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-ok);
+  color: var(--color-accent-contrast);
+  font: 800 11px/1 var(--font-sans);
+}
+

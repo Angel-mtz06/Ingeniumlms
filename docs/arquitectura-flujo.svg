@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1090" width="1600" height="1090" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/>
+    </marker>
+    <style>
+      .t{font-size:17px;font-weight:700;fill:#0f172a}
+      .s{font-size:14px;fill:#334155}
+      .x{font-size:13px;fill:#475569}
+      .lbl{font-size:13px;font-weight:600;fill:#1e293b}
+      .box{fill:#ffffff;stroke-width:2}
+      .ln{fill:none;stroke:#334155;stroke-width:2}
+      .wf{fill:none;stroke:#7c3aed;stroke-width:2.5;stroke-dasharray:7 5}
+      .band{font-size:15px;font-weight:700;fill:#ffffff;letter-spacing:.5px}
+    </style>
+  </defs>
+
+  <rect width="1600" height="1090" fill="#f8fafc"/>
+  <text x="800" y="44" text-anchor="middle" font-size="26" font-weight="800" fill="#0f172a">Arquitectura y flujo de datos — Intérprete y evaluador de LSM</text>
+  <text x="800" y="70" text-anchor="middle" class="s">INDIVISA INGENIUM 2026 · 10 dedales con IMU · pulseras por WiFi local · todo el procesamiento en la laptop</text>
+
+  <!-- ===== Bandas ===== -->
+  <rect x="20" y="88"  width="1560" height="222" rx="14" fill="#ecfeff" stroke="#a5f3fc"/>
+  <rect x="20" y="322" width="1560" height="200" rx="14" fill="#eef2ff" stroke="#c7d2fe"/>
+  <rect x="20" y="534" width="1560" height="236" rx="14" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <rect x="20" y="782" width="1560" height="250" rx="14" fill="#fff7ed" stroke="#fed7aa"/>
+  <rect x="20" y="88"  width="44" height="222" rx="12" fill="#0891b2"/>
+  <rect x="20" y="322" width="44" height="200" rx="12" fill="#4f46e5"/>
+  <rect x="20" y="534" width="44" height="236" rx="12" fill="#16a34a"/>
+  <rect x="20" y="782" width="44" height="250" rx="12" fill="#ea580c"/>
+  <text class="band" transform="translate(48 199) rotate(-90)" text-anchor="middle">① CAPTURA Y RED</text>
+  <text class="band" transform="translate(48 422) rotate(-90)" text-anchor="middle">② NAVEGADOR</text>
+  <text class="band" transform="translate(48 652) rotate(-90)" text-anchor="middle">③ SERVIDOR LOCAL</text>
+  <text class="band" transform="translate(48 907) rotate(-90)" text-anchor="middle">④ RESULTADOS</text>
+
+  <!-- ===== ① Captura y red ===== -->
+  <rect class="box" stroke="#0891b2" x="90" y="128" width="300" height="112" rx="12"/>
+  <text class="t" x="240" y="168" text-anchor="middle">📷 Cámara web</text>
+  <text class="s" x="240" y="193" text-anchor="middle">960×540 · 7–30 fps</text>
+  <text class="x" x="240" y="215" text-anchor="middle">el video no sale de la laptop</text>
+
+  <rect class="box" stroke="#0891b2" x="500" y="112" width="300" height="150" rx="12"/>
+  <text class="t" x="650" y="146" text-anchor="middle">✋ Mano derecha: 5 dedales</text>
+  <text class="s" x="650" y="172" text-anchor="middle">1 MPU-6050 por dedal (cable I²C)</text>
+  <text class="s" x="650" y="194" text-anchor="middle">pulsera: ESP32 + TCA9548A</text>
+  <rect x="525" y="210" width="250" height="32" rx="16" fill="#ede9fe"/>
+  <text class="lbl" x="650" y="231" text-anchor="middle" fill="#6d28d9">Pulsera = punto de acceso WiFi</text>
+
+  <rect class="box" stroke="#0891b2" x="850" y="112" width="300" height="150" rx="12"/>
+  <text class="t" x="1000" y="146" text-anchor="middle">🤚 Mano izquierda: 5 dedales</text>
+  <text class="s" x="1000" y="172" text-anchor="middle">1 MPU-6050 por dedal (cable I²C)</text>
+  <text class="s" x="1000" y="194" text-anchor="middle">pulsera: ESP32 + TCA9548A</text>
+  <text class="x" x="1000" y="228" text-anchor="middle">estación WiFi · 192.168.4.3</text>
+
+  <rect class="box" stroke="#7c3aed" x="1230" y="128" width="330" height="112" rx="56"/>
+  <text class="t" x="1395" y="164" text-anchor="middle">📶 Red WiFi «LSM-Dedales»</text>
+  <text class="s" x="1395" y="189" text-anchor="middle">192.168.4.x · sin internet</text>
+  <text class="x" x="1395" y="211" text-anchor="middle">WebSocket :81 · ~50 lecturas/s</text>
+
+  <path class="wf" d="M650 112 V 100 H 1395 V 126" marker-end="url(#aw)"/>
+  <text class="lbl" x="1022" y="95" text-anchor="middle" fill="#6d28d9">crea la red (192.168.4.1)</text>
+  <path class="wf" d="M1150 187 H 1228" marker-end="url(#aw)"/>
+
+  <!-- ===== ② Navegador ===== -->
+  <path class="ln" d="M240 240 V 364" marker-end="url(#a)"/>
+  <rect class="box" stroke="#4f46e5" x="90" y="366" width="330" height="112" rx="12"/>
+  <text class="t" x="255" y="404" text-anchor="middle">MediaPipe Tasks Vision (GPU)</text>
+  <text class="s" x="255" y="429" text-anchor="middle">manos 2×21 · pose · cara</text>
+  <text class="x" x="255" y="451" text-anchor="middle">puntos clave 3D por cuadro</text>
+
+  <path class="wf" d="M1395 240 V 364" marker-end="url(#aw)"/>
+  <rect class="box" stroke="#4f46e5" x="1230" y="366" width="330" height="112" rx="12"/>
+  <text class="t" x="1395" y="404" text-anchor="middle">Lectura de dedales</text>
+  <text class="s" x="1395" y="429" text-anchor="middle">WebSocket a cada pulsera</text>
+  <text class="x" x="1395" y="451" text-anchor="middle">USB (Web Serial) como respaldo</text>
+
+  <rect class="box" stroke="#4f46e5" x="640" y="366" width="360" height="112" rx="12"/>
+  <text class="t" x="820" y="404" text-anchor="middle">Cuadro por instante</text>
+  <text class="s" x="820" y="429" text-anchor="middle">keypoints + ángulos de cada dedo</text>
+  <text class="x" x="820" y="451" text-anchor="middle">+ marca de tiempo</text>
+  <path class="ln" d="M420 422 H 636" marker-end="url(#a)"/>
+  <path class="ln" d="M1230 422 H 1004" marker-end="url(#a)"/>
+
+  <!-- ===== ③ Servidor ===== -->
+  <text class="lbl" x="1560" y="556" text-anchor="end">Python · FastAPI · PyTorch · 127.0.0.1:8000</text>
+  <path class="ln" d="M820 478 V 512 H 445 V 588" marker-end="url(#a)"/>
+  <rect x="560" y="500" width="200" height="24" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+  <text class="lbl" x="660" y="517" text-anchor="middle">WebSocket local /ws</text>
+
+  <rect class="box" stroke="#16a34a" x="320" y="592" width="250" height="112" rx="12"/>
+  <text class="t" x="445" y="630" text-anchor="middle">1 · Normalización</text>
+  <text class="s" x="445" y="655" text-anchor="middle">en anchos de cabeza</text>
+  <text class="x" x="445" y="677" text-anchor="middle">independiente de la distancia</text>
+
+  <polygon class="box" stroke="#16a34a" points="760,580 880,648 760,716 640,648"/>
+  <text class="t" x="760" y="643" text-anchor="middle">2 · ¿Terminó</text>
+  <text class="t" x="760" y="664" text-anchor="middle">la seña?</text>
+  <path class="ln" d="M570 648 H 636" marker-end="url(#a)"/>
+  <path class="ln" d="M760 716 V 748 H 445 V 708" marker-end="url(#a)"/>
+  <text class="lbl" x="602" y="742" text-anchor="middle">no · sigue acumulando</text>
+
+  <path class="ln" d="M880 648 H 946" marker-end="url(#a)"/>
+  <text class="lbl" x="913" y="640" text-anchor="middle">sí</text>
+  <rect class="box" stroke="#16a34a" x="950" y="592" width="300" height="112" rx="12"/>
+  <text class="t" x="1100" y="630" text-anchor="middle">3 · Clasificador Transformer</text>
+  <text class="s" x="1100" y="655" text-anchor="middle">122 clases (121 señas + NINGUNA)</text>
+  <text class="x" x="1100" y="677" text-anchor="middle">16 instantes × 150 rasgos</text>
+
+  <path class="ln" d="M1250 648 H 1296" marker-end="url(#a)"/>
+  <polygon class="box" stroke="#16a34a" points="1400,588 1505,648 1400,708 1295,648"/>
+  <text class="t" x="1400" y="654" text-anchor="middle">Modo</text>
+
+  <!-- ===== ④ Resultados ===== -->
+  <path class="ln" d="M150 478 V 836" marker-end="url(#a)"/>
+  <rect class="box" stroke="#ea580c" x="90" y="840" width="300" height="160" rx="12"/>
+  <text class="t" x="240" y="876" text-anchor="middle">Alfabeto (en el navegador)</text>
+  <text class="s" x="240" y="902" text-anchor="middle">k-NN de 27 letras</text>
+  <text class="s" x="240" y="924" text-anchor="middle">+ poses del cartel SEP</text>
+  <text class="lbl" x="240" y="962" text-anchor="middle">→ letra reconocida y</text>
+  <text class="lbl" x="240" y="982" text-anchor="middle">corrección de la forma</text>
+
+  <path class="ln" d="M1400 708 V 772 H 640 V 836" marker-end="url(#a)"/>
+  <text class="lbl" x="1020" y="766" text-anchor="middle">Práctica</text>
+  <rect class="box" stroke="#ea580c" x="470" y="840" width="340" height="160" rx="12"/>
+  <text class="t" x="640" y="876" text-anchor="middle">4a · Evaluador (Práctica)</text>
+  <text class="s" x="640" y="902" text-anchor="middle">5 parámetros LSM: mano, ubicación,</text>
+  <text class="s" x="640" y="924" text-anchor="middle">orientación, movimiento, contactos</text>
+  <text class="lbl" x="640" y="962" text-anchor="middle">→ puntaje 0–100, consejos en</text>
+  <text class="lbl" x="640" y="982" text-anchor="middle">español y estado de cada dedo</text>
+
+  <path class="ln" d="M1505 648 H 1548 V 800 H 1030 V 836" marker-end="url(#a)"/>
+  <text class="lbl" x="1290" y="794" text-anchor="middle">Interpretación</text>
+  <rect class="box" stroke="#ea580c" x="880" y="840" width="300" height="160" rx="12"/>
+  <text class="t" x="1030" y="876" text-anchor="middle">4b · Generador de oraciones</text>
+  <text class="s" x="1030" y="902" text-anchor="middle">glosas + reglas de la LSM</text>
+  <text class="s" x="1030" y="924" text-anchor="middle">+ contexto del párrafo</text>
+  <text class="lbl" x="1030" y="962" text-anchor="middle">→ oración y párrafo en</text>
+  <text class="lbl" x="1030" y="982" text-anchor="middle">español (texto y voz)</text>
+
+  <path class="ln" d="M1180 920 H 1226" marker-end="url(#a)"/>
+  <polygon class="box" stroke="#ea580c" points="1300,868 1372,920 1300,972 1228,920"/>
+  <text class="lbl" x="1300" y="916" text-anchor="middle">¿Hay</text>
+  <text class="lbl" x="1300" y="933" text-anchor="middle">internet?</text>
+  <path class="ln" d="M1330 890 L 1400 872" marker-end="url(#a)"/>
+  <text class="lbl" x="1370" y="872" text-anchor="middle">sí</text>
+  <path class="ln" d="M1330 950 L 1400 968" marker-end="url(#a)"/>
+  <text class="lbl" x="1370" y="978" text-anchor="middle">no</text>
+  <rect class="box" stroke="#ea580c" x="1404" y="840" width="160" height="62" rx="10"/>
+  <text class="lbl" x="1484" y="866" text-anchor="middle">OpenAI</text>
+  <text class="x" x="1484" y="886" text-anchor="middle">GPT-4o-mini</text>
+  <rect class="box" stroke="#ea580c" x="1404" y="938" width="160" height="62" rx="10"/>
+  <text class="lbl" x="1484" y="964" text-anchor="middle">Plantillas</text>
+  <text class="x" x="1484" y="984" text-anchor="middle">locales (sin red)</text>
+
+  <!-- ===== Leyenda ===== -->
+  <line x1="90" y1="1060" x2="140" y2="1060" class="wf"/>
+  <text class="x" x="150" y="1065">WiFi local de las pulseras (ESP32, sin internet)</text>
+  <line x1="520" y1="1060" x2="570" y2="1060" class="ln"/>
+  <text class="x" x="580" y="1065">flujo dentro de la laptop</text>
+  <text class="x" x="1560" y="1065" text-anchor="end">Todo funciona sin internet; solo la redacción con IA lo aprovecha.</text>
+</svg>
