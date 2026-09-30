@@ -1,21 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { FramePayload } from "../lib/protocol";
 import { parseGloveLine } from "../lib/diagnostics";
 
 type Side = "L" | "R";
 const SIDES: readonly Side[] = ["R", "L"];
+const SIDE_SHORT: Record<Side, string> = { R: "der.", L: "izq." };
 const SIDE_NAME: Record<Side, string> = { R: "derecha", L: "izquierda" };
 const REFRESH_MS = 100;
-/**
- * Sentido del eje en pantalla: 1 = gira como el giro lateral que manda la pulsera, -1 = al revés. Si en la cámara
- * el eje se inclina hacia el lado contrario que la mano, se cambia aquí.
- */
-const AXIS_SIGN = 1;
+/** Grados que llenan media barra (0 al centro, ±FULL_TILT en los extremos). */
+const FULL_TILT = 90;
 
 export interface WristReading {
-  /** Inclinación (grados, 0 = plana sobre la mesa al calibrar). */
+  /** Inclinación arriba/abajo (grados, 0 = plana sobre la mesa al calibrar). */
   pitch: number;
-  /** Giro lateral (grados, 0 = plana sobre la mesa al calibrar). */
+  /** Inclinación de lado (grados, 0 = plana sobre la mesa al calibrar). */
   roll: number;
   /** Velocidad de giro total (°/s). */
   speed: number;
@@ -35,11 +33,53 @@ export function formatTilt(deg: number): string {
   return `${n < 0 ? "−" : ""}${Math.abs(n)}°`;
 }
 
+/** Fracción de media barra: −1 (todo a la izquierda) … 1 (todo a la derecha). */
+export function tiltFraction(deg: number): number {
+  return Math.max(-1, Math.min(1, deg / FULL_TILT));
+}
+
+const AXES = [
+  { key: "pitch", label: "Arriba / abajo" },
+  { key: "roll", label: "De lado" },
+] as const;
+
 /**
- * Eje de inclinación de la muñeca en la parte de abajo de la cámara, por cada pulsera con datos: una línea que gira
- * con el giro lateral de la muñeca sobre una referencia horizontal (la mesa donde se calibró) y los grados. Los valores
- * cambian 10 veces por segundo y se escriben directo en el DOM; React solo re-renderiza cuando aparece o desaparece
- * una pulsera.
+ * Barras de inclinación: cada una parte del centro (la mesa donde se calibró = 0°) y crece hacia el lado de la
+ * inclinación. Con `values` se dibujan con React; sin ellos quedan vacías y WristLevel las actualiza en el DOM.
+ */
+function TiltRows({ values }: { values?: { pitch: number; roll: number } }) {
+  return (
+    <div className="tilt__rows">
+      {AXES.map(({ key, label }) => {
+        const v = values?.[key];
+        const style = v === undefined ? undefined : ({ "--v": tiltFraction(v).toFixed(3) } as CSSProperties);
+        return (
+          <div key={key} className="tilt__row" data-axis={key} style={style}>
+            <span className="tilt__label">{label}</span>
+            <span className="tilt__track" aria-hidden="true">
+              <span className="tilt__fill" />
+            </span>
+            <span className="tilt__value tabular">{v === undefined ? "…" : formatTilt(v)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Barras de inclinación dibujadas con React (pantalla Diagnóstico). */
+export function TiltBars({ pitch, roll }: { pitch: number; roll: number }) {
+  return (
+    <div className="tilt tilt--inline" role="group" aria-label="Inclinación de la muñeca">
+      <TiltRows values={{ pitch, roll }} />
+    </div>
+  );
+}
+
+/**
+ * Inclinación de la muñeca en la esquina inferior izquierda de la cámara, por cada pulsera con datos: dos barras
+ * (arriba/abajo y de lado) que parten del 0 de la mesa donde se calibró, con los grados. Los valores cambian 10 veces
+ * por segundo y se escriben directo en el DOM; React solo re-renderiza cuando aparece o desaparece una pulsera.
  */
 export function WristLevel({ read }: { read: () => FramePayload["gloves"] }) {
   const [present, setPresent] = useState<Record<Side, boolean>>({ L: false, R: false });
@@ -56,11 +96,14 @@ export function WristLevel({ read }: { read: () => FramePayload["gloves"] }) {
         next[side] = w !== null;
         const el = nodes.current[side];
         if (!w || !el) continue;
-        const deg = Math.max(-90, Math.min(90, w.roll)) * AXIS_SIGN;
-        el.style.setProperty("--tilt", `${deg.toFixed(1)}deg`);
-        const label = el.querySelector("[data-v]");
-        const text = formatTilt(w.roll);
-        if (label && label.textContent !== text) label.textContent = text;
+        for (const { key } of AXES) {
+          const row = el.querySelector<HTMLElement>(`[data-axis="${key}"]`);
+          if (!row) continue;
+          row.style.setProperty("--v", tiltFraction(w[key]).toFixed(3));
+          const value = row.querySelector(".tilt__value");
+          const text = formatTilt(w[key]);
+          if (value && value.textContent !== text) value.textContent = text;
+        }
       }
       setPresent((p) => (p.L === next.L && p.R === next.R ? p : next));
     };
@@ -74,15 +117,10 @@ export function WristLevel({ read }: { read: () => FramePayload["gloves"] }) {
   return (
     <div className="tilt">
       {SIDES.filter((s) => present[s]).map((side) => (
-        <div key={side} ref={(el) => { nodes.current[side] = el; }} className="tilt__item" role="group"
+        <div key={side} ref={(el) => { nodes.current[side] = el; }} className="tilt__card" role="group"
           aria-label={`Inclinación de la muñeca ${SIDE_NAME[side]}`}>
-          <span className="tilt__axis" aria-hidden="true">
-            <span className="tilt__line" />
-          </span>
-          <span className="tilt__value">
-            {both ? <span className="tilt__side">{side === "R" ? "Der." : "Izq."}</span> : null}
-            <span className="tabular" data-v>…</span>
-          </span>
+          <p className="tilt__title">{both ? `Inclinación ${SIDE_SHORT[side]}` : "Inclinación de la muñeca"}</p>
+          <TiltRows />
         </div>
       ))}
     </div>

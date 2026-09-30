@@ -4,6 +4,7 @@ import { StatusBar } from "../components/StatusBar";
 import { formatAngle, IMU_NAMES, parseGloveLine, SeqRate, type GloveLine } from "../lib/diagnostics";
 import { sentencesLabel } from "../lib/health";
 import { GloveControls, HealthNotice, useApp } from "./shared";
+import { TiltBars } from "../components/WristLevel";
 
 const POLL_MS = 200;
 
@@ -144,6 +145,13 @@ function GlovePanel({ title, connected, stale, view }: { title: string; connecte
               <dd className="tabular">{p.seq}</dd>
             </div>
           </dl>
+
+          {p.imuOk[0] ? (
+            <div>
+              <h4 className="diag-sub">Inclinación de la muñeca</h4>
+              <TiltBars pitch={p.pitch[0]} roll={p.roll[0]} />
+            </div>
+          ) : null}
 
           <div className="diag-table-wrap">
             <table className="diag-table">

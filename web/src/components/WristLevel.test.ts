@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTilt, readWrist } from "./WristLevel";
+import { formatTilt, readWrist, tiltFraction } from "./WristLevel";
 
 const line = (status: number) => `D,R,5,1000,-80.0,12.5${",0.0,0.0".repeat(5)},3.0,4.0,12.0,${status}`;
 
@@ -20,5 +20,13 @@ describe("formatTilt", () => {
     expect(formatTilt(-12.4)).toBe("\u221212°");
     expect(formatTilt(7.6)).toBe("8°");
     expect(formatTilt(-0.2)).toBe("0°");
+  });
+});
+
+describe("tiltFraction", () => {
+  it("media barra por cada 90°, recortada en los extremos", () => {
+    expect(tiltFraction(45)).toBe(0.5);
+    expect(tiltFraction(-90)).toBe(-1);
+    expect(tiltFraction(130)).toBe(1);
   });
 });
