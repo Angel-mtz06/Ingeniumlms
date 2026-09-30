@@ -1,7 +1,11 @@
 # Firmware de la pulsera (ESP32)
 
-Lee 6 MPU-6050 (dorso + 5 dedales) por un multiplexor TCA9548A y envía las lecturas a la laptop por **WebSocket
+Lee **una** MPU-6050, la de la muñeca (dorso de la mano), y envía las lecturas a la laptop por **WebSocket
 (puerto 81)** y por **USB serie (921 600 baudios)** con el protocolo de `docs/arquitectura.md`, sección 3.
+
+La MPU puede ir por el multiplexor TCA9548A (canal SD2) o directo a SDA/SCL: al encender se detecta sola y el
+monitor serie dice cuál encontró. La línea `D,…` conserva los 6 lugares del protocolo para que la app no cambie:
+el primero es la muñeca y los 5 dedos van en `0.0` con su bit de `status` apagado (los dedos los ve la cámara).
 
 ## Antes de cargarlo
 
@@ -10,9 +14,9 @@ Lee 6 MPU-6050 (dorso + 5 dedales) por un multiplexor TCA9548A y envía las lect
 2. En `config.h`:
    - `LADO`: `'R'` para la pulsera derecha y `'L'` para la izquierda (se carga una vez con cada valor).
    - `MODO_WIFI`: `WIFI_ESTACION` (se conecta a la zona con cobertura de la laptop) o `WIFI_PUNTO_ACCESO`.
-   - Pines `PIN_SDA` / `PIN_SCL` y canales del TCA9548A en `CANAL_IMU` (orden: dorso, pulgar, índice, medio,
-     anular, meñique). Ya están los del guante derecho: SDA 8, SCL 9, I²C a 100 kHz; dorso SD2, meñique SD3,
-     anular SD4, medio SD5, índice SD6, pulgar SD7.
+   - Pines `PIN_SDA` / `PIN_SCL` y el canal del TCA9548A en `CANAL_IMU`. Ya están los de la pulsera derecha:
+     SDA 8, SCL 9, I²C a 100 kHz, muñeca en SD2. Para volver a los 5 dedales:
+     `CANAL_IMU[] = {2, 7, 6, 5, 4, 3}` (dorso, pulgar, índice, medio, anular, meñique).
 
 ## Compilar y cargar
 
@@ -22,10 +26,10 @@ Lee 6 MPU-6050 (dorso + 5 dedales) por un multiplexor TCA9548A y envía las lect
   MPU6050_light: este código lee las MPU directamente.
 - Arduino IDE o `arduino-cli compile --fqbn esp32:esp32:esp32c3 firmware/pulsera`.
 
-## Montaje de las MPU-6050
+## Montaje de la MPU-6050
 
-Eje **X** hacia la punta del dedo y eje **Z** saliendo de la uña (en el dorso, saliendo de la mano). Con la mano
-quieta ~0.2 s al encender, cada IMU mide el sesgo de su giroscopio.
+En el dorso de la mano, junto a la muñeca: eje **X** hacia los dedos y eje **Z** saliendo del dorso. Con la mano
+quieta ~0.2 s al encender, mide el sesgo de su giroscopio.
 
 ## Monitor serie (921600 baudios; con el ESP32-C3 cualquier velocidad funciona: usa USB nativo)
 
@@ -34,9 +38,9 @@ Las líneas que empiezan con `#` son mensajes de estado (IMU que responden, camb
 
 | Comando | Qué hace |
 |---|---|
-| `ID?` | Responde la identificación de la pulsera (`ID,R,fw=1.1,…`). |
-| `CAL` | Calibra los giroscopios: mano apoyada y quieta 2 s. Responde `CAL,R,ok,…` o qué sensor se movió. Se guarda en el ESP32. |
-| `PRUEBA` | Activa/desactiva el modo de prueba: cada 0.5 s un resumen legible (Hz, WiFi e IP, app conectada, cada IMU ok o NO RESPONDE, ángulos y flexión de cada dedo respecto al dorso). Mientras está activo no salen las líneas `D,…` por USB. |
+| `ID?` | Responde la identificación de la pulsera (`ID,R,fw=1.2,imus=1,…`). |
+| `CAL` | Calibra el giroscopio: mano apoyada y quieta 2 s. Responde `CAL,R,ok,…` o `CAL,R,error,movimiento,0`. Se guarda en el ESP32. |
+| `PRUEBA` | Activa/desactiva el modo de prueba: cada 0.5 s un resumen legible (Hz, WiFi e IP, app conectada, muñeca ok o NO RESPONDE, inclinación, giro lateral y velocidad de giro). Mientras está activo no salen las líneas `D,…` por USB. |
 
 Fuera del modo de prueba, cada 20 ms sale una línea `D,…` (la que lee la app).
 

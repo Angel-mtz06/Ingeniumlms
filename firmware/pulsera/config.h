@@ -22,22 +22,22 @@
 #define NOMBRE_IZQ "pulsera-izq"
 
 // ---------- I²C y multiplexor ----------
-// Guante derecho: ESP32-C3 Super Mini (pines confirmados con el código de prueba del equipo).
+// Pulsera derecha: ESP32-C3 Super Mini (pines confirmados con el código de prueba del equipo).
 #define PIN_SDA 8           // ESP32-C3 Super Mini: SDA = GPIO8
 #define PIN_SCL 9           // ESP32-C3 Super Mini: SCL = GPIO9
 #define I2C_HZ 100000       // 100 kHz: estable con los cables largos hasta los dedales
 #define DIR_TCA9548A 0x70   // A0–A2 a GND
-#define DIR_MPU6050 0x68    // AD0 a GND en todas las MPU (el multiplexor las separa)
+#define DIR_MPU6050 0x68    // AD0 a GND
 
-// Canal del TCA9548A de cada IMU, en el orden del protocolo:
-// 0 = dorso (pulsera), 1 = pulgar, 2 = índice, 3 = medio, 4 = anular, 5 = meñique
-// Armado del guante derecho: dorso SD2, meñique SD3, anular SD4, medio SD5, índice SD6, pulgar SD7.
-static const uint8_t CANAL_IMU[6] = {2, 7, 6, 5, 4, 3};
+// Solo una IMU: la de la muñeca (dorso de la mano). Es el canal del TCA9548A donde está conectada (SD2).
+// Si la MPU va directo a SDA/SCL, sin multiplexor, el código lo detecta al encender y este canal no se usa.
+// (Para volver a los 5 dedales: {2, 7, 6, 5, 4, 3} = dorso, pulgar, índice, medio, anular, meñique.)
+static const uint8_t CANAL_IMU[] = {2};
 
 // ---------- Envío ----------
 #define PERIODO_MS 20       // 50 lecturas por segundo
 #define SERIAL_BAUDIOS 921600
-#define FIRMWARE "1.1"
+#define FIRMWARE "1.2"
 
 // Filtro complementario: peso del giroscopio (0–1). Más alto = más suave, más bajo = responde más rápido.
 #define ALFA_GIRO 0.96f

@@ -1,25 +1,28 @@
-// Pulsera LSM: lee 6 MPU-6050 (dorso + 5 dedales) por un TCA9548A y envía las lecturas a la laptop
-// por WebSocket (WiFi) y por USB serie, con el protocolo de texto de docs/arquitectura.md (sección 3):
+// Pulsera LSM: lee la MPU-6050 de la muñeca (dorso de la mano), por el TCA9548A o conectada directo, y envía
+// las lecturas a la laptop por WebSocket (WiFi) y por USB serie, con el protocolo de texto de
+// docs/arquitectura.md (sección 3):
 //   laptop  → pulsera:  ID?
-//   pulsera → laptop :  ID,<L|R>,fw=<versión>,imus=6,halls=0
+//   pulsera → laptop :  ID,<L|R>,fw=<versión>,imus=1,halls=0
 //                       D,<L|R>,<seq>,<t_ms>,p0,r0,…,p5,r5,gx,gy,gz,<status>
-// IMU 0 = dorso; 1–5 = pulgar→meñique. Ángulos en grados (1 decimal), giroscopio del dorso en °/s.
+// La línea D conserva los 6 lugares del protocolo (dorso + 5 dedos) para que la app no cambie: el 0 es la
+// muñeca y los dedos van en 0.0 con su bit de status apagado (la app usa la cámara para los dedos).
+// Ángulos en grados (1 decimal), giroscopio de la muñeca en °/s.
 //
-// Calibración de giroscopios: el comando CAL (USB o WebSocket) mide el sesgo de las 6 IMU durante CAL_MS con la
+// Calibración de giroscopios: el comando CAL (USB o WebSocket) mide el sesgo de las IMU durante CAL_MS con la
 // mano quieta, lo rechaza si alguna se movió y, si sale bien, lo guarda en la memoria del ESP32 (sobrevive al
 // apagado). Responde CAL,<L|R>,midiendo,<ms> y luego CAL,<L|R>,ok,<variación máx °/s> o
 // CAL,<L|R>,error,<movimiento|no_responde>,<imu>. Al encender se mide de nuevo solo si la mano está quieta;
 // si no, se usa el sesgo guardado.
 //
 // Modo de prueba: el comando PRUEBA (monitor serie) activa/desactiva un resumen legible cada 0.5 s (Hz, WiFi,
-// clientes, estado y ángulos de cada IMU, flexión de cada dedo respecto al dorso). Mientras está activo no se
+// clientes, estado, ángulos y giro de cada IMU). Mientras está activo no se
 // imprimen las líneas D por USB (por WiFi se siguen mandando). Los cambios de WiFi se avisan siempre con #.
 //
 // Con ESPERAR_WIFI (config.h) los sensores se inician y se empiezan a leer solo cuando la pulsera ya está
 // conectada a la red; mientras tanto el monitor dice cada 2 s que está esperando.
 //
-// Montaje de cada MPU-6050: eje X hacia la punta del dedo, eje Z saliendo de la uña (o del dorso).
-// Así "p" (inclinación) gira al doblar el dedo y cubre −180…180°; "r" es el giro lateral.
+// Montaje de la MPU-6050: eje X hacia los dedos, eje Z saliendo del dorso de la mano.
+// Así "p" (inclinación) es subir/bajar la mano y cubre −180…180°; "r" es el giro lateral de la muñeca.
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -36,7 +39,8 @@
 #warning "Falta secrets.h: se usan los datos de ejemplo (copia secrets.example.h como secrets.h)"
 #endif
 
-static const int N_IMU = 6;
+static const int N_IMU = sizeof(CANAL_IMU) / sizeof(CANAL_IMU[0]);  // IMU conectadas (1: la muñeca)
+static const int IMU_PROTOCOLO = 6;  // lugares de la línea D (dorso + 5 dedos), fijos para la app
 static const float ACC_LSB = 8192.0f;   // ±4 g
 static const float GIRO_LSB = 65.5f;    // ±500 °/s
 static const float RAD_A_GRADOS = 57.2957795f;
@@ -56,6 +60,7 @@ uint32_t seq = 0;
 uint32_t proximo = 0;
 uint32_t ultimoMicros = 0;
 bool mdnsListo = false;
+bool hayMultiplexor = false;  // se detecta al encender: TCA9548A en DIR_TCA9548A o la MPU directo en el bus
 String entradaSerie;
 Preferences memoria;
 bool calPendiente = false;  // se pidió CAL (se atiende en loop, fuera del callback del WebSocket)
@@ -70,6 +75,7 @@ const char* nombreRed() { return LADO == 'R' ? NOMBRE_DER : NOMBRE_IZQ; }
 
 // ---------------------------------------------------------------- I²C
 bool seleccionarCanal(uint8_t canal) {
+  if (!hayMultiplexor) return true;  // MPU directo en SDA/SCL: no hay canal que elegir
   Wire.beginTransmission(DIR_TCA9548A);
   Wire.write(1 << canal);
   return Wire.endTransmission() == 0;
@@ -208,7 +214,7 @@ float envolver(float a) {   // a −180…180
 void actualizarImu(int i, float dt) {
   Imu& m = imus[i];
   if (!m.iniciada) {
-    if (millis() - m.ultimoIntento > 2000) iniciarImu(i);   // reintento si se desconectó un dedal
+    if (millis() - m.ultimoIntento > 2000) iniciarImu(i);   // reintento si se desconectó
     return;
   }
   float ax, ay, az, gx, gy, gz;
@@ -228,12 +234,15 @@ void actualizarImu(int i, float dt) {
 
 // ---------------------------------------------------------------- Protocolo
 String lineaId() {
-  return String("ID,") + LADO + ",fw=" + FIRMWARE + ",imus=6,halls=0";
+  return String("ID,") + LADO + ",fw=" + FIRMWARE + ",imus=" + N_IMU + ",halls=0";
 }
 
 int lineaDatos(char* buf, size_t n) {
   int k = snprintf(buf, n, "D,%c,%lu,%lu", LADO, (unsigned long)seq, (unsigned long)millis());
-  for (int i = 0; i < N_IMU; i++) k += snprintf(buf + k, n - k, ",%.1f,%.1f", imus[i].p, imus[i].r);
+  for (int i = 0; i < IMU_PROTOCOLO; i++) {
+    if (i < N_IMU) k += snprintf(buf + k, n - k, ",%.1f,%.1f", imus[i].p, imus[i].r);
+    else k += snprintf(buf + k, n - k, ",0.0,0.0");  // dedo sin sensor (bit de status apagado)
+  }
   uint8_t status = 0;
   for (int i = 0; i < N_IMU; i++) if (imus[i].ok) status |= (1 << i);
   k += snprintf(buf + k, n - k, ",%.1f,%.1f,%.1f,%u", imus[0].gx, imus[0].gy, imus[0].gz, status);
@@ -277,7 +286,12 @@ void leerSerie() {
 }
 
 // ---------------------------------------------------------------- Pruebas
-const char* NOMBRES_IMU[N_IMU] = {"dorso  ", "pulgar ", "indice ", "medio  ", "anular ", "menique"};
+const char* NOMBRES_IMU[IMU_PROTOCOLO] = {"muneca ", "pulgar ", "indice ", "medio  ", "anular ", "menique"};
+
+String textoCanal(int i) {
+  if (!hayMultiplexor) return "directo";
+  return String("canal ") + CANAL_IMU[i];
+}
 
 String textoWifi() {
 #if MODO_WIFI == WIFI_PUNTO_ACCESO
@@ -310,15 +324,15 @@ void imprimirPrueba() {
   for (int i = 0; i < N_IMU; i++) {
     const Imu& m = imus[i];
     if (!m.ok) {
-      Serial.printf("#  %s canal %d  NO RESPONDE (revisa el cable)\n", NOMBRES_IMU[i], CANAL_IMU[i]);
+      Serial.printf("#  %s %s  NO RESPONDE (revisa el cable)\n", NOMBRES_IMU[i], textoCanal(i).c_str());
       continue;
     }
     if (i == 0) {
-      Serial.printf("#  %s canal %d  ok   p=%7.1f  r=%7.1f  giro=%6.1f %6.1f %6.1f\n", NOMBRES_IMU[i], CANAL_IMU[i], m.p, m.r,
-                    m.gx, m.gy, m.gz);
+      Serial.printf("#  %s %s  ok   inclinacion=%7.1f  giro lateral=%7.1f  vel=%6.1f %6.1f %6.1f\n", NOMBRES_IMU[i],
+                    textoCanal(i).c_str(), m.p, m.r, m.gx, m.gy, m.gz);
     } else {
       float flex = imus[0].ok ? envolver(m.p - imus[0].p) : NAN;
-      Serial.printf("#  %s canal %d  ok   p=%7.1f  r=%7.1f  flexion=%7.1f\n", NOMBRES_IMU[i], CANAL_IMU[i], m.p, m.r, flex);
+      Serial.printf("#  %s %s  ok   p=%7.1f  r=%7.1f  flexion=%7.1f\n", NOMBRES_IMU[i], textoCanal(i).c_str(), m.p, m.r, flex);
     }
   }
 }
@@ -361,6 +375,10 @@ void setup() {
   memoria.begin("pulsera", false);  // sesgo de los giroscopios guardado por CAL
   delay(200);
   Serial.printf("# Pulsera %c · firmware %s\n", LADO, FIRMWARE);
+  Wire.beginTransmission(DIR_TCA9548A);
+  hayMultiplexor = Wire.endTransmission() == 0;
+  Serial.println(hayMultiplexor ? "# Multiplexor TCA9548A encontrado: la IMU se lee por su canal"
+                                : "# Sin multiplexor: la IMU se lee directo en SDA/SCL");
   iniciarWifi();
   ws.begin();
   ws.onEvent(alRecibirWs);
@@ -379,10 +397,10 @@ bool debeEsperarWifi() {
 }
 
 void iniciarSensores() {
-  Serial.println("# Iniciando sensores: mano quieta un momento (se mide el sesgo de los giroscopios)");
+  Serial.println("# Iniciando sensores: mano quieta un momento (se mide el sesgo del giroscopio)");
   for (int i = 0; i < N_IMU; i++) {
     bool ok = iniciarImu(i);
-    Serial.printf("# IMU %d (canal %d): %s\n", i, CANAL_IMU[i], ok ? "ok" : "NO RESPONDE");
+    Serial.printf("# IMU %s(%s): %s\n", NOMBRES_IMU[i], textoCanal(i).c_str(), ok ? "ok" : "NO RESPONDE");
   }
   sensoresListos = true;
   ultimoMicros = micros();
