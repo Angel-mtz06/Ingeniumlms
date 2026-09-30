@@ -152,11 +152,15 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
   }, [complete]);
 
   // Libre: cada vez que se reconoce una letra nueva se agrega a la lista (como ir escribiendo). La
-  // misma letra se repite solo si antes se perdió la mano o se reconoció otra.
+  // misma letra se repite solo si antes se perdió la mano o se reconoció otra. Una letra con
+  // movimiento reemplaza a la pose con la que empezó (I→J, N→Ñ, D→Z): esa pose no era otra letra.
   const stableLetter = mode === "free" ? recognition.stable?.[0] ?? null : null;
   const [freeLetters, setFreeLetters] = useState<string[]>([]);
   useEffect(() => {
-    if (stableLetter) setFreeLetters((prev) => [...prev, stableLetter].slice(-60));
+    if (!stableLetter) return;
+    const start = motionBaseLetter(stableLetter);
+    setFreeLetters((prev) => start && start !== stableLetter && prev.at(-1) === start
+      ? [...prev.slice(0, -1), stableLetter] : [...prev, stableLetter].slice(-60));
   }, [stableLetter]);
 
   const correct = complete || (!motion && !!feedback?.correct);

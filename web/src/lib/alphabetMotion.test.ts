@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { analyzeMotion, analyzeMotionFor, CAPTURE_MS, LiveMotion, motionBaseLetter, PREPARE_MS, significantMotion, startPoseOk, trajectoryProgress, type MotionFrame } from "./alphabetMotion";
+import { analyzeMotion, analyzeMotionFor, CAPTURE_MS, FREE_MOTION_LETTERS, FreeMotion, LiveMotion, motionBaseLetter, PREPARE_MS, significantMotion, startPoseOk, trajectoryProgress, type MotionFrame } from "./alphabetMotion";
 import { MOTION_LETTERS, predictAlphabet } from "./alphabet";
-import { outOfFrame } from "./alphabetFeedback";
+import { outOfFrame, targetMatches } from "./alphabetFeedback";
 import references from "../data/alphabet_references.json";
 import samples from "../data/alphabet_samples.json";
 
@@ -180,5 +180,53 @@ describe("live tracking (no countdown, no fixed window)", () => {
     const f=(u:number)=>{const h=byLetter("J")[0]; return Array.from({length:30},(_,i)=>{const [dx,dy]=along(J,u*i/29);return {t:i*33,hand:h.map(p=>[p[0]*110+320+dx*110,p[1]*110+230+dy*110,p[2]*110]),pose:null} as MotionFrame;});};
     expect(trajectoryProgress(f(.4),"J")).toBeLessThan(.6);
     expect(trajectoryProgress(f(1),"J")).toBeGreaterThan(.9);
+  });
+});
+
+describe("Libre: las letras con movimiento se siguen en vivo, sin letra objetivo", () => {
+  const handOf = (s: number[]) => Array.from({length:21},(_,i)=>s.slice(i*3,i*3+3));
+  const byLetter = (l: string) => samples.samples.filter((_,i)=>samples.letters[samples.labels[i]]===l).map(handOf);
+  const along=(path:number[][],u:number)=>{
+    const seg=path.slice(1).map((p,i)=>Math.hypot(p[0]-path[i][0],p[1]-path[i][1]));
+    let d=u*seg.reduce((a,b)=>a+b,0);
+    for (let i=0;i<seg.length;i++){ if(d<=seg[i]||i===seg.length-1){const r=seg[i]?Math.min(1,d/seg[i]):0;return [0,1].map(a=>path[i][a]+(path[i+1][a]-path[i][a])*r);} d-=seg[i]; }
+    return path.at(-1)!;
+  };
+  const PATHS: Record<string, number[][]> = {
+    J: [[0,0],[0,.8],[-.1,1],[-.35,1.1],[-.55,.95],[-.55,.7]],
+    "Ñ": [[0,0],[.25,.16],[.5,.22],[.75,.16],[1,0]],
+    Z: [[0,0],[1,0],[0,.8],[1,.8]],
+    X: [[0,0],[0,.7],[0,.05]],
+  };
+  /** Igual que el hook: pose inicial de cada letra por clasificador o por verificación de la base. */
+  function runFree(sampleLetter: string, path: number[][], t0: number, t1: number, sample = 0) {
+    const free=new FreeMotion(), hand=byLetter(sampleLetter)[sample], moving: boolean[]=[];
+    for (let t=0;t<=t1+1500;t+=1000/30) {
+      const [dx,dy]=along(path,Math.max(0,Math.min(1,(t-t0)/(t1-t0))));
+      const h=hand.map(p=>[p[0]*110+320+dx*110,p[1]*110+230+dy*110,p[2]*110]);
+      const prediction=predictAlphabet(h), startOk: Record<string, boolean> = {}, score: Record<string, number> = {};
+      for (const l of FREE_MOTION_LETTERS) {
+        const base=motionBaseLetter(l)!;
+        startOk[l]=startPoseOk(prediction.pose,l) || targetMatches(prediction,h,base);
+        score[l]=prediction.shares[samples.letters.indexOf(base)] ?? 0;
+      }
+      const st=free.push({t,hand:h,pose:prediction.pose,out:outOfFrame(h,640,480).out},startOk,score);
+      moving.push(st.moving);
+      if (st.result) return {letter: st.result.prediction?.[0] ?? null, t, moving};
+    }
+    return {letter: null, t: Infinity, moving};
+  }
+  it.each([["J","J"],["Ñ","Ñ"],["Z","D"],["X","X"]])("reconoce la %s (hecha desde su pose inicial)", (letter, poseOf) => {
+    const r=runFree(poseOf, PATHS[letter], 1200, 2400);
+    expect(r.letter).toBe(letter);
+    expect(r.moving.some(Boolean)).toBe(true);
+  });
+  it("un movimiento corto (0.7 s) también cuenta: ya no exige 2.2 s de grabación", () => {
+    expect(runFree("Ñ", PATHS["Ñ"], 1200, 1900).letter).toBe("Ñ");
+  });
+  it("una pose sin movimiento, o una letra estática que se desplaza, no se vuelven letras con movimiento", () => {
+    expect(runFree("J", [[0,0],[0,0]], 1200, 2400).letter).toBeNull();
+    expect(runFree("A", PATHS.Z, 1200, 2400).letter).toBeNull();
+    expect(runFree("B", PATHS["Ñ"], 1200, 2400).letter).toBeNull();
   });
 });

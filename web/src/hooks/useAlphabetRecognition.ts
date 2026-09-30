@@ -4,13 +4,13 @@ import {
   CaptureMonitor, FeedbackStabilizer, fingerStates, outOfFrame, poseFeedback, targetMatches, type Feedback,
 } from "../lib/alphabetFeedback";
 import {
-  analyzeMotion, LiveMotion, MAX_MOVE_MS, motionBaseLetter, movementEnded, MotionWindow, RESULT_MS, significantMotion,
-  startPoseOk, type LiveMotionState, type MotionFrame, type MotionResult,
+  FREE_MOTION_LETTERS, FreeMotion, LiveMotion, motionBaseLetter, RESULT_MS, startPoseOk,
+  type LiveMotionState, type MotionFrame, type MotionResult,
 } from "../lib/alphabetMotion";
 import type { FramePayload } from "../lib/protocol";
 
 export type AlphabetMode = "sequential" | "specific" | "free";
-/** Libre: idle → capturing (desde que empieza a moverse hasta que se detiene) → result. */
+/** Libre: idle → capturing (una letra con movimiento lleva ≥ 25 % de su recorrido) → result. */
 export type MotionPhase = "idle" | "capturing" | "result";
 
 const START_READY: Feedback = { correct: true, type: "ok", issue: "start_ready", message: "Posición correcta." };
@@ -32,7 +32,7 @@ const EMPTY = { pose: null, static: null, ranking: [] as Prediction[], shares: [
  * Recognition + corrective feedback on the frames of the shared camera/MediaPipe.
  *  - Letra estática con objetivo: captura → verificación contra la objetivo → un mensaje + dedos.
  *  - Letra con movimiento con objetivo: seguimiento EN VIVO (LiveMotion), sin cuenta regresiva.
- *  - Libre: letra estable + top 3; un movimiento se sigue hasta que la mano se detiene.
+ *  - Libre: letra estable + top 3; las cinco letras con movimiento se siguen en vivo a la vez (FreeMotion).
  */
 export function useAlphabetRecognition(target: string | null, mode: AlphabetMode, enabled: boolean) {
   const [detected, setDetected] = useState<Prediction | null>(null);
@@ -51,9 +51,9 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
   const stabilizer = useRef(new StableLetter());
   const monitor = useRef(new CaptureMonitor());
   const messages = useRef(new FeedbackStabilizer());
-  const window = useRef(new MotionWindow());
+  const freeMotion = useRef(new FreeMotion());
   const tracker = useRef<LiveMotion | null>(null);
-  const state = useRef({phase:"idle" as MotionPhase, since:0, lastFrame:0, completed:false, frames:[] as MotionFrame[], hidden:false});
+  const state = useRef({phase:"idle" as MotionPhase, since:0, lastFrame:0, completed:false, hidden:false});
   const dynamic = target !== null && MOTION_LETTERS.has(target);
 
   const transition = useCallback((next: MotionPhase, now: number) => {
@@ -61,9 +61,9 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
   }, []);
 
   const restart = useCallback(() => {
-    hold.current.reset(); stabilizer.current.reset(); window.current.clear(); monitor.current.reset(); messages.current.reset();
+    hold.current.reset(); stabilizer.current.reset(); freeMotion.current.reset(); monitor.current.reset(); messages.current.reset();
     tracker.current = dynamic && mode !== "free" ? new LiveMotion(target!) : null;
-    state.current.frames=[]; state.current.completed=false; state.current.lastFrame=0;
+    state.current.completed=false; state.current.lastFrame=0;
     setDetected(null); setRanking([]); setFeedback(null); setFingers([]); setSide(null); setTargetShare(0); setStable(null);
     setProgress(0); setComplete(false); setLive(null); setMotionResult(null);
     transition("idle", performance.now());
@@ -76,18 +76,18 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
     const timer = globalThis.setInterval(() => {
       const now=performance.now(), s=state.current;
       if (document.hidden) {
-        s.hidden=true; s.frames=[]; hold.current.reset(); stabilizer.current.reset(); window.current.clear(); tracker.current?.reset();
+        s.hidden=true; hold.current.reset(); stabilizer.current.reset(); freeMotion.current.reset(); tracker.current?.reset();
         setDetected(null); setStable(null); setProgress(0);
         return;
       }
       if (s.hidden) { s.hidden=false; restart(); return; }
       if (now-s.lastFrame>250) {
-        hold.current.reset(); stabilizer.current.reset(); window.current.clear(); monitor.current.reset();
+        hold.current.reset(); stabilizer.current.reset(); freeMotion.current.reset(); monitor.current.reset();
         setDetected(null); setStable(null); setRanking([]); setFingers([]);
         if (!s.completed) { setProgress(0); setFeedback(null); }
       }
       if (s.phase === "result" && now-s.since > RESULT_MS) {
-        s.frames=[]; window.current.clear(); stabilizer.current.reset(); setStable(null); setMotionResult(null);
+        freeMotion.current.reset(); stabilizer.current.reset(); setStable(null); setMotionResult(null);
         transition("idle",now);
       }
     },50);
@@ -122,33 +122,29 @@ export function useAlphabetRecognition(target: string | null, mode: AlphabetMode
       return;
     }
 
-    if (s.phase === "capturing") {
-      s.frames.push(frame);
-      if (s.frames.length>240) s.frames.shift();
-      if (!hand || movementEnded(s.frames) || now-s.since > MAX_MOVE_MS) {
-        const result = analyzeMotion(s.frames);
-        setMotionResult(result); setStable(result.prediction);
-        transition("result", now);
-      }
-      return;
-    }
-    if (s.phase !== "idle") return;
-
     if (mode === "free") {
+      if (s.phase === "result") return; // se está mostrando la letra con movimiento reconocida
       setDetected(prediction.static);
       // Sin letra objetivo no se sabe qué quería hacer el usuario: solo retroalimentación de captura.
       setFeedback(capture ? messages.current.push(t, capture) : null);
-      if (!hand) window.current.clear();
-      else window.current.push(frame);
-      if (hand && significantMotion(window.current.frames)) {
-        s.frames=[...window.current.frames]; stabilizer.current.reset(); setStable(null); setMotionResult(null); setFingers([]);
-        transition("capturing",now);
-      } else {
-        const shown = stabilizer.current.push(t,prediction.static,hand!==null);
-        setStable(shown);
-        // Libre: sin objetivo, los dedos se comparan con la letra que la app YA reconoció (verde = coincide).
-        setFingers(hand && !capture && shown ? fingerStates(hand, shown[0]) : []);
+      // Cada letra con movimiento arranca desde su pose inicial, verificada igual que en Secuencial.
+      const startOk: Record<string, boolean> = {}, score: Record<string, number> = {};
+      for (const letter of FREE_MOTION_LETTERS) {
+        const base = motionBaseLetter(letter)!;
+        startOk[letter] = !!hand && !capture && (startPoseOk(prediction.pose, letter) || targetMatches(prediction, hand, base));
+        score[letter] = prediction.shares[LETTERS_ORDER.indexOf(base)] ?? 0;
       }
+      const motion = freeMotion.current.push(frame, startOk, score);
+      if (motion.result) {
+        stabilizer.current.reset(); setMotionResult(motion.result); setStable(motion.result.prediction); setFingers([]);
+        transition("result", now);
+        return;
+      }
+      if (motion.moving !== (s.phase === "capturing")) transition(motion.moving ? "capturing" : "idle", now);
+      const shown = stabilizer.current.push(t,prediction.static,hand!==null);
+      setStable(shown);
+      // Libre: sin objetivo, los dedos se comparan con la letra que la app YA reconoció (verde = coincide).
+      setFingers(hand && !capture && shown && !motion.moving ? fingerStates(hand, shown[0]) : []);
       return;
     }
     if (s.completed || !target) return;

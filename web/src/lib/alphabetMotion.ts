@@ -439,6 +439,47 @@ export class LiveMotion {
   }
 }
 
+export interface FreeMotionState {
+  /** Alguna letra con movimiento ya partió de su pose inicial y lleva al menos 25 % del recorrido. */
+  moving: boolean;
+  /** Mayor avance entre las letras que se están siguiendo (0–1). */
+  progress: number;
+  /** Letra reconocida al completar su recorrido (solo en el cuadro en que termina). */
+  result: MotionResult | null;
+}
+
+/**
+ * Libre: las cinco letras con movimiento se siguen EN VIVO a la vez, cada una con el mismo LiveMotion
+ * que Secuencial (misma tolerancia, mismo "100 % = correcto"). Cada letra arranca desde SU pose
+ * inicial (J desde I, Ñ desde N, Z desde D, Q y X desde la suya): quien llama pasa en `startOk` qué
+ * poses verifica ese cuadro. Sin letra objetivo no se sabe qué quería hacer el usuario, así que un
+ * intento fallido no se reporta: esa letra vuelve a esperar su pose de inmediato.
+ */
+export const FREE_MOTION_LETTERS = RULES.map((r) => r.letter);
+export class FreeMotion {
+  private trackers = new Map(FREE_MOTION_LETTERS.map((l) => [l, new LiveMotion(l)]));
+  reset() { for (const t of this.trackers.values()) t.reset(); }
+  /** `score`: desempate cuando dos letras terminan en el mismo cuadro (p. ej. Ñ y Q, mismo arco). */
+  push(frame: MotionFrame, startOk: Record<string, boolean>, score: Record<string, number> = {}): FreeMotionState {
+    const done: MotionResult[] = [];
+    let moving = false, progress = 0;
+    for (const [letter, tracker] of this.trackers) {
+      const st = tracker.push({...frame, startOk: !!startOk[letter]});
+      if (st.phase === "result") {
+        if (st.result?.issue === "ok" && st.result.prediction) done.push(st.result);
+        tracker.reset();
+      } else if (st.phase === "moving") {
+        progress = Math.max(progress, st.progress);
+        if (st.progress >= .25) moving = true;
+      }
+    }
+    if (!done.length) return {moving, progress, result: null};
+    done.sort((a, b) => (score[b.prediction![0]] ?? 0)-(score[a.prediction![0]] ?? 0) || b.prediction![1]-a.prediction![1]);
+    this.reset();
+    return {moving: false, progress: 1, result: {...done[0], reason: MESSAGES.ok}};
+  }
+}
+
 /** Bounded rolling sequence; used for motion routing in Libre. */
 export class MotionWindow {
   frames: MotionFrame[] = [];
