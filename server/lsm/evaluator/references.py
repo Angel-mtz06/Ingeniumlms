@@ -48,10 +48,14 @@ def _hold_idx(hands: np.ndarray, present: np.ndarray, slot: int) -> np.ndarray:
     return np.array(cand[:HOLD_K])
 
 
+PALM_POINTS = [0, 5, 9, 13, 17]  # muñeca y nudillos
+
+
 def sample_stats(norm: NormSequence) -> dict:
     hands, present = resample(norm, *active_span(norm), T_OUT)
     frac = present.mean(axis=0)
     st = {"present_frac": frac, "flex": np.full((2, 5), np.nan), "loc": np.full((2, 3), np.nan),
+          "center": np.full((2, 3), np.nan),  # centro de la palma (muñeca + nudillos): para nombrar la zona
           "palm": np.full((2, 3), np.nan), "contacts": np.full((2, 4), np.nan)}
     for s in (0, 1):
         if frac[s] < 0.5:
@@ -59,6 +63,7 @@ def sample_stats(norm: NormSequence) -> dict:
         idx = _hold_idx(hands, present, s)
         st["flex"][s] = np.mean([finger_flexion(hands[t, s]) for t in idx], axis=0)
         st["loc"][s] = hands[idx, s, 0].mean(axis=0)
+        st["center"][s] = hands[idx, s][:, PALM_POINTS].mean(axis=(0, 1))
         p = np.mean([palm_normal(hands[t, s]) for t in idx], axis=0)
         st["palm"][s] = p / max(np.linalg.norm(p), 1e-9)
         st["contacts"][s] = np.mean([thumb_contacts(hands[t, s]) for t in idx], axis=0)

@@ -110,7 +110,11 @@ def evaluate(ref: GlossRef, seq: NormSequence, glove_flex: np.ndarray | None = N
         zl = float(np.linalg.norm(d) / max(float(np.linalg.norm(np.nan_to_num(ref.loc_std[s]))), LOC_FLOOR)) / _tol(ref, "ubicacion")
         per["ubicacion"].append(_score(zl))
         if _is_issue(zl):
-            issues.append(Issue("ubicacion", zl, s, None, {"dx": float(d[0]), "dy": float(d[1])}))
+            # Centro de la palma de la persona y dónde quedaría con la muñeca de la referencia (misma forma de mano).
+            c = st["center"][s]
+            t = ref.loc_mean[s] + (c - st["loc"][s])
+            issues.append(Issue("ubicacion", zl, s, None, {"dx": float(d[0]), "dy": float(d[1]), "x": float(c[0]),
+                                                           "y": float(c[1]), "tx": float(t[0]), "ty": float(t[1])}))
         spread = ref.palm_spread[s]
         zo = _angle(st["palm"][s], ref.palm_mean[s]) / max(0.0 if np.isnan(spread) else float(spread), PALM_FLOOR) / _tol(ref, "orientacion")
         per["orientacion"].append(_score(zo))
