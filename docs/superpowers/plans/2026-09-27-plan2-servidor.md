@@ -36,6 +36,7 @@
 | `remove_gloss` | `index: int` | Borra una etiqueta pendiente |
 | `build_sentence` | — | Fuerza la oración con las etiquetas pendientes |
 | `reset` | — | Limpia buffers y párrafo |
+| `validate` | `enabled: bool` | "Validar cada seña" en Interpretación (ver nota de validación); responde `{"type":"validate","enabled":…}` |
 | `topic` | `topic: "todo"\|"saludos"\|"salud"\|"emergencias"` | Tema de la conversación en Interpretación (ver nota de tema); responde `{"type":"topic","topic":…}` |
 
 Nota (aditiva, 2026-09-28): `frame.t` es la marca de tiempo en ms del cuadro (la misma, monótona, que se pasa
@@ -55,13 +56,14 @@ no afecta a los rasgos del modelo). Registro de diagnóstico en `logs/lsm.log` (
 | `live` | `fingers: [[s×5],[s×5]]` (−1 sin uso, 0 bien, 1 regular, 2 mal), `hands: [bool,bool]`, `segment: "idle"\|"active"` |
 | `evaluation` | `target`, `recognized: [[gloss,p]…]`, `scores: {configuracion, ubicacion, movimiento, orientacion}`, `total`, `tips: [str]`, `fingers`, `evaluable: bool` — `false` si una mano que la seña requiere no se vio (el puntaje no es comparable; mostrar el consejo) o si no hay referencia; sin referencia llegan `scores: {}`, `total: 0`, `fingers: []` |
 | `sign` | `index`, `gloss`, `top3: [[gloss,p]…]`, `confident: bool`, `reranked?: true` (el contexto cambió el top-1; ver nota de contexto) |
-| `pending` | `glosses: [str]` (también responde a `build_sentence` sin glosas pendientes, con `glosses: []`) |
+| `pending` | `glosses: [str]`, `confirmed: [bool]` (cuáles confirmó la persona con `confirm_gloss`), `awaiting_validation?: true` (ver nota de validación). También responde a `build_sentence` sin glosas pendientes, con `glosses: []` |
 | `sentence` | `glosses` (las elegidas), `text`, `paragraph`, `source: "llm"\|"template"`, `corrected: [int]` (índices de `glosses` que cambiaron respecto a las señas mostradas; ver nota de contexto) |
 | `calibration` | `step`, `status` o `sides: {"L": bool, "R": bool}` |
 | `warning` | `code`, `message` |
 | `error` | `message` |
 | `pausing` | `remaining: number\|null` (s, 1 decimal), `total: number` (s) — ver nota de pausa |
 | `topic` | `topic` (acuse del mensaje `topic`; un valor inválido responde `error`) |
+| `validate` | `enabled` (acuse del mensaje `validate`; un valor que no sea bool responde `error`) |
 
 Nota (aditiva, 2026-09-28, pausa de oración): en Traducción la oración se forma tras `LSM_PAUSE_S` segundos
 (por defecto **3.5**, rango 1.5–10; antes 45 cuadros ≈ 1.5 s) con las manos en reposo, medidos desde que la mano
@@ -106,6 +108,18 @@ descripciones + Comunicación + Tiempo; salud = Salud y síntomas + Cuerpo + Pro
 emergencias = Emergencias + Profesiones + Lugares + Acciones + Salud y síntomas. Todos suman las palabras núcleo YO MI
 SU EL SI NO COMO DONDE CUANTO AHORA AYUDA NECESITAR TENER IR POR_FAVOR GRACIAS. `reranked: true` aparece también si
 el cambio de top-1 lo causó el tema; el registro anota `tema=<tema>` en la línea `contexto top1`.
+
+Nota (aditiva, 2026-09-29, validación): `{"type":"validate","enabled":true}` activa "Validar cada seña" (la web lo
+activa por defecto y lo reenvía tras `hello` al reconectar, igual que `topic`; el servidor arranca en `false`, así un
+cliente anterior se comporta como antes). Es una preferencia de la conexión: sobrevive a `hello` y `reset`. Con él
+activo, mientras alguna seña pendiente no tenga `confirmed` (lo pone `confirm_gloss`; `remove_gloss` la quita):
+- la pausa de oración **no** llama al LLM ni a la plantilla: responde `{"type":"pending","glosses":[…],
+  "confirmed":[…],"awaiting_validation":true}` (la pausa se consume; la siguiente seña la vuelve a armar);
+- `build_sentence` responde lo mismo en vez de `sentence`;
+- no se emite `pausing` (la cuenta regresiva solo corre con todo validado).
+Con todo confirmado, la pausa y `build_sentence` forman la oración como siempre, solo con las señas confirmadas y en
+su orden; las confirmadas van **fijas** al LLM (sin candidatas, ver nota de contexto). La web deja de mandar cuadros
+mientras hay señas sin validar, así no se cuela otra seña; esta regla del servidor es la red de seguridad.
 
 ## Estructura de archivos
 

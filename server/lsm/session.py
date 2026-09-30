@@ -116,6 +116,9 @@ class Session:
         # Es una preferencia de la conexión: sobrevive a hello y reset.
         self.topic = ALL_TOPICS
         self.topic_boost = topic_boost()
+        # "Validar cada seña" (mensaje "validate"): la pausa y build_sentence no forman la oración mientras haya
+        # señas sin confirmar (confirm_gloss). También es una preferencia de la conexión.
+        self.validate = False
         self.references = references or {}
         self.sentences = sentences or SentenceBuilder()
         self.mode, self.target = "translate", None
@@ -187,6 +190,12 @@ class Session:
                 return [{"type": "error", "message": "topic inválido: " + "|".join(TOPIC_NAMES)}]
             self.topic = topic
             return [{"type": "topic", "topic": topic}]
+        if t == "validate":
+            enabled = msg.get("enabled")
+            if not isinstance(enabled, bool):
+                return [{"type": "error", "message": "validate inválido: enabled debe ser true|false"}]
+            self.validate = enabled
+            return [{"type": "validate", "enabled": enabled}]
         if t == "calibrate":
             return self._calibrate(msg.get("step"))
         if t in ("confirm_gloss", "remove_gloss"):
@@ -202,9 +211,9 @@ class Session:
                         self.pending.pop(i)
             except (KeyError, ValueError, TypeError):
                 return [{"type": "error", "message": f"mensaje inválido: {t}"}]
-            return [{"type": "pending", "glosses": [p["gloss"] for p in self.pending]}]
+            return [self._pending_msg()]
         if t == "build_sentence":
-            return await self._sentence() if self.pending else [{"type": "pending", "glosses": []}]
+            return await self._sentence() if self.pending else [self._pending_msg()]
         if t == "reset":
             self.paragraph = []
             self._reset_stream(keep_calib=True)
@@ -259,11 +268,25 @@ class Session:
                 out += await self._sentence()
         return out + self._pausing()
 
+    def _unvalidated(self) -> bool:
+        """Con "Validar cada seña", True si alguna seña pendiente no la confirmó la persona."""
+        return self.validate and any(not p.get("confirmed") for p in self.pending)
+
+    def _pending_msg(self, awaiting: bool = False) -> dict:
+        """Lista vigente de señas pendientes y cuáles confirmó la persona. `awaiting_validation`: la pausa o
+        build_sentence no formaron la oración porque faltan señas por validar."""
+        msg = {"type": "pending", "glosses": [p["gloss"] for p in self.pending],
+               "confirmed": [bool(p.get("confirmed")) for p in self.pending]}
+        if awaiting:
+            msg["awaiting_validation"] = True
+        return msg
+
     def _pause_left(self) -> float | None:
         """Segundos que faltan para formar la oración por pausa, o None si no hay cuenta regresiva (sin glosas
-        pendientes, manos arriba o en otro modo)."""
+        pendientes, manos arriba, en otro modo o con señas sin validar)."""
         seg = self.segmenter
-        if self.mode != "translate" or not self.pending or not seg.pending or seg.state != "idle" or seg.idle_count <= 0:
+        if (self.mode != "translate" or not self.pending or not seg.pending or seg.state != "idle"
+                or seg.idle_count <= 0 or self._unvalidated()):
             return None
         return max(0.0, (seg.frames("pause") - seg.idle_count) / self.rate.fps)
 
@@ -388,6 +411,8 @@ class Session:
     async def _sentence(self) -> list[dict]:
         if not self.pending:
             return []
+        if self._unvalidated():  # ni la pausa ni build_sentence llaman al LLM con señas sin validar
+            return [self._pending_msg(awaiting=True)]
         shown = [p["gloss"] for p in self.pending]
         positions = [self._position(p) for p in self.pending]
         glosses, text, source = await self.sentences.choose(

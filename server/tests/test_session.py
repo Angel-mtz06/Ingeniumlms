@@ -85,7 +85,7 @@ def test_confirm_and_remove_gloss():
     s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
     s.pending = [{"gloss": "HOLA", "top3": [], "confident": False}, {"gloss": "SI", "top3": [], "confident": True}]
     out = asyncio.run(run(s, [{"type": "confirm_gloss", "index": 0, "gloss": "ADIOS"}, {"type": "remove_gloss", "index": 1}]))
-    assert out[-1] == {"type": "pending", "glosses": ["ADIOS"]}
+    assert out[-1] == {"type": "pending", "glosses": ["ADIOS"], "confirmed": [True]}
 
 
 def test_no_hand_warning_once():
@@ -224,7 +224,7 @@ def test_confirm_gloss_is_canonical_string():
     s = Session(FakeClassifier(), {}, SentenceBuilder(llm=None, provider="none"))
     s.pending = [{"gloss": "HOLA", "top3": [], "confident": False}]
     out = asyncio.run(run(s, [{"type": "confirm_gloss", "index": 0, "gloss": "buenos días"}]))
-    assert out[-1] == {"type": "pending", "glosses": ["BUENOS_DIAS"]}
+    assert out[-1] == {"type": "pending", "glosses": ["BUENOS_DIAS"], "confirmed": [True]}
     asyncio.run(run(s, [{"type": "confirm_gloss", "index": 0, "gloss": {"a": 1}}]))
     assert isinstance(s.pending[0]["gloss"], str)
     out = asyncio.run(run(s, [{"type": "build_sentence"}]))
@@ -243,7 +243,7 @@ def test_hello_validates_mode_and_target():
 
 def test_build_sentence_without_pending_returns_empty_pending():
     s = Session(None, {}, SentenceBuilder(llm=None, provider="none"))
-    assert asyncio.run(s.handle({"type": "build_sentence"})) == [{"type": "pending", "glosses": []}]
+    assert asyncio.run(s.handle({"type": "build_sentence"})) == [{"type": "pending", "glosses": [], "confirmed": []}]
 
 
 def two_hand_ref():
