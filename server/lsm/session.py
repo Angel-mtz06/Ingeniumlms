@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import warnings
 from collections import deque
 
 import numpy as np
 
+from lsm.context import LOCK_P, MIN_P, START, ContextModel, rerank, token
+from lsm.context import context_weight as env_context_weight
 from lsm.evaluator.feedback import messages
 from lsm.evaluator.scoring import evaluate, finger_status
 from lsm.features import finger_flexion
@@ -25,6 +28,7 @@ KEEP = 900
 DROP = 300
 CONF_MIN = 0.6
 NONE_MIN = 0.5  # Traducción descarta un segmento solo si NINGUNA es top-1 con al menos esta probabilidad
+TOP_K = 5  # candidatas que se piden al clasificador; el contexto solo reordena dentro de ellas
 NO_HAND_WARN = 60  # cuadros a 30 fps (2 s); se escala con la tasa real
 GLOVE_STALE = 10  # cuadros sin una lectura nueva (seq distinto) → el guante cuenta como ausente
 SIDE_OF_SLOT = ("R", "L")
@@ -97,8 +101,14 @@ def _parse_frame(msg: dict):
 
 
 class Session:
-    def __init__(self, classifier=None, references: dict | None = None, sentences: SentenceBuilder | None = None):
+    def __init__(self, classifier=None, references: dict | None = None, sentences: SentenceBuilder | None = None,
+                 context: ContextModel | None = None, context_weight: float | None = None):
         self.classifier = classifier
+        # Prior de contexto (bigramas de glosas). λ de LSM_CONTEXT_WEIGHT (0.5; 0 = sin reordenar ni Viterbi).
+        self.context = context
+        self.ctx_weight = env_context_weight() if context_weight is None else max(0.0, float(context_weight))
+        # LSM_CONTEXT_LLM=0: al formar la oración el LLM solo recibe la glosa mostrada (sin candidatas)
+        self.llm_choose = os.environ.get("LSM_CONTEXT_LLM", "1").strip() != "0"
         self.references = references or {}
         self.sentences = sentences or SentenceBuilder()
         self.mode, self.target = "translate", None
@@ -171,7 +181,8 @@ class Session:
                 if t == "confirm_gloss":
                     i = int(msg["index"])
                     if 0 <= i < len(self.pending):
-                        self.pending[i].update(gloss=canonical(str(msg["gloss"])), confident=True)
+                        # confirmed: la persona la eligió; ni el contexto ni el LLM la cambian
+                        self.pending[i].update(gloss=canonical(str(msg["gloss"])), confident=True, confirmed=True)
                 else:
                     i = int(msg["index"])
                     if 0 <= i < len(self.pending):
@@ -294,11 +305,12 @@ class Session:
         self._last_top: list = []
         b = self._trim_descent(a, b)
         seq = NormSequence(np.stack(self.hands[a:b + 1]), np.stack(self.present[a:b + 1]))
-        # k=4: NINGUNA nunca se muestra como alternativa; quitándola aún quedan 3
-        top = [[g, round(float(p), 3)] for g, p in self.classifier.predict(seq, k=4)] if self.classifier else []
+        # k=5: NINGUNA nunca se muestra como alternativa; quitándola quedan ≥4 para el contexto
+        top = [[g, round(float(p), 3)] for g, p in self.classifier.predict(seq, k=TOP_K)] if self.classifier else []
         self._last_top = top  # para el registro (incluye NINGUNA si salió)
         none_top1 = bool(top) and top[0][0] == NONE_GLOSS
-        top3 = [t for t in top if t[0] != NONE_GLOSS][:3]
+        cands = [t for t in top if t[0] != NONE_GLOSS]
+        top3 = cands[:3]
         if self.mode == "practice":
             recognized = [] if none_top1 else top3  # NINGUNA arriba = "no se reconoció ninguna seña"
             ref = self.references.get(self.target)
@@ -317,7 +329,14 @@ class Session:
                      "evaluable": not any(i.param == "mano" for i in ev.issues)}]
         if not top3 or (none_top1 and top[0][1] >= NONE_MIN):
             return []  # NINGUNA segura (movimiento que no es seña): se descarta en silencio
+        prev = self._ctx_prev()
+        ranked, changed = rerank(cands, prev, self.context, self.ctx_weight)
+        top3 = [[g, p] for g, p in ranked[:3]]
         item = {"gloss": top3[0][0], "top3": top3, "confident": top3[0][1] >= CONF_MIN}
+        if changed:
+            item["reranked"] = True
+            log.info("contexto top1 %s->%s previa=%s p=%.2f->%.2f lambda=%.2f", cands[0][0], top3[0][0], prev,
+                     cands[0][1], top3[0][1], self.ctx_weight)
         self.pending.append(item)
         return [{"type": "sign", "index": len(self.pending) - 1, **item}]
 
@@ -329,16 +348,45 @@ class Session:
         """Quita del final los cuadros en que la mano solo baja al reposo (≤40 % del segmento)."""
         return a + trim_descent([self._top_y(i) for i in range(a, b + 1)], self.segmenter.rate)
 
+    def _ctx_prev(self) -> str:
+        """Glosa previa para el contexto: la última pendiente (deletreada = <NOMBRE>) o <s> al empezar oración.
+        Así el contexto se reinicia solo al formar la oración o con reset (ambos vacían `pending`)."""
+        if not self.pending:
+            return START
+        last = self.pending[-1]
+        return token(last["gloss"], bool(last.get("spelled")))
+
+    def _position(self, item: dict) -> dict:
+        """Candidatas de una seña pendiente para formar la oración. La mostrada va primero; las alternativas
+        solo si p ≥ MIN_P. Sin alternativas: deletreadas, confirmadas por la persona, top-1 con p ≥ LOCK_P y
+        todas si LSM_CONTEXT_LLM=0 y hay LLM."""
+        g = item["gloss"]
+        if item.get("spelled"):
+            return {"candidates": [(g, 1.0)], "spelled": True}
+        top = [(str(a), float(q)) for a, q in item.get("top3") or []]
+        p = dict(top).get(g)
+        if item.get("confirmed") or p is None:
+            return {"candidates": [(g, 1.0)], "spelled": False}
+        if p >= LOCK_P or (not self.llm_choose and self.sentences.llm is not None):
+            return {"candidates": [(g, p)], "spelled": False}
+        return {"candidates": [(g, p)] + [(a, q) for a, q in top if a != g and q >= MIN_P], "spelled": False}
+
     async def _sentence(self) -> list[dict]:
         if not self.pending:
             return []
-        glosses = [p["gloss"] for p in self.pending]
-        text, source = await self.sentences.build(glosses, self.paragraph[-3:])
+        shown = [p["gloss"] for p in self.pending]
+        positions = [self._position(p) for p in self.pending]
+        glosses, text, source = await self.sentences.choose(positions, self.paragraph[-3:], prior=self.context,
+                                                            weight=self.ctx_weight)
+        corrected = [i for i, (a, b) in enumerate(zip(shown, glosses)) if a != b]
+        if corrected:  # una deletreada nunca cambia: no se registra ningún nombre
+            log.info("oración corregida por contexto fuente=%s cambios=%s", source,
+                     ",".join(f"{i}:{shown[i]}->{glosses[i]}" for i in corrected))
         self.paragraph.append(text)
         self.pending = []
         self.pausing_at = None  # la oración reemplaza al aviso: no hace falta cancelarlo
         return [{"type": "sentence", "glosses": glosses, "text": text,
-                 "paragraph": " ".join(self.paragraph), "source": source}]
+                 "paragraph": " ".join(self.paragraph), "source": source, "corrected": corrected}]
 
     def _calibrate(self, step: str | None) -> list[dict]:
         if step in ("open", "fist"):

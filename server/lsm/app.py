@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from lsm.context import ContextModel, context_weight, load_default
 from lsm.evaluator.references import _to_json, load_references
 from lsm.live import frames_to_raw
 from lsm.paths import (DATASETS, MODELS, PROCESSED, ROOT, active_model_name, active_references_path,
@@ -70,7 +71,9 @@ class WebFiles(StaticFiles):
 
 def create_app(classifier=None, references: dict | None = None, sentences: SentenceBuilder | None = None,
                static_dir: str | Path | None = None, own_dir: str | Path | None = None,
-               model_name: str | None = None, vocab_csv: str | Path | None = None) -> FastAPI:
+               model_name: str | None = None, vocab_csv: str | Path | None = None,
+               context: ContextModel | None = None) -> FastAPI:
+    """`context`: prior de bigramas de glosas para Interpretación (None = sin contexto; λ en LSM_CONTEXT_WEIGHT)."""
     references = references or {}
     sentences = sentences or SentenceBuilder()
     own = Path(own_dir) if own_dir else DATASETS / "own"
@@ -155,7 +158,7 @@ def create_app(classifier=None, references: dict | None = None, sentences: Sente
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
         await ws.accept()
-        session = Session(classifier, references, sentences)
+        session = Session(classifier, references, sentences, context=context)
         while True:
             try:
                 msg = await ws.receive_json()
@@ -192,8 +195,12 @@ def main() -> None:
     references = load_references(ref_path) if ref_path.exists() else {}
     print(f"modelo activo: {name}" + ("" if classifier else " (no encontrado)")
           + f"; referencias: {ref_path.name}; catálogo: {vocab_path.parent.name}/{vocab_path.name}", flush=True)
+    weight = context_weight()
+    context = load_default(classifier.labels if classifier else ()) if weight > 0 else None
+    print("contexto de glosas: " + (f"peso {weight:g} ({len(context.vocab)} glosas)" if context
+                                    else "desactivado (LSM_CONTEXT_WEIGHT=0 o sin corpus)"), flush=True)
     app = create_app(classifier, references, SentenceBuilder(), static_dir=ROOT / "web" / "dist",
-                     model_name=name if classifier else None, vocab_csv=vocab_path)
+                     model_name=name if classifier else None, vocab_csv=vocab_path, context=context)
     uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8000")))
 
 
