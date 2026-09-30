@@ -21,6 +21,9 @@ export type ClientMsg =
   | { type: "remove_gloss"; index: number }
   /** Palabra deletreada con el alfabeto (letras separadas por guiones, p. ej. "M-A-R-I-O"). */
   | { type: "add_gloss"; gloss: string }
+  /** Deletreo en Interpretación: al empezar, el servidor aparta las señas de esos cuadros; al terminar,
+   *  con `word` entra la palabra y se descartan; sin ella se regresan. */
+  | { type: "spelling"; active: boolean; word?: string | null }
   | { type: "build_sentence" }
   | { type: "reset" };
 
