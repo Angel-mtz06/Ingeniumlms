@@ -30,13 +30,13 @@ export type MotionResult = {
 };
 
 /**
- * Mínimo de cuadros con desplazamiento para poder OBSERVAR la trayectoria. No es una velocidad
- * de la LSM (no hay secuencias de referencia de letras en el repositorio): la trayectoria se
- * remuestrea a 32 puntos y se filtra con mediana de 3; con menos de 10 observaciones reales el
- * gancho de la J o los tres trazos de la Z quedan con 1–2 cuadros por tramo, y la forma sería
- * interpolación, no medición.
+ * Mínimo para poder OBSERVAR la trayectoria (no es una velocidad de la LSM: no hay secuencias de
+ * referencia de letras en el repositorio). Cuadros Y tiempo con desplazamiento: con muy pocos
+ * cuadros la forma sería interpolación, no medición; y el tiempo impide aprobar un trazo de 0.15 s.
+ * Muchas cámaras entregan ~15 cuadros/s: con 7 cuadros un movimiento normal de 0.4 s se rechazaba.
  */
-export const MIN_ACTIVE_FRAMES = 7;
+export const MIN_ACTIVE_FRAMES = 5, MIN_ACTIVE_MS = 250;
+const tooFastSpan = (a: {frames: number; ms: number}) => a.frames < MIN_ACTIVE_FRAMES || a.ms < MIN_ACTIVE_MS;
 /** Seguimiento en vivo: pose inicial sostenida, inicio, fin por quietud y duración máxima. */
 export const READY_HOLD_MS = 300, ONSET_PALMS = .15, STILL_MS = 450, STILL_PALMS = .12, MAX_MOVE_MS = 4000, RESULT_MS = 2500, PREROLL_FRAMES = 4;
 /** Tolerancia de forma (RMS tras normalizar). La misma para el avance en vivo y el juicio final:
@@ -244,7 +244,7 @@ export function analyzeMotionFor(frames: MotionFrame[], target: string, options:
   const out = {...r, travel: travelled, activeFrames: active.frames, activeMs: active.ms};
   if (span < .25) return withIssue(out, "no_motion");
   if (span < .4) return withIssue(out, "too_small");
-  if (active.frames < MIN_ACTIVE_FRAMES) return withIssue(out, "too_fast");
+  if (tooFastSpan(active)) return withIssue(out, "too_fast");
   if (target === "X") {
     const x = outAndBack(points);
     if (x >= .95) return {...withIssue(out, "ok"), prediction: [target, Math.max(CONF_THRESHOLD, supporting.length/frames.length)]};
@@ -294,7 +294,7 @@ export function analyzeMotion(frames: MotionFrame[]): MotionResult {
     result.travel = Math.max(result.travel, travelled);
     if (rule.letter === "X") {
       const active = activeSpan(points, t);
-      if (outAndBack(points) >= .95 && active.frames >= MIN_ACTIVE_FRAMES) candidates.push(["X", Math.max(CONF_THRESHOLD, supporting.reduce((s,f)=>s+f.pose![1],0)/frames.length)]);
+      if (outAndBack(points) >= .95 && !tooFastSpan(active)) candidates.push(["X", Math.max(CONF_THRESHOLD, supporting.reduce((s,f)=>s+f.pose![1],0)/frames.length)]);
       continue;
     }
     if (!ruleGates(rule.letter, points, span, travelled)) continue;
@@ -303,7 +303,7 @@ export function analyzeMotion(frames: MotionFrame[]): MotionResult {
     result.activeMs = Math.max(result.activeMs, active.ms);
     const error = shapeError(points, rule.path);
     if (error > SHAPE_ERROR) continue;
-    if (active.frames < MIN_ACTIVE_FRAMES) { tooFast = true; continue; }
+    if (tooFastSpan(active)) { tooFast = true; continue; }
     // Both significant displacement and the ordered trajectory must match.
     // A frozen pose or a straight translation cannot pass a J, Z or arc rule.
     const poseScore = supporting.reduce((s,f)=>s+f.pose![1],0)/frames.length;
@@ -324,11 +324,13 @@ function recentExtent(frames: MotionFrame[], tip: number, ms: number): number {
   return Math.max(extent(normalizedPath(recent, tip).points), extent(normalizedPath(recent, 0).points));
 }
 
-/** The hand moved and has now been still for STILL_MS (used to end a live segment, also in Libre). */
-export function movementEnded(frames: MotionFrame[], tip = 8): boolean {
-  if (frames.length < 3 || frames.at(-1)!.t-frames[0].t < STILL_MS+150) return false;
-  return recentExtent(frames, tip, STILL_MS) < STILL_PALMS;
+/** The hand moved and has now been still for `ms` (STILL_MS by default; ends a live segment). */
+export function movementEnded(frames: MotionFrame[], tip = 8, ms = STILL_MS): boolean {
+  if (frames.length < 3 || frames.at(-1)!.t-frames[0].t < ms+150) return false;
+  return recentExtent(frames, tip, ms) < STILL_PALMS;
 }
+/** X: al dar la vuelta en el punto más lejano la mano casi se detiene; ahí no se da por terminada. */
+export const X_TURN_STILL_MS = 900;
 
 /** How much of the letter's trajectory the partial path already matches (0–1), for live feedback. */
 export function trajectoryProgress(frames: MotionFrame[], target: string): number {
@@ -423,7 +425,8 @@ export class LiveMotion {
     }
     // Recorrido completo: se califica a los 150 ms, sin esperar a que la mano se quede quieta.
     const finished = this.doneT !== null && t-this.doneT >= DONE_GRACE_MS;
-    if (missing || timedOut || finished || movementEnded(this.frames, rule.tip)) {
+    const stillMs = this.target === "X" && this.progress >= .5 ? X_TURN_STILL_MS : STILL_MS;
+    if (missing || timedOut || finished || movementEnded(this.frames, rule.tip, stillMs)) {
       // Lo que la mano hace DESPUÉS de completar el recorrido (bajar, acomodarse) no cuenta.
       const judged = this.doneAt !== null && !missing ? this.frames.slice(0, this.doneAt+3) : this.frames;
       const r = analyzeMotionFor(judged, this.target, {live: true, timedOut: timedOut && this.doneAt === null});
@@ -446,37 +449,52 @@ export interface FreeMotionState {
   progress: number;
   /** Letra reconocida al completar su recorrido (solo en el cuadro en que termina). */
   result: MotionResult | null;
+  /** Letras cuya pose inicial ya se sostuvo: se puede hacer el movimiento. */
+  ready: string[];
+  /** Intento que llevaba al menos la mitad del recorrido y no se aprobó (p. ej. demasiado rápido). */
+  failed: MotionResult | null;
 }
 
 /**
  * Libre: las cinco letras con movimiento se siguen EN VIVO a la vez, cada una con el mismo LiveMotion
  * que Secuencial (misma tolerancia, mismo "100 % = correcto"). Cada letra arranca desde SU pose
  * inicial (J desde I, Ñ desde N, Z desde D, Q y X desde la suya): quien llama pasa en `startOk` qué
- * poses verifica ese cuadro. Sin letra objetivo no se sabe qué quería hacer el usuario, así que un
- * intento fallido no se reporta: esa letra vuelve a esperar su pose de inmediato.
+ * poses verifica ese cuadro. Sin letra objetivo no se sabe qué quería hacer el usuario: un intento
+ * fallido solo se reporta si ya llevaba al menos la mitad de SU recorrido (ahí sí se sabe qué letra
+ * se intentaba), y esa letra vuelve a esperar su pose de inmediato.
  */
 export const FREE_MOTION_LETTERS = RULES.map((r) => r.letter);
 export class FreeMotion {
   private trackers = new Map(FREE_MOTION_LETTERS.map((l) => [l, new LiveMotion(l)]));
-  reset() { for (const t of this.trackers.values()) t.reset(); }
+  /** Avance de cada letra en el cuadro anterior (el resultado ya no lo trae). */
+  private progress = new Map<string, number>();
+  reset() { for (const t of this.trackers.values()) t.reset(); this.progress.clear(); }
   /** `score`: desempate cuando dos letras terminan en el mismo cuadro (p. ej. Ñ y Q, mismo arco). */
   push(frame: MotionFrame, startOk: Record<string, boolean>, score: Record<string, number> = {}): FreeMotionState {
-    const done: MotionResult[] = [];
-    let moving = false, progress = 0;
+    const done: MotionResult[] = [], ready: string[] = [];
+    let moving = false, progress = 0, failed: {result: MotionResult; progress: number} | null = null;
     for (const [letter, tracker] of this.trackers) {
+      const before = this.progress.get(letter) ?? 0;
       const st = tracker.push({...frame, startOk: !!startOk[letter]});
       if (st.phase === "result") {
         if (st.result?.issue === "ok" && st.result.prediction) done.push(st.result);
+        else if (st.result && before >= .5 && (!failed || before > failed.progress))
+          failed = {result: {...st.result, prediction: null, reason: `${letter}: ${st.result.reason}`}, progress: before};
         tracker.reset();
-      } else if (st.phase === "moving") {
-        progress = Math.max(progress, st.progress);
-        if (st.progress >= .25) moving = true;
+        this.progress.set(letter, 0);
+      } else {
+        this.progress.set(letter, st.phase === "moving" ? st.progress : 0);
+        if (st.phase === "ready") ready.push(letter);
+        if (st.phase === "moving") {
+          progress = Math.max(progress, st.progress);
+          if (st.progress >= .25) moving = true;
+        }
       }
     }
-    if (!done.length) return {moving, progress, result: null};
+    if (!done.length) return {moving, progress, result: null, ready, failed: failed?.result ?? null};
     done.sort((a, b) => (score[b.prediction![0]] ?? 0)-(score[a.prediction![0]] ?? 0) || b.prediction![1]-a.prediction![1]);
     this.reset();
-    return {moving: false, progress: 1, result: {...done[0], reason: MESSAGES.ok}};
+    return {moving: false, progress: 1, result: {...done[0], reason: MESSAGES.ok}, ready: [], failed: null};
   }
 }
 

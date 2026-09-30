@@ -177,11 +177,14 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
     if (!cameraOn) return null;
     if (mode === "free") {
       if (recognition.phase === "capturing") return { text: "Siguiendo el movimiento… deja la mano quieta al terminar." };
-      if (recognition.phase === "result" && recognition.motionResult) {
+      if (recognition.motionResult) {
         const r = recognition.motionResult;
-        return r.prediction ? { tone: "ok", text: `Movimiento compatible con la ${r.prediction[0]} (evaluación experimental).` } : { tone: "warn", lead: "Movimiento: ", text: r.reason };
+        return r.prediction ? { tone: "ok", text: `Movimiento compatible con la ${r.prediction[0]} (evaluación experimental).` } : { tone: "warn", lead: "Movimiento de la ", text: r.reason };
       }
-      return feedback?.type === "capture" ? { tone: "warn", text: feedback.message } : null;
+      if (feedback?.type === "capture") return { tone: "warn", text: feedback.message };
+      // La pose inicial de una letra con movimiento ya se reconoció: avisar que ya puede moverse.
+      if (recognition.freeReady) return { tone: "ok", text: `Pose de ${[...recognition.freeReady].join(" / ")} lista: haz el movimiento.` };
+      return null;
     }
     if (motion) {
       if (live?.phase === "result" && motionResult) {
@@ -348,6 +351,7 @@ export function AlphabetPractice({ onBack }: AlphabetPracticeProps) {
               ? recognition.ranking.map(([l, share]) => <><strong translate="no">{l}</strong> <span className="tabular">{Math.round(share * 100)} %</span></>)
               : [feedback?.type === "capture" ? feedback.message : "Haz una letra frente a la cámara."]}>
             <p className="sheet__hint">Confianza relativa entre letras, no probabilidad de acierto.</p>
+            <p className="sheet__hint">J, Ñ, Q, X y Z: sostén un momento la pose inicial (J desde I, Ñ desde N, Z desde D) y luego haz el movimiento.</p>
           </EvaluationCard>
         ) : motion && target ? (
           <EvaluationCard {...motionCard}>
