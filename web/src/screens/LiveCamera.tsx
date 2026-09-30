@@ -1,21 +1,19 @@
 import type { ReactNode } from "react";
 import { CameraView } from "../components/CameraView";
-import { useBodyOverlay } from "../hooks/useBodyOverlay";
 import { useApp } from "./shared";
 
 /**
  * Como `CameraStage` (shared.tsx), pero con los medidores de las pantallas de trabajo: FPS en la
- * esquina superior izquierda y, opcionalmente, algo en la superior derecha (el puntaje en Práctica). Con
- * "Mostrar cara y torso" (se cambia en Calibración) dibuja también la cara y el torso, en otros colores.
+ * esquina superior izquierda y, opcionalmente, algo en la superior derecha (el puntaje en Práctica). Solo dibuja
+ * las manos: la cara y el torso se siguen detectando (filtran manos falsas y dan la zona de los consejos), pero
+ * solo se dibujan en Calibración.
  */
 export function LiveCamera({ corner, children }: { corner?: ReactNode; children?: ReactNode }) {
   const { camera, vision } = useApp();
-  const [showBody] = useBodyOverlay();
   return (
     <CameraView
       videoRef={camera.videoRef}
       hands={vision.lastHands}
-      body={showBody ? vision.lastBody : undefined}
       loading={!camera.error && !vision.error && (!camera.ready || vision.loading)}
       error={camera.error ?? vision.error}
       fps={vision.fps}

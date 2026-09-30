@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { IconCheck, IconError, IconWarning, ToneIcon } from "../components/icons";
-import { useBodyOverlay } from "../hooks/useBodyOverlay";
 import { calibrationOutcome } from "../lib/calibration";
 import type { FramePayload, ServerMsg } from "../lib/protocol";
 import { CalibrationLostNotice, CameraStage, GloveControls, ServerNotice, useApp, useFrameSink, useSessionMode } from "./shared";
@@ -293,12 +292,11 @@ function useBodySeen(): Seen {
 
 /**
  * Detección de cuerpo: la cámara de arriba dibuja la cara (magenta), el cuello, los hombros y el torso (verde
- * azulado) y las manos (azul). Aquí va la leyenda con lo que se ve ahora y el interruptor para mostrar la cara y el
- * torso también en Práctica, Alfabeto e Interpretación.
+ * azulado) y las manos (azul). Aquí va la leyenda con lo que se ve ahora. En las demás pantallas la cara y el torso
+ * se detectan igual, pero solo se dibujan las manos.
  */
 function BodyDetection() {
   const seen = useBodySeen();
-  const [show, setShow] = useBodyOverlay();
   const rows = [
     { key: "hands", swatch: "hands", label: "Manos", ok: seen.hands > 0,
       text: seen.hands === 0 ? "no se ven" : seen.hands === 1 ? "1 detectada" : `${seen.hands} detectadas` },
@@ -330,14 +328,7 @@ function BodyDetection() {
       {seen.ready && !seen.torso ? (
         <p className="sheet__hint">Aléjate un poco de la cámara para que se vean tus hombros.</p>
       ) : null}
-      <button type="button" role="switch" aria-checked={show} className="switch switch--inline" onClick={() => setShow(!show)}>
-        <span className="switch__track" aria-hidden="true">
-          <span className="switch__thumb" />
-        </span>
-        <span className="switch__label">Mostrar cara y torso</span>
-        <span className="switch__state">{show ? "activado" : "desactivado"}</span>
-      </button>
-      <p className="sheet__hint">Se ve también en la cámara de Práctica, Alfabeto e Interpretación.</p>
+      <p className="sheet__hint">En Práctica, Alfabeto e Interpretación solo se dibujan las manos; la cara y el torso se siguen detectando.</p>
     </section>
   );
 }

@@ -1126,10 +1126,6 @@
   min-width: 0;
 }
 
-.body-detect .switch__label {
-  white-space: normal;
-}
-
 .body-detect__list {
   display: grid;
   gap: var(--space-2);
