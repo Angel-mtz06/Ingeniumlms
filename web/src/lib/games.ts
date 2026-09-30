@@ -2,7 +2,7 @@
  * games.ts: lógica pura de la pestaña Juegos (la pantalla solo dibuja).
  *  - Completa la palabra, con letras: deletrear una palabra letra por letra (reconocedor del alfabeto).
  *  - Completa la palabra, con señas: hacer las señas de una frase (HOLA MAMÁ) una tras otra.
- *  - Carrera: deletrear un texto; cada letra correcta avanza tu carro contra rivales de ritmo fijo.
+ *  - Carrera: deletrear un texto; cada letra correcta avanza tu leopardo contra rivales de ritmo fijo.
  */
 import { LETTERS } from "./alphabet";
 import type { Glosses } from "./protocol";
